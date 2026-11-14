@@ -87,6 +87,8 @@ class XrayService:
         }
 
     def ensure_credentials(self, settings):
+        if os.name == 'nt':
+            raise ValueError('Windows 原生环境暂不支持本地网络节点，请使用 WSL 2 或 Docker')
         updated = dict(settings)
         if not updated.get('uuid'):
             updated['uuid'] = str(uuid.uuid4())

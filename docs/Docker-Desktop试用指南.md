@@ -57,6 +57,19 @@ docker compose -f compose.desktop.yaml logs --tail=100 hopworld-router
 
 ## 功能范围
 
-镜像包含 Xray 和 curl，可供订阅管理与节点测试使用，但在 Docker Desktop 上尚未完成实际验证。默认配置只映射管理端口：**本地网络节点端口没有映射**，其他设备不能通过本配置直接连接该节点。要开放节点端口，需另行设计并验证端口映射、主机防火墙和网络路径；不要为此开放管理端口。
+镜像包含 Xray 和 curl，可供订阅管理与节点测试使用，但在 Docker Desktop 上尚未完成实际验证。默认配置只映射管理端口，本地网络节点端口没有映射。
+
+### 可选：映射本地节点端口
+
+仓库提供可选的 `compose.desktop.node.yaml`，将容器的 TCP 8443 映射到宿主机的 `127.0.0.1:8443`，仅供本机试用。保留自己的配置副本，便于以后更新项目：
+
+```sh
+cp compose.desktop.node.yaml compose.node.local.yaml
+docker compose -f compose.desktop.yaml -f compose.node.local.yaml up -d --build
+```
+
+管理页中的本地节点端口需与容器端口一致；更改端口时同时修改副本中映射的两端。使用此附加配置后，后续 `up`、更新和查看配置也要同时指定这两个 `-f` 文件；只使用基础配置重新创建容器会移除该映射。停止服务可以执行 `docker compose -f compose.desktop.yaml -f compose.node.local.yaml down`。
+
+默认 `127.0.0.1` 不允许其他设备通过此映射连接。如果确需其他设备连接，必须自行调整副本中的宿主机绑定地址，并验证 Docker Desktop 端口映射、系统防火墙、路由和访问控制；绑定到所有地址可能同时暴露局域网或公网。不要修改管理端口的本机绑定。外部连接还需要可达的节点地址，管理页能打开不等于节点可连接。端口映射、本地节点和客户端连接均尚未实测。
 
 IKEv2、证书自动签发与 DNS Webhook 不在此 Compose 配置中完整部署。订阅远程访问也需要另行配置受保护的 HTTPS 入口。各项功能与重启恢复的验证计划见[运行环境适配路线图](运行环境适配路线图.md)。

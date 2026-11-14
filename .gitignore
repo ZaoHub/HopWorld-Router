@@ -18,6 +18,7 @@ build/
 # Local deployment helper and nested workspace
 /deploy/push-to-server.sh
 /未命名/
+/compose.node.local.yaml
 *.sqlite
 *.sqlite3
 *.db

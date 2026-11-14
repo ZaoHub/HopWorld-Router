@@ -107,6 +107,8 @@ class XrayRenameTests(unittest.TestCase):
                 self.assertFalse(service.running())
                 self.assertEqual(service.apply({'enabled': False}), '')
                 with self.assertRaisesRegex(ValueError, 'Windows 原生环境暂不支持'):
+                    service.ensure_credentials({})
+                with self.assertRaisesRegex(ValueError, 'Windows 原生环境暂不支持'):
                     service.apply({'enabled': True})
                 service.stop()
                 kill.assert_not_called()
