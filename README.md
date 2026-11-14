@@ -54,24 +54,43 @@ HopWorld Router 同时做两件事：**把运行本服务的机器网络做成�
 - 节点**自动换线**（`router/ranking.py` 等仅为模块雏形，未接入管理页与订阅输出）
 - OpenWrt、Windows 与透明网关等场景的完整部署与验证
 
-## 本机试用
+## 安装教程
 
-需要 Python 3.10 或更高版本，并安装 `requirements.txt` 中的 PyYAML 依赖。
+根据运行环境展开对应教程：
+
+- **Linux 服务器 / VPS**：Debian、Ubuntu、RHEL、Rocky Linux、AlmaLinux。
+- **Linux Docker**：使用 Docker 在 Linux 主机上运行。
+- **macOS**：使用 Python 在本机试用。
+- **Windows / OpenWrt / NAS**：查看当前支持状态。
+
+<details>
+<summary><strong>macOS：本机试用</strong></summary>
+
+### macOS：本机试用
+
+需要 Git、Python 3.10 或更高版本。打开“终端”，依次执行：
 
 ```sh
+git clone https://github.com/ZaoHub/HopWorld-Router.git
+cd HopWorld-Router
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 export HOPWORLD_ADMIN_PASSWORD='请替换为至少16字符的随机密码'
 .venv/bin/python -m router.server
 ```
 
-打开 `http://127.0.0.1:8080`，用户名为 `admin`，密码为上面设置的值。程序只监听 `127.0.0.1`；配置保存在 `./data/router.db`。可用 `HOPWORLD_DATA` 指定数据目录，`HOPWORLD_PORT` 指定监听端口。停止服务按 `Ctrl+C`。
+将密码替换为至少 16 个字符且不含冒号的随机字符串。打开 `http://127.0.0.1:8080`，用户名为 `admin`，密码为上面设置的值。程序只监听 `127.0.0.1`；配置保存在 `./data/router.db`。可用 `HOPWORLD_DATA` 指定数据目录，`HOPWORLD_PORT` 指定监听端口。停止服务按 `Ctrl+C`。本机试用没有安装后台服务；节点测试和本地网络节点还需安装 Xray，节点测试还需 curl。
 
 生成的地址默认仅能从运行服务的机器访问。访问远程服务器的管理界面时，可通过 SSH 本地转发并让两端使用相同端口，例如 `ssh -L 8080:127.0.0.1:8080 user@server`，然后访问本机 `127.0.0.1:8080`。不要直接将 HTTP 管理界面或未保护的数据库暴露到公网。若需其他设备远程获取订阅，须另行部署受信任的 HTTPS 反向代理，仅转发 `/s/` 路径，并避免在访问日志中记录订阅地址；管理接口仍应限于本机或 SSH 隧道。
 
 订阅链接、上游地址、节点凭据和访问密钥保存在数据目录中，订阅地址本身可用于访问节点内容；请妥善保护数据目录和备份，避免分享或提交到 Git。Base64 不是加密。该初版尚未经过安全审计或生产环境验证。
 
-## 全新 Linux 服务器
+</details>
+
+<details>
+<summary><strong>Linux 服务器 / VPS：原生安装</strong></summary>
+
+### 全新 Linux 服务器
 
 下面是一台新机器从空目录到能打开管理页的顺序。命令都在服务器上以 root 执行。适用 Debian 12、Ubuntu 22.04 及更新版本，或 RHEL / Rocky / Alma 9 及更新版本。`python3 --version` 须为 3.10 或更高。
 
@@ -272,7 +291,12 @@ bash /opt/hopworld-router/deploy/hopworld-install-boot.sh
 - 启用本地节点后，`ss` 能看到 8443，外网能连上该 TCP 端口
 - 做了第 8 步时，公网能打开订阅 URL，打开 `https://域名/` 得到 404
 
-## Docker（Linux）
+</details>
+
+<details>
+<summary><strong>Linux Docker：容器安装</strong></summary>
+
+### Docker（Linux）
 
 Linux Docker 可使用主机网络，使仅监听回环地址的管理服务可通过宿主机本地或 SSH 隧道访问：
 
@@ -290,6 +314,15 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
 ```
 
 将示例密码替换成自己的随机密码后再启动；最后一条命令返回 `401` 表示管理界面正在运行且需要认证。镜像包含 Xray 和 curl，供节点测试及本地网络节点使用；IKEv2、证书自动签发和 DNS Webhook 的宿主机部署步骤不适用于此容器，需另行配置。此方式依赖 Linux 的主机网络，Docker Desktop、NAS 等环境可能不同，需要单独验证；请勿将容器改成公网监听后直接暴露管理界面。
+
+</details>
+
+<details>
+<summary><strong>Windows / OpenWrt / NAS：支持状态</strong></summary>
+
+Windows 和 OpenWrt 尚未完成适配，暂无可直接使用的安装教程。NAS 与 Docker Desktop 的容器网络和设备环境各不相同，Linux Docker 教程不能保证直接适用，尚需在对应设备上验证。
+
+</details>
 
 ## 测试
 
