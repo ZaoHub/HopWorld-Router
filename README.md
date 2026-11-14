@@ -61,6 +61,7 @@ HopWorld Router 同时做两件事：**把运行本服务的机器网络做成�
 - **Linux 服务器 / VPS**：Debian、Ubuntu、RHEL、Rocky Linux、AlmaLinux。
 - **Linux 虚拟机 / ARM 小主机**：使用 Linux 原生安装教程，并核对设备与架构要求。
 - **Linux Docker**：使用 Docker 在 Linux 主机上运行。
+- **macOS / Windows Docker Desktop**：使用桌面容器试用。
 - **macOS**：使用 Python 在本机试用。
 - **Windows + WSL 2**：在 Linux 子系统中试用。
 - **Windows 原生 / OpenWrt / NAS**：查看当前支持状态。
@@ -322,6 +323,15 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
 </details>
 
 <details>
+<summary><strong>macOS / Windows：Docker Desktop 试用</strong></summary>
+
+### Docker Desktop 试用
+
+可参考 [Docker Desktop 试用指南](docs/Docker-Desktop试用指南.md)，使用独立的 Compose 配置将管理端口映射到本机。该方案尚未在 Docker Desktop 实测。
+
+</details>
+
+<details>
 <summary><strong>Windows：WSL 2 试用</strong></summary>
 
 ### Windows：WSL 2 试用
@@ -333,7 +343,7 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
 <details>
 <summary><strong>Windows 原生 / OpenWrt / NAS：支持状态</strong></summary>
 
-Windows 原生版和 OpenWrt 尚未完成适配，暂无可直接使用的安装教程。NAS 适配计划包括群晖、威联通、极空间、绿联 NAS（UGOS Pro）和飞牛私有云（fnOS）；不同设备的容器网络和系统环境各不相同，Linux Docker 教程不能保证直接适用，尚需在对应设备上验证。Docker Desktop 也需要单独验证。
+Windows 原生版和 OpenWrt 尚未完成适配，暂无可直接使用的安装教程。NAS 适配计划包括群晖、威联通、极空间、绿联 NAS（UGOS Pro）和飞牛私有云（fnOS）；不同设备的容器网络和系统环境各不相同，Linux Docker 教程不能保证直接适用，尚需在对应设备上验证。Docker Desktop 试用方案也需要单独验证。
 
 绿联和飞牛可参考 [NAS 容器试用指南](docs/NAS容器试用指南.md)，该指南尚未在对应设备上实测。
 
