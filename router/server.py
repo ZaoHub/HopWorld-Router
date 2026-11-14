@@ -341,10 +341,14 @@ class Store:
 
     def _auto_pool(self, settings):
         pool = []
-        for node in self.nodes():
-            if not node['enabled'] or node['local']:
+        with self.connect() as db:
+            sources = [json.loads(row['links']) for row in db.execute('SELECT links FROM sources ORDER BY id')]
+            manual = [row['link'] for row in db.execute('SELECT link FROM manual_nodes ORDER BY rowid')]
+            disabled = {row['id'] for row in db.execute('SELECT id FROM disabled_nodes')}
+        local_link = self.local_link()
+        for link in combine_subscriptions(sources + [manual]):
+            if node_id(link) in disabled or link == local_link:
                 continue
-            link = self.node_link(node['id'])
             parts = urlsplit(link)
             try:
                 host = (parts.hostname or '').lower()
