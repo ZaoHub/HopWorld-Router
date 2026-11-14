@@ -320,7 +320,7 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
 <details>
 <summary><strong>Windows / OpenWrt / NAS：支持状态</strong></summary>
 
-Windows 和 OpenWrt 尚未完成适配，暂无可直接使用的安装教程。NAS 与 Docker Desktop 的容器网络和设备环境各不相同，Linux Docker 教程不能保证直接适用，尚需在对应设备上验证。
+Windows 和 OpenWrt 尚未完成适配，暂无可直接使用的安装教程。NAS 适配计划包括群晖、威联通、极空间、绿联 NAS（UGOS Pro）和飞牛私有云（fnOS）；不同设备的容器网络和系统环境各不相同，Linux Docker 教程不能保证直接适用，尚需在对应设备上验证。Docker Desktop 也需要单独验证。
 
 </details>
 
