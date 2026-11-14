@@ -165,6 +165,27 @@ class ServerTests(unittest.TestCase):
         self.store.add_manual('\n'.join(f'trojan://secret@node{i}.example.com:443?security=tls' for i in range(40)))
         self.assertEqual(len(self.store._auto_pool({'public_host': 'entry.example.com', 'port': 8443})), 40)
 
+    def test_auto_status_maps_observations_to_nodes_and_hides_secrets(self):
+        self.store.add_manual('trojan://secret@example.com:443?security=tls#线路A')
+        node = self.store.nodes()[0]
+        settings = self.store.local_node_settings()
+        settings.update({'enabled': True, 'egress_mode': 'auto', 'proxy_pool': [{}], 'auto_pool_ids': [node['id']]})
+        self.store.save_local_node_settings(settings)
+        data = {'candidate-0': {'alive': True, 'delay': 42, 'last_try_time': 1000, 'other': 'private'}}
+        with patch.object(self.store.xray, 'running', return_value=True), \
+             patch.object(self.store.xray, 'auto_observations', return_value=data), \
+             patch('router.server.time.time', return_value=1010):
+            status = json.load(self.request('/api/local/auto-status'))
+        self.assertEqual(status['state'], 'ok')
+        self.assertEqual(status['nodes'][0]['title'], '线路A')
+        self.assertEqual(status['nodes'][0]['delay_ms'], 42)
+        self.assertNotIn('secret', json.dumps(status))
+        self.assertNotIn('private', json.dumps(status))
+        with patch.object(self.store.xray, 'running', return_value=True), \
+             patch.object(self.store.xray, 'auto_observations', return_value=data), \
+             patch('router.server.time.time', return_value=1200):
+            self.assertEqual(self.store.auto_observation_status()['nodes'][0]['state'], 'stale')
+
     def test_local_node_auto_public_host_updates_subscription(self):
         reality = 'vless://a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89@8.8.4.4:8443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.microsoft.com&fp=chrome&pbk=pub&sid=abcd&type=tcp#%E6%9C%AC%E5%9C%B0%E7%BD%91%E7%BB%9C'
         def build_link(settings):

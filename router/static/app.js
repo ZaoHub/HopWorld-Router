@@ -3,6 +3,8 @@ const $ = s => document.querySelector(s);
 const LE_LABEL = '免费 SSL 证书（Let\u2019s Encrypt）';
 const message = $('#message');
 let probeTimer;
+let autoObservationTimer;
+let autoObservationBusy = false;
 let ikev2Timer;
 const selectedGroups = new Set();
 const seenGroups = new Set();
@@ -908,7 +910,7 @@ function syncModalBodyScroll() {
 function closeModal(key) {
   const modal = $(`#${MODAL_IDS[key]}`);
   if (!modal || modal.hidden) return;
-  if (key === 'local-node') localEditing = false;
+  if (key === 'local-node') { localEditing = false; clearInterval(autoObservationTimer); }
   if (key === 'ikev2') {
     endIkev2Edit();
     const settings = $('#ikev2-settings-modal');
@@ -960,7 +962,31 @@ function openLocalNodeModal() {
   if (!modal) return;
   modal.hidden = false;
   syncModalBodyScroll();
-  refresh().catch(() => {});
+  refresh().then(refreshAutoObservations).catch(() => {});
+  clearInterval(autoObservationTimer);
+  autoObservationTimer = setInterval(refreshAutoObservations, 10000);
+}
+async function refreshAutoObservations() {
+  if ($('#local-node-modal').hidden || $('#local-egress-mode').value !== 'auto' || autoObservationBusy) return;
+  autoObservationBusy = true;
+  try {
+    const data = await call('/api/local/auto-status');
+    const messages = {inactive: '启用自动换线后显示', stopped: '本地节点未运行', empty: '没有符合条件的候选节点', unavailable: '暂时无法读取 Xray 探测状态', ok: '最近探测结果'};
+    $('#local-auto-observation-status').textContent = messages[data.state] || '暂时无法读取状态';
+    const list = $('#local-auto-observations');
+    list.replaceChildren();
+    for (const node of data.nodes || []) {
+      const item = document.createElement('li');
+      const labels = {pending: '等待探测', ok: '可用', failed: '不可用', stale: '结果已过期'};
+      const delay = node.delay_ms == null ? '' : ` · ${node.delay_ms} ms`;
+      const checked = node.last_checked ? ` · ${new Date(node.last_checked * 1000).toLocaleTimeString()}` : '';
+      item.textContent = `${node.title} · ${labels[node.state] || '未知'}${delay}${checked}`;
+      list.append(item);
+    }
+  } catch {
+    $('#local-auto-observation-status').textContent = '暂时无法读取 Xray 探测状态';
+    $('#local-auto-observations').replaceChildren();
+  } finally { autoObservationBusy = false; }
 }
 function openIkev2Modal() {
   endIkev2Edit();
@@ -1029,6 +1055,7 @@ function localPayload(enabled){
 $('#local-egress-mode').addEventListener('change', () => {
   $('#local-proxy-settings').hidden = $('#local-egress-mode').value !== 'local_proxy';
   $('#local-auto-settings').hidden = $('#local-egress-mode').value !== 'auto';
+  void refreshAutoObservations();
 });
 $('#local-proxy-scan').addEventListener('click', async () => {
   const button = $('#local-proxy-scan');

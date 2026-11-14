@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -110,6 +111,20 @@ class LocalNodeTests(unittest.TestCase):
 
 
 class XrayRenameTests(unittest.TestCase):
+    def test_auto_observations_use_private_socket_not_public_listener(self):
+        with tempfile.TemporaryDirectory() as temp:
+            service = XrayService(Path(temp), binary='/usr/bin/xray')
+            settings = {'public_host':'example.com', 'port':8443, 'uuid':'a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89', 'private_key':'priv', 'public_key':'pub', 'short_id':'abcd', 'egress_mode':'auto', 'proxy_pool':[{'protocol':'http', 'settings':{'servers':[{'address':'example.net','port':8080}]}}]}
+            try:
+                config, _ = service.build(settings)
+                path = Path(config['inbounds'][1]['listen'])
+                self.assertEqual(path.parent.stat().st_mode & 0o777, 0o700)
+                self.assertEqual(config['metrics'], {'tag': 'internal-metrics'})
+                self.assertEqual(config['routing']['rules'][0]['inboundTag'], ['internal-metrics-in'])
+                self.assertFalse(path.exists())
+            finally:
+                if service._metrics_dir: shutil.rmtree(service._metrics_dir, ignore_errors=True)
+
     def test_xray_immediate_exit_is_reported_without_pid(self):
         with tempfile.TemporaryDirectory() as temp:
             service = XrayService(Path(temp), binary='/usr/bin/xray')

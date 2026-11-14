@@ -339,8 +339,9 @@ class Store:
         self.save_local_node_settings(settings)
         return changed
 
-    def _auto_pool(self, settings):
+    def _auto_pool_entries(self, settings):
         pool = []
+        identifiers = []
         with self.connect() as db:
             sources = [json.loads(row['links']) for row in db.execute('SELECT links FROM sources ORDER BY id')]
             manual = [row['link'] for row in db.execute('SELECT link FROM manual_nodes ORDER BY rowid')]
@@ -363,24 +364,31 @@ class Store:
                 if host == (settings.get('public_host') or '').lower() and parts.port == settings.get('port'):
                     continue
                 pool.append(outbound(link))
+                identifiers.append(node_id(link))
             except (UnsupportedNode, ValueError):
                 continue
-        return pool
+        return pool, identifiers
+
+    def _auto_pool(self, settings):
+        return self._auto_pool_entries(settings)[0]
 
     def reconcile_auto_pool(self):
         with self._local_lock:
             settings = self.local_node_settings()
             if not settings.get('enabled') or settings.get('egress_mode') != 'auto':
                 return
-            pool = self._auto_pool(settings)
-            if pool == settings.get('proxy_pool'):
+            pool, identifiers = self._auto_pool_entries(settings)
+            if pool == settings.get('proxy_pool') and identifiers == settings.get('auto_pool_ids'):
                 return
+            changed = pool != settings.get('proxy_pool')
             settings['proxy_pool'] = pool
-            try:
-                self.xray.apply(settings)
-            except ValueError:
-                self.xray.stop()
-                raise
+            settings['auto_pool_ids'] = identifiers
+            if changed:
+                try:
+                    self.xray.apply(settings)
+                except ValueError:
+                    self.xray.stop()
+                    raise
             self.save_local_node_settings(settings)
 
     def configure_local_node(self, *args, **kwargs):
@@ -434,10 +442,11 @@ class Store:
             settings['local_proxy'] = local_proxy
         mode = settings.get('egress_mode', 'default')
         if mode == 'auto':
-            settings['proxy_pool'] = self._auto_pool(settings)
+            settings['proxy_pool'], settings['auto_pool_ids'] = self._auto_pool_entries(settings)
             target = settings.get('auto_target', 'google')
             settings['auto_probe_url'] = TARGETS[target][1] or TEST_URL
         elif mode == 'local_proxy':
+            settings.pop('auto_pool_ids', None)
             try:
                 protocol, raw_port = (settings.get('local_proxy') or '').split(':')
                 proxy_port = int(raw_port)
@@ -451,6 +460,7 @@ class Store:
             settings['auto_probe_url'] = TEST_URL
         else:
             settings.pop('proxy_pool', None)
+            settings.pop('auto_pool_ids', None)
         if enabled:
             if settings.get('ddns_enabled'):
                 if not settings.get('public_host') or is_ip_host(settings.get('public_host', '')):
@@ -545,6 +555,33 @@ class Store:
         settings = self.local_node_settings()
         view = self.xray.public_view(settings)
         return self.attach_dns_hints(view, settings)
+
+    def auto_observation_status(self):
+        with self._local_lock:
+            settings = self.local_node_settings()
+            if not settings.get('enabled') or settings.get('egress_mode') != 'auto':
+                return {'state': 'inactive', 'nodes': []}
+            if not self.xray.running():
+                return {'state': 'stopped', 'nodes': []}
+            if not settings.get('proxy_pool'):
+                return {'state': 'empty', 'nodes': []}
+            data = self.xray.auto_observations()
+            if data is None:
+                return {'state': 'unavailable', 'nodes': []}
+            titles = {node['id']: node['title'] for node in self.nodes()}
+            result = []
+            for index, identifier in enumerate(settings.get('auto_pool_ids') or []):
+                info = data.get(f'candidate-{index}')
+                state = 'pending'
+                delay = None
+                if isinstance(info, dict) and type(info.get('last_try_time')) is int and info['last_try_time'] > 0 and type(info.get('alive')) is bool:
+                    state = 'stale' if time.time() - info['last_try_time'] > 180 else ('ok' if info['alive'] else 'failed')
+                    value = info.get('delay')
+                    if state == 'ok' and type(value) is int and 0 <= value <= 86400000:
+                        delay = value
+                checked = info.get('last_try_time') if isinstance(info, dict) and type(info.get('last_try_time')) is int and info['last_try_time'] > 0 else None
+                result.append({'id': identifier, 'title': titles.get(identifier, '节点已变更'), 'state': state, 'delay_ms': delay, 'last_checked': checked})
+            return {'state': 'ok', 'nodes': result}
 
     def acme_settings(self):
         with self.connect() as db:
@@ -649,7 +686,7 @@ class Store:
         settings = self.local_node_settings()
         if settings.get('enabled'):
             if settings.get('egress_mode') == 'auto':
-                settings['proxy_pool'] = self._auto_pool(settings)
+                settings['proxy_pool'], settings['auto_pool_ids'] = self._auto_pool_entries(settings)
             settings = self.xray.ensure_credentials(settings)
             if settings.get('ddns_enabled'):
                 settings, _ = self.refresh_ddns(settings)
@@ -912,6 +949,8 @@ def make_handler(store, password):
                     'acme': store.acme_status(),
                     'ikev2': store.ikev2_status(),
                 })
+            if path == '/api/local/auto-status':
+                return self.json(200, store.auto_observation_status())
             if path == '/api/local/dns-hints':
                 if not self.authorized():
                     return

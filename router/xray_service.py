@@ -1,14 +1,18 @@
 """Manage the persistent Xray process used by the local network node."""
 
 import json
+import http.client
 import os
 import re
 import secrets
 import shutil
 import signal
+import socket
 import subprocess
+import tempfile
 import threading
 import uuid
+import weakref
 from pathlib import Path
 
 from router.local_node import (
@@ -29,6 +33,8 @@ class XrayService:
         self.pid_path = self.data_dir / 'xray-local.pid'
         self.binary = binary or os.environ.get('HOPWORLD_XRAY') or shutil.which('xray')
         self._lock = threading.Lock()
+        self._metrics_lock = threading.Lock()
+        self._metrics_dir = None
         self._process = None
 
     def generate_keys(self):
@@ -104,8 +110,21 @@ class XrayService:
         updated.setdefault('name', DEFAULT_NODE_NAME)
         return updated
 
+    def _metrics_path(self):
+        if os.name == 'nt':
+            return None
+        with self._metrics_lock:
+            if self._metrics_dir is None:
+                try:
+                    self._metrics_dir = tempfile.mkdtemp(prefix='hwr-metrics-', dir='/tmp')
+                    weakref.finalize(self, shutil.rmtree, self._metrics_dir, ignore_errors=True)
+                except OSError:
+                    return None
+            path = os.path.join(self._metrics_dir, 'metrics.sock')
+            return path if len(os.fsencode(path)) < 100 else None
+
     def build(self, settings):
-        return build_local_reality_node(
+        config, link = build_local_reality_node(
             settings['public_host'],
             int(settings['port']),
             settings['uuid'],
@@ -119,6 +138,39 @@ class XrayService:
             settings.get('auto_probe_url'),
             settings.get('egress_mode') == 'local_proxy',
         )
+        if settings.get('egress_mode') == 'auto' and settings.get('proxy_pool'):
+            path = self._metrics_path()
+            if path:
+                config['metrics'] = {'tag': 'internal-metrics'}
+                config['inbounds'].append({'tag': 'internal-metrics-in', 'listen': path, 'protocol': 'dokodemo-door', 'settings': {'address': '127.0.0.1', 'port': 80, 'network': 'tcp'}})
+                config['routing']['rules'].insert(0, {'type': 'field', 'inboundTag': ['internal-metrics-in'], 'outboundTag': 'internal-metrics'})
+        return config, link
+
+    def auto_observations(self):
+        path = self._metrics_path()
+        if not path:
+            return None
+        conn = http.client.HTTPConnection('localhost', timeout=0.5)
+        try:
+            conn.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            conn.sock.settimeout(0.5)
+            conn.sock.connect(path)
+            conn.request('GET', '/debug/vars', headers={'Connection': 'close'})
+            response = conn.getresponse()
+            if response.status != 200:
+                return None
+            raw = response.read(1024 * 1024 + 1)
+            if len(raw) > 1024 * 1024:
+                return None
+            payload = json.loads(raw)
+            if not isinstance(payload, dict):
+                return None
+            observations = payload.get('observatory')
+            return observations if isinstance(observations, dict) else None
+        except (OSError, ValueError, http.client.HTTPException):
+            return None
+        finally:
+            conn.close()
 
     def public_view(self, settings, running=None):
         view = {
