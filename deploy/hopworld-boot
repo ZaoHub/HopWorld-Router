@@ -1,0 +1,36 @@
+#!/bin/bash
+# Run at boot: restore IKEv2/NAT and ensure HopWorld units start on reboot.
+set -euo pipefail
+
+DATA_DIR="${HOPWORLD_IKEV2_DATA:-/var/lib/hopworld-router/ikev2}"
+APPLY="${HOPWORLD_IKEV2_APPLY:-/usr/local/sbin/hopworld-ikev2-apply}"
+ENV_FILE="${HOPWORLD_ENV:-/etc/hopworld-router.env}"
+
+ikev2_enabled() {
+  [[ -f "$DATA_DIR/ipsec.conf" ]] || return 1
+  grep -q 'conn hopworld-ikev2' "$DATA_DIR/ipsec.conf" 2>/dev/null
+}
+
+if [[ -x "$APPLY" ]] && ikev2_enabled; then
+  "$APPLY" apply "$DATA_DIR" || "$APPLY" sync-clients "$DATA_DIR" || true
+fi
+
+if [[ -f "$ENV_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  if [[ "${HOPWORLD_HOST:-}" == "0.0.0.0" ]]; then
+    iptables -C INPUT -p tcp --dport 8080 -j ACCEPT 2>/dev/null \
+      || iptables -I INPUT -p tcp --dport 8080 -j ACCEPT
+  fi
+fi
+
+systemctl enable hopworld-router.service hopworld-boot.service 2>/dev/null || true
+for unit in strongswan strongswan-starter ipsec; do
+  if systemctl cat "${unit}.service" &>/dev/null; then
+    systemctl enable "$unit" 2>/dev/null || true
+    systemctl start "$unit" 2>/dev/null || true
+    break
+  fi
+done
+
+exit 0

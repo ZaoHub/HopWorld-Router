@@ -1,0 +1,13 @@
+[Unit]
+Description=HopWorld Router boot restore (IKEv2, NAT, firewall)
+After=network-online.target
+Before=hopworld-router.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/hopworld-boot
+
+[Install]
+WantedBy=multi-user.target

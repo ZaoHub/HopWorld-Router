@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>订阅管理 · HopWorld Router</title>
+  <link rel="icon" href="logo.png" type="image/png">
+  <link rel="apple-touch-icon" href="logo.png">
+  <link rel="stylesheet" href="style.css">
+  <script src="qrcode.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#overview" aria-label="HopWorld Router 首页"><img class="brand-mark" src="logo.png" width="40" height="40" alt=""><span class="brand-name">HopWorld <b>Router</b><small>网络管理控制台</small></span></a>
+      <div class="topbar-right"><span class="environment"><span></span>本机管理</span><img class="avatar" src="logo.png" width="34" height="34" alt="" aria-hidden="true"></div>
+    </div>
+  </header>
+  <main id="overview" class="page">
+    <div class="page-heading page-heading-compact"><div><div class="breadcrumb">工作台 <span>/</span> 订阅管理</div><h1>订阅管理</h1></div><button type="button" class="heading-link" id="add-source-open-top"><span>＋</span> 添加订阅</button></div>
+    <div class="layout">
+      <div class="main-column">
+        <section class="card card-compact address-card" id="subscription-section"><div class="card-head card-head-tight"><div class="card-title"><span class="icon-box blue" aria-hidden="true">↗</span><div><h2>统一订阅</h2><p>客户端直连节点，流量不经本服务</p></div></div><span class="pill">密钥保护</span></div><p id="subscription-summary" class="field-hint">连接服务后生成</p><p id="subscription-tls-status" class="field-hint subscription-tls-status" hidden></p><div class="side-actions side-actions-split"><button type="button" id="subscription-open" class="primary full">订阅与扫码</button><button type="button" id="copy" class="secondary full">复制</button></div></section>
+        <section class="card list-card" id="ikev2-monitor" hidden>
+          <div class="card-head"><div class="card-title"><span class="icon-box blue" aria-hidden="true">⌁</span><div><h2>IKEv2 连接监视</h2><p>UDP 500 第一包起显示，含正在连接</p></div></div><span id="ikev2-monitor-count" class="count">0 台在线</span></div>
+          <p id="ikev2-monitor-summary" class="field-hint">尚未启用 IKEv2</p>
+          <div class="ikev2-table-wrap"><table class="ikev2-table" aria-label="已连接设备"><thead><tr><th>VPN IP</th><th>公网 IP</th><th>本机 ID</th><th>时长</th><th>上行</th><th>下行</th><th>合计</th><th>状态</th></tr></thead><tbody id="ikev2-monitor-body"></tbody></table></div>
+          <div id="ikev2-diagnosis" class="ikev2-diagnosis" hidden><p class="ikev2-diagnosis-title">上网诊断</p><ul id="ikev2-diagnosis-list" class="ikev2-diagnosis-list"></ul></div>
+          <div class="batch-bar"><button id="ikev2-sync-nat" class="secondary" type="button" hidden>修复 VPN 转发/NAT</button></div>
+        </section>
+        <section class="card list-card" id="source-section"><details><summary class="card-head"><div class="card-title"><span class="icon-box violet" aria-hidden="true">≋</span><div><h2>上游订阅</h2><p>订阅更新失败时，保留上次获取的节点</p></div></div><span id="count" class="count">0 个订阅</span></summary><div class="batch-bar"><button id="batch-update" class="secondary" type="button">批量更新</button><span id="update-progress" role="status"></span></div><div id="sources" class="list"><p class="empty">连接服务后查看订阅</p></div></details></section>
+        <section class="card list-card" id="node-section"><details><summary class="card-head"><div class="card-title"><span class="icon-box cyan" aria-hidden="true">◇</span><div><h2>节点列表</h2><p>测试后按可用性和延迟排序</p></div></div><span id="node-count" class="count">0 个节点</span></summary><fieldset class="group-selector"><legend>批量测试订阅组</legend><p>默认全部参与；点「编辑」勾选要测的组，未勾选的不测。</p><label class="sr-only" for="probe-group-filter">筛选订阅组</label><div class="group-filter-row"><input type="search" id="probe-group-filter" class="group-filter" placeholder="筛选订阅组…" autocomplete="off"><button id="probe-groups-edit" class="secondary" type="button">编辑</button></div><div id="probe-groups" class="group-list" role="list"></div></fieldset><div class="batch-bar batch-bar-probe"><div class="probe-target-picks"><label for="test-target-category">分组</label><select id="test-target-category"><option value="general">通用</option><option value="ai">AI</option><option value="social">社交媒体</option></select><label for="test-target">目标</label><select id="test-target"></select><button id="batch-probe" class="secondary" type="button">批量测试</button></div><span id="probe-progress" role="status"></span></div><div id="nodes" class="list"><p class="empty">连接服务后查看节点</p></div></details></section>
+      </div>
+      <aside class="side-column"><section class="card form-card card-compact" id="add-source"><div class="side-heading"><div class="icon-box blue" aria-hidden="true">＋</div><div><h2>添加上游订阅</h2><p>从订阅链接拉取节点</p></div></div><p id="add-source-summary" class="field-hint">尚无上游订阅 · 点击添加</p><button type="button" id="add-source-open" class="primary full">添加上游订阅 <span aria-hidden="true">→</span></button></section>
+        <section class="card form-card card-compact" id="local-node"><div class="side-heading"><div class="icon-box violet" aria-hidden="true">◎</div><div><h2>本地网络节点</h2><p>VLESS Reality 出口</p></div></div><p id="local-node-summary" class="field-hint">尚未启用</p><button type="button" id="local-node-open" class="secondary full">查看与配置</button></section>
+        <section class="card form-card card-compact" id="ikev2"><div class="side-heading"><div class="icon-box blue" aria-hidden="true">⌁</div><div><h2>系统 VPN（IKEv2）</h2><p>iPhone 蜂窝 PSK</p></div></div><p id="ikev2-summary" class="field-hint">尚未启用</p><div class="side-actions side-actions-split"><button type="button" id="ikev2-open" class="secondary full">配置</button><button type="button" id="ikev2-settings-open" class="secondary full">设置</button></div></section>
+        <section class="card form-card card-compact" id="manual-import"><div class="side-heading"><div class="icon-box cyan" aria-hidden="true">⌁</div><div><h2>手动导入节点</h2><p>粘贴节点链接</p></div></div><p id="manual-summary" class="field-hint">暂无手动节点</p><button type="button" id="manual-open" class="secondary full">导入节点</button></section>
+        <div class="help-card"><div class="help-icon" aria-hidden="true">i</div><div><strong>使用提示</strong><p>主栏与侧栏均为摘要 + 弹窗；连接说明在「订阅与扫码」里查看。</p></div></div>
+      </aside>
+    </div>
+    <footer><span>HopWorld Router</span><span>让连接管理更简单</span></footer>
+  </main>
+  <div id="toast-host" class="toast-host" aria-hidden="true">
+    <p id="message" class="message" role="status" aria-live="polite" hidden></p>
+  </div>
+  <div id="local-node-notice-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="local-node-notice-title">
+    <button type="button" class="modal-backdrop" data-modal-close="local-node-notice" aria-label="关闭"></button>
+    <div class="modal-panel card notice-panel">
+      <div class="modal-panel-head">
+        <button type="button" class="modal-close text-button" data-modal-close="local-node-notice" aria-label="关闭">关闭</button>
+        <div class="side-heading"><div class="icon-box violet" aria-hidden="true">◎</div><div><h2 id="local-node-notice-title">本地网络节点尚未启用</h2><p>启用后订阅里会多一个 Reality 出口</p></div></div>
+      </div>
+      <div class="modal-panel-body">
+        <p class="notice-lead">当前未开启 <strong>本地网络节点</strong>，客户端订阅中不会出现本机 VLESS 出口。</p>
+        <ul class="notice-list">
+          <li>适合 Shadowrocket 等代理：更新订阅即可多一个直连 VPS 的节点</li>
+          <li>需在安全组放行 TCP 端口（默认 8443）</li>
+          <li>与 IKEv2 系统 VPN 可同时使用，互不影响</li>
+        </ul>
+        <div class="form-actions notice-actions"><button type="button" id="local-node-notice-go" class="primary">去启用</button><button type="button" class="secondary" data-modal-close="local-node-notice">本次先不启用</button></div>
+        <p class="field-hint muted">每次打开管理页都会提醒，直至本地网络节点已启用。</p>
+      </div>
+    </div>
+  </div>
+  <div id="local-node-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="local-node-modal-title">
+    <button type="button" class="modal-backdrop" data-modal-close="local-node" aria-label="关闭"></button>
+    <div class="modal-panel card">
+      <div class="modal-panel-head">
+        <button type="button" class="modal-close text-button" data-modal-close="local-node" aria-label="关闭">关闭</button>
+        <div class="side-heading"><div class="icon-box violet" aria-hidden="true">◎</div><div><h2 id="local-node-modal-title">本地网络节点</h2></div></div>
+      </div>
+      <div class="modal-panel-body"><form id="local-form" class="stacked-form">
+        <label for="local-name">节点名称</label>
+        <input id="local-name" class="is-readonly" maxlength="40" required value="本地网络" readonly placeholder="订阅里显示的名称">
+        <fieldset class="local-pub-fieldset" id="local-pub-fieldset">
+          <legend class="local-pub-legend">公网属性</legend>
+          <div id="local-host-summary" class="local-host-summary" hidden>
+            <div class="local-host-summary-top">
+              <span class="local-host-summary-label">公网入口</span>
+              <span id="local-host-summary-mode" class="local-host-summary-mode"></span>
+            </div>
+            <p id="local-acme-summary" class="local-acme-summary field-hint" hidden></p>
+          </div>
+          <section id="local-host-section" class="local-host-section is-off" aria-label="公网入口配置">
+            <label class="checkbox-row" for="local-ddns" title="与「出口 IP 写进订阅」不可同时开启">
+              <input id="local-ddns" type="checkbox">
+              <span>固定域名 + 自动 DNS</span>
+            </label>
+            <label class="checkbox-row" for="local-auto-host" title="与「固定域名 + 自动 DNS」不可同时开启">
+              <input id="local-auto-host" type="checkbox">
+              <span>出口 IP 写进订阅</span>
+            </label>
+            <div class="local-auto-only">
+              <label for="local-host-prefer">探测偏好</label>
+              <select id="local-host-prefer" disabled>
+                <option value="ipv4">优先 IPv4</option>
+                <option value="ipv6">IPv6</option>
+                <option value="ipv4_first">IPv4，失败再用 IPv6</option>
+              </select>
+            </div>
+            <label class="checkbox-row" for="local-acme">
+              <input id="local-acme" type="checkbox">
+              <span>免费 SSL 证书（Let's Encrypt）</span>
+            </label>
+            <label for="local-acme-challenge">校验方式</label>
+            <select id="local-acme-challenge" disabled>
+              <option value="auto">自动</option>
+              <option value="dns">DNS-01（无需 80）</option>
+              <option value="http">HTTP-01（80）</option>
+              <option value="tls-alpn">TLS-ALPN-01（443）</option>
+            </select>
+            <label for="local-acme-email">ACME 邮箱</label>
+            <input id="local-acme-email" type="email" maxlength="254" placeholder="注册与到期提醒">
+            <div id="local-acme-fw-wrap" class="local-acme-fw" hidden>
+              <p class="local-acme-fw-title">云防火墙入站（TCP）</p>
+              <table class="local-acme-fw-table" aria-label="校验方式与需放行端口">
+                <thead><tr><th>校验</th><th>入站端口</th></tr></thead>
+                <tbody>
+                  <tr data-challenge="dns"><td>DNS-01</td><td>不需要</td></tr>
+                  <tr data-challenge="http"><td>HTTP-01</td><td>80</td></tr>
+                  <tr data-challenge="tls-alpn"><td>TLS-ALPN-01</td><td>443</td></tr>
+                  <tr data-challenge="auto"><td>自动</td><td>按检测结果</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <p id="local-acme-status" class="field-hint" hidden></p>
+          <label for="local-host">公网地址<span class="label-hint">（IP 或域名）</span></label>
+          <div class="local-host-wrap">
+            <input id="local-host" class="is-readonly" maxlength="253" required readonly placeholder="例如 node.example.com">
+            <span id="local-host-ddns-hint" class="local-host-inline-hint" hidden>请更换为域名</span>
+          </div>
+          <section id="local-dns-hints" class="local-dns-hints" aria-label="DNS 记录" hidden>
+            <h3 class="local-dns-hints-title">DNS 记录</h3>
+            <p id="local-dns-hints-summary" class="local-dns-hints-summary" hidden></p>
+            <div class="local-dns-table-wrap">
+              <table class="local-dns-table">
+                <thead><tr><th>类型</th><th>主机记录</th><th>记录值</th><th>维护</th></tr></thead>
+                <tbody id="local-dns-hints-body"></tbody>
+              </table>
+            </div>
+            <p id="local-dns-hints-empty" class="field-hint" hidden>无需 DNS</p>
+            <div class="local-dns-verify-row">
+              <p id="local-dns-verify-status" class="local-dns-verify-status" hidden></p>
+              <button id="local-dns-verify" type="button" class="secondary text-button">检查解析</button>
+            </div>
+          </section>
+          <label for="local-port">端口</label>
+          <input id="local-port" class="is-readonly" type="number" min="1" max="65535" value="8443" required readonly>
+        </fieldset>
+        <p id="local-status" class="field-hint">尚未启用</p>
+        <p id="local-form-hint" class="field-hint">点「编辑」后可改</p>
+        <div class="form-actions">
+          <button id="local-toggle" type="button" class="primary">启用</button>
+          <button id="local-edit" class="secondary" type="button" hidden>编辑</button>
+          <button id="local-save" class="secondary" type="button" hidden>保存</button>
+          <button id="local-cancel" class="secondary" type="button" hidden>取消</button>
+        </div>
+      </form></div>
+    </div>
+  </div>
+  <div id="ikev2-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="ikev2-modal-title">
+    <button type="button" class="modal-backdrop" data-modal-close="ikev2" aria-label="关闭"></button>
+    <div class="modal-panel card modal-panel-wide">
+      <div class="modal-panel-head">
+        <button type="button" class="modal-close text-button" data-modal-close="ikev2" aria-label="关闭">关闭</button>
+        <div class="side-heading"><div class="icon-box blue" aria-hidden="true">⌁</div><div><h2 id="ikev2-modal-title">系统 VPN（IKEv2）</h2><p>无证书 PSK，供 iPhone 设置直接连接</p></div></div>
+      </div>
+      <div class="modal-panel-body"><form id="ikev2-form"><label for="ikev2-host">公网地址</label><input id="ikev2-host" maxlength="253" required placeholder="例如：8.8.8.8"><label for="ikev2-remote-id">Remote ID</label><input id="ikev2-remote-id" maxlength="64" required value="hopworld.ikev2"><p class="field-hint">未启用时可直接填写后点「启用」；已启用后为只读展示，点「编辑」后再保存（手机需重装描述文件）。</p><p id="ikev2-status" class="field-hint">尚未启用</p><p id="ikev2-health" class="field-hint" hidden></p><p class="field-hint"><a href="#ikev2-monitor">↑ 在主栏查看已连接设备与无网诊断</a></p><label for="ikev2-psk">共享密钥</label><p class="field-hint">8–32 位字母或数字；首次「启用」留空则自动生成。</p><div class="input-row has-field"><input id="ikev2-psk" class="is-readonly" maxlength="32" autocomplete="off" readonly placeholder="启用后显示"><button id="ikev2-copy-psk" class="secondary" type="button">复制</button></div><p class="field-hint">iPhone 安装描述文件与手填说明在侧栏「设置」。</p><div class="form-actions" id="ikev2-actions"><button id="ikev2-toggle" type="button" class="primary">启用</button><button id="ikev2-edit" class="secondary" type="button" hidden>编辑</button><button id="ikev2-save" class="secondary" type="button" hidden>保存</button><button id="ikev2-cancel" class="secondary" type="button" hidden>取消</button><button id="ikev2-rotate" class="secondary span-2" type="button">随机密钥</button></div></form></div>
+    </div>
+  </div>
+  <div id="ikev2-settings-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="ikev2-settings-modal-title">
+    <button type="button" class="modal-backdrop" data-modal-close="ikev2-settings" aria-label="关闭"></button>
+    <div class="modal-panel card">
+      <div class="modal-panel-head">
+        <button type="button" class="modal-close text-button" data-modal-close="ikev2-settings" aria-label="关闭">关闭</button>
+        <div class="side-heading"><div class="icon-box blue" aria-hidden="true">⌁</div><div><h2 id="ikev2-settings-modal-title">iPhone 连接设置</h2><p>蜂窝推荐描述文件；也可手动添加 VPN</p></div></div>
+      </div>
+      <div class="modal-panel-body"><p id="ikev2-settings-disabled-hint" class="field-hint" hidden>请先在侧栏点「配置」启用 IKEv2，再安装描述文件。</p>
+      <div id="ikev2-settings-profile" hidden>
+        <p class="ikev2-settings-section">描述文件（推荐）</p>
+        <p class="field-hint">在手机 Safari 打开安装链接，或在本机下载后 AirDrop 到手机。</p>
+        <div class="form-actions ikev2-settings-actions"><button id="ikev2-mobileconfig" class="secondary" type="button">下载描述文件</button><button id="ikev2-mobileconfig-copy" class="secondary" type="button">复制安装链接</button></div>
+        <label for="ikev2-mobileconfig-url" id="ikev2-mobileconfig-label">蜂窝安装链接（手机 Safari 打开，无需再登录）</label>
+        <div class="input-row has-field"><input id="ikev2-mobileconfig-url" readonly></div>
+        <p id="ikev2-cellular-hint" class="field-hint">安装：打开链接或下载 → 设置 → 已下载描述文件 → 安装 → VPN 里连接 HopWorld。</p>
+      </div>
+      <p class="ikev2-settings-section">手动填写 VPN</p>
+      <p class="field-hint">iPhone：设置 → VPN → 添加配置 → 类型 IKEv2</p>
+      <div class="ikev2-guide"><ul class="ikev2-fields"><li>服务器：<span id="ikev2-guide-server">—</span></li><li>远程 ID：<span id="ikev2-guide-remote">—</span></li><li>本地 ID：留空</li><li>用户认证：无</li><li>描述：自定（如 HopWorld）</li><li>共享密钥：<span id="ikev2-guide-psk">—</span></li><li>无法上网：断开 VPN 重连；Safari 试打开 http://1.1.1.1 区分 DNS/线路问题</li></ul></div>
+      <p class="field-hint muted">改 Remote ID 或密钥后需重装描述文件，或同步手动 VPN 字段。</p></div>
+    </div>
+  </div>
+  <div id="manual-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="manual-modal-title">
+    <button type="button" class="modal-backdrop" data-modal-close="manual" aria-label="关闭"></button>
+    <div class="modal-panel card">
+      <div class="modal-panel-head">
+        <button type="button" class="modal-close text-button" data-modal-close="manual" aria-label="关闭">关闭</button>
+        <div class="side-heading"><div class="icon-box cyan" aria-hidden="true">⌁</div><div><h2 id="manual-modal-title">手动导入节点</h2><p>粘贴已有的节点链接</p></div></div>
+      </div>
+      <div class="modal-panel-body"><form id="manual"><label for="links">节点链接</label><textarea id="links" rows="6" required placeholder="每行粘贴一个节点链接"></textarea><p class="field-hint">支持 VLESS、VMess、Trojan 等链接</p><button type="submit" class="primary full">导入节点</button></form></div>
+    </div>
+  </div>
+  <div id="subscription-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="subscription-modal-title">
+    <button type="button" class="modal-backdrop" data-modal-close="subscription" aria-label="关闭"></button>
+    <div class="modal-panel card modal-panel-wide">
+      <div class="modal-panel-head">
+        <button type="button" class="modal-close text-button" data-modal-close="subscription" aria-label="关闭">关闭</button>
+        <div class="side-heading"><div class="icon-box blue" aria-hidden="true">↗</div><div><h2 id="subscription-modal-title">统一订阅</h2><p>复制链接或扫码导入客户端</p></div></div>
+      </div>
+      <div class="modal-panel-body">
+        <label for="subscription">订阅链接</label>
+        <div class="input-row has-field"><input id="subscription" readonly placeholder="连接服务后生成"><button id="copy-modal" class="secondary" type="button">复制</button></div>
+        <div class="address-footer"><p class="hint">地址含访问密钥，仅分享给信任设备。</p><button id="rotate" class="text-button" type="button">更换密钥 <span aria-hidden="true">↗</span></button></div>
+        <p class="hint muted">本机 HTTP 适合隧道访问；外网需 HTTPS 入口。二维码仅在本页生成。</p>
+        <div class="mobile-connect" aria-label="手机连接方式">
+          <div class="mobile-connect-head"><h3>导入方式</h3><p>扫码或粘贴订阅链接到客户端。</p></div>
+          <div class="mobile-connect-body">
+            <div class="mobile-qr-panel"><div id="mobile-qr" class="mobile-qr" role="img" aria-label="订阅二维码"></div><p id="mobile-qr-hint" class="field-hint">连接服务后生成二维码</p></div>
+            <div class="mobile-steps">
+              <div class="mobile-step"><strong>系统 VPN（iPhone / 蜂窝）</strong><p>侧栏「系统 VPN」→「配置」启用，「设置」安装描述文件（推荐）。</p></div>
+              <div class="mobile-step"><strong>Android</strong><p>v2rayNG / Clash Meta：订阅或扫码导入，更新后选节点。</p></div>
+              <div class="mobile-step"><strong>iOS 代理 App</strong><p>Shadowrocket / Streisand：添加订阅或扫码同一链接。</p></div>
+              <p class="hint muted">客户端若要求 HTTPS，http 链接请手动粘贴添加。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="add-source-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="add-source-modal-title">
+    <button type="button" class="modal-backdrop" data-modal-close="add-source" aria-label="关闭"></button>
+    <div class="modal-panel card">
+      <div class="modal-panel-head">
+        <button type="button" class="modal-close text-button" data-modal-close="add-source" aria-label="关闭">关闭</button>
+        <div class="side-heading"><div class="icon-box blue" aria-hidden="true">＋</div><div><h2 id="add-source-modal-title">添加上游订阅</h2><p>添加一个订阅来源</p></div></div>
+      </div>
+      <div class="modal-panel-body"><form id="add"><label for="name">订阅名称</label><input id="name" maxlength="100" required placeholder="例如：我的订阅"><label for="url">订阅地址</label><input id="url" type="url" required placeholder="https://…"><p class="field-hint">支持 HTTPS、Base64 及部分 Clash YAML 订阅</p><button type="submit" class="primary full">添加并更新 <span aria-hidden="true">→</span></button></form></div>
+    </div>
+  </div>
+</body></html>
