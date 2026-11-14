@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+
+# 此文件由 root 管理；禁止执行不受信任的配置。
+set -a
+. /etc/hopworld-router.env
+set +a
+export HOPWORLD_HOST=127.0.0.1
+export HOPWORLD_DATA=/etc/hopworld-router/data
+export PYTHONPATH=/opt/hopworld-router
+umask 077
+mkdir -p "$HOPWORLD_DATA"
+cd /opt/hopworld-router
+exec /opt/hopworld-router/.venv/bin/python -m router.server

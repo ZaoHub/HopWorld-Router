@@ -65,7 +65,8 @@ HopWorld Router 同时做两件事：**把运行本服务的机器网络做成�
 - **macOS**：使用 Python 在本机试用。
 - **Windows + WSL 2**：在 Linux 子系统中试用。
 - **Windows 原生**：使用 Python 在本机试用订阅管理。
-- **OpenWrt / NAS**：查看当前支持状态。
+- **OpenWrt**：查看原生试用准备和限制。
+- **NAS**：查看当前支持状态。
 
 <details>
 <summary><strong>macOS：本机试用</strong></summary>
@@ -351,9 +352,18 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
 </details>
 
 <details>
-<summary><strong>OpenWrt / NAS：支持状态</strong></summary>
+<summary><strong>OpenWrt：原生试用准备</strong></summary>
 
-OpenWrt 尚未完成适配，暂无可直接使用的安装教程。NAS 适配计划包括群晖、威联通、极空间、绿联 NAS（UGOS Pro）和飞牛私有云（fnOS）；不同设备的容器网络和系统环境各不相同，Linux Docker 教程不能保证直接适用，尚需在对应设备上验证。Docker Desktop 试用方案也需要单独验证。
+### OpenWrt 原生试用
+
+已准备实验性的 procd 服务模板及 [OpenWrt 试用指南](docs/OpenWrt试用指南.md)，仅覆盖订阅管理。尚无安装包，且未在 OpenWrt 设备上验证；透明网关、IKEv2 和其他系统集成不在此方案范围内。
+
+</details>
+
+<details>
+<summary><strong>NAS：支持状态</strong></summary>
+
+NAS 适配计划包括群晖、威联通、极空间、绿联 NAS（UGOS Pro）和飞牛私有云（fnOS）；不同设备的容器网络和系统环境各不相同，Linux Docker 教程不能保证直接适用，尚需在对应设备上验证。Docker Desktop 试用方案也需要单独验证。
 
 绿联和飞牛可参考 [NAS 容器试用指南](docs/NAS容器试用指南.md)，该指南尚未在对应设备上实测。
 
