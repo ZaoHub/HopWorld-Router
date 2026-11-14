@@ -220,6 +220,12 @@ class XrayService:
             )
         except OSError as exc:
             raise ValueError('无法启动 Xray，请检查安装和执行权限') from exc
+        try:
+            process.wait(timeout=0.5)
+        except subprocess.TimeoutExpired:
+            pass
+        else:
+            raise ValueError('Xray 启动后立即退出，请检查配置和端口占用')
         self._process = process
         self.pid_path.write_text(str(process.pid), encoding='utf-8')
         os.chmod(self.pid_path, 0o600)

@@ -119,6 +119,17 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(self.store.local_node_settings(), original)
         self.assertFalse(json.load(self.request('/api/status'))['local_node']['enabled'])
 
+    def test_immediate_xray_exit_does_not_enable_node(self):
+        creds = {'uuid':'a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89', 'private_key':'priv', 'public_key':'pub', 'short_id':'abcd'}
+        self.store.xray.binary = '/fake/xray'
+        with patch.object(self.store.xray, 'ensure_credentials', side_effect=lambda settings: {**settings, **creds}), \
+             patch('router.xray_service.subprocess.Popen') as popen:
+            popen.return_value.wait.return_value = 1
+            with self.assertRaises(HTTPError) as error:
+                self.request('/api/local-node', {'enabled': True, 'public_host': '8.8.8.8', 'port': 8443})
+        self.assertEqual(error.exception.code, 400)
+        self.assertFalse(self.store.local_node_settings()['enabled'])
+
     def test_local_node_auto_public_host_updates_subscription(self):
         reality = 'vless://a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89@8.8.4.4:8443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.microsoft.com&fp=chrome&pbk=pub&sid=abcd&type=tcp#%E6%9C%AC%E5%9C%B0%E7%BD%91%E7%BB%9C'
         def build_link(settings):

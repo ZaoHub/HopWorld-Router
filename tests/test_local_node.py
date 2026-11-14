@@ -1,4 +1,5 @@
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -98,6 +99,26 @@ class LocalNodeTests(unittest.TestCase):
 
 
 class XrayRenameTests(unittest.TestCase):
+    def test_xray_immediate_exit_is_reported_without_pid(self):
+        with tempfile.TemporaryDirectory() as temp:
+            service = XrayService(Path(temp), binary='/usr/bin/xray')
+            with unittest.mock.patch('router.xray_service.subprocess.Popen') as popen:
+                popen.return_value.wait.return_value = 1
+                with self.assertRaisesRegex(ValueError, '启动后立即退出'):
+                    service._restart_locked()
+            self.assertIsNone(service._process)
+            self.assertFalse(service.pid_path.exists())
+
+    def test_xray_process_still_running_is_recorded(self):
+        with tempfile.TemporaryDirectory() as temp:
+            service = XrayService(Path(temp), binary='/usr/bin/xray')
+            with unittest.mock.patch('router.xray_service.subprocess.Popen') as popen:
+                popen.return_value.pid = 1234
+                popen.return_value.wait.side_effect = subprocess.TimeoutExpired('xray', 0.5)
+                service._restart_locked()
+            self.assertEqual(service.pid_path.read_text(encoding='utf-8'), '1234')
+            self.assertIs(service._process, popen.return_value)
+
     def test_xray_launch_error_is_reported(self):
         with tempfile.TemporaryDirectory() as temp:
             service = XrayService(Path(temp), binary='/missing/xray')
