@@ -487,6 +487,7 @@ function syncLocalForm(local, acme) {
     if ($('#local-host-prefer')) $('#local-host-prefer').value = local.public_host_prefer || 'ipv4';
     if (local.egress_mode) $('#local-egress-mode').value = local.egress_mode;
     if (local.auto_target) $('#local-auto-target').value = local.auto_target;
+    if (local.auto_interval) $('#local-auto-interval').value = String(local.auto_interval);
     if (local.local_proxy) {
       const select = $('#local-proxy-choice');
       if (![...select.options].some(o => o.value === local.local_proxy)) select.add(new Option(local.local_proxy, local.local_proxy));
@@ -502,6 +503,7 @@ function syncLocalForm(local, acme) {
   const localEditable = !local?.enabled || localEditing;
   $('#local-egress-mode').disabled = !localEditable;
   $('#local-auto-target').disabled = !localEditable;
+  $('#local-auto-interval').disabled = !localEditable;
   $('#local-proxy-port').disabled = !localEditable;
   $('#local-proxy-choice').disabled = !localEditable;
   $('#local-proxy-scan').disabled = !localEditable;
@@ -1050,6 +1052,7 @@ function localPayload(enabled){
     egress_mode: $('#local-egress-mode').value,
     local_proxy: $('#local-proxy-choice').value,
     auto_target: $('#local-auto-target').value,
+    auto_interval: Number($('#local-auto-interval').value),
   };
 }
 $('#local-egress-mode').addEventListener('change', () => {

@@ -398,7 +398,7 @@ class Store:
     def _configure_local_node(self, enabled, public_host=None, port=None, name=None,
                              auto_public_host=None, public_host_prefer=None, ddns_enabled=None,
                              acme_enabled=None, acme_email=None, acme_challenge=None,
-                             egress_mode=None, local_proxy=None, auto_target=None):
+                             egress_mode=None, local_proxy=None, auto_target=None, auto_interval=None):
         if not isinstance(enabled, bool):
             raise ValueError('本地节点设置无效')
         settings = self.local_node_settings()
@@ -436,6 +436,10 @@ class Store:
             if auto_target not in ('google', 'youtube', 'cloudflare'):
                 raise ValueError('自动换线测试目标无效')
             settings['auto_target'] = auto_target
+        if auto_interval is not None:
+            if type(auto_interval) is not int or auto_interval not in (30, 60, 120, 300):
+                raise ValueError('自动换线探测间隔无效')
+            settings['auto_interval'] = auto_interval
         if local_proxy is not None:
             if not isinstance(local_proxy, str) or len(local_proxy) > 20:
                 raise ValueError('本机代理无效')
@@ -575,7 +579,8 @@ class Store:
                 state = 'pending'
                 delay = None
                 if isinstance(info, dict) and type(info.get('last_try_time')) is int and info['last_try_time'] > 0 and type(info.get('alive')) is bool:
-                    state = 'stale' if time.time() - info['last_try_time'] > 180 else ('ok' if info['alive'] else 'failed')
+                    interval = settings.get('auto_interval', 60)
+                    state = 'stale' if time.time() - info['last_try_time'] > max(180, interval * 3) else ('ok' if info['alive'] else 'failed')
                     value = info.get('delay')
                     if state == 'ok' and type(value) is int and 0 <= value <= 86400000:
                         delay = value
@@ -1033,7 +1038,7 @@ def make_handler(store, password):
                         bool(data.get('enabled')), data.get('public_host'), data.get('port'), data.get('name'),
                         data.get('auto_public_host'), data.get('public_host_prefer'), data.get('ddns_enabled'),
                         data.get('acme_enabled'), data.get('acme_email'), data.get('acme_challenge'),
-                        data.get('egress_mode'), data.get('local_proxy'), data.get('auto_target'))})
+                        data.get('egress_mode'), data.get('local_proxy'), data.get('auto_target'), data.get('auto_interval'))})
                 elif path == '/api/ikev2':
                     return self.json(200, {'ok': True, 'ikev2': store.configure_ikev2(
                         bool(data.get('enabled')), data.get('public_host'), data.get('remote_id'),

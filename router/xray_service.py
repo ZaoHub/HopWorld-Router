@@ -137,6 +137,7 @@ class XrayService:
             (settings.get('proxy_pool') or []) if settings.get('egress_mode') in ('auto', 'local_proxy') else None,
             settings.get('auto_probe_url'),
             settings.get('egress_mode') == 'local_proxy',
+            settings.get('auto_interval', 60),
         )
         if settings.get('egress_mode') == 'auto' and settings.get('proxy_pool'):
             path = self._metrics_path()
@@ -189,6 +190,7 @@ class XrayService:
             'local_proxy': settings.get('local_proxy', ''),
             'auto_pool_count': len(settings.get('proxy_pool') or []) if settings.get('egress_mode') == 'auto' else 0,
             'auto_target': settings.get('auto_target', 'google'),
+            'auto_interval': settings.get('auto_interval', 60),
             'link': '',
         }
         if settings.get('enabled') and settings.get('public_host') and settings.get('public_key'):

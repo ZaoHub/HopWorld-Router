@@ -92,6 +92,12 @@ class LocalNodeTests(unittest.TestCase):
         self.assertEqual(config['routing']['balancers'][0]['fallbackTag'], 'blocked')
         self.assertEqual(config['routing']['balancers'][0]['strategy']['type'], 'leastPing')
         self.assertEqual(config['observatory']['probeUrl'], 'https://example.com/check')
+        self.assertEqual(config['observatory']['probeInterval'], '1m')
+        config, _ = build_local_reality_node(*args, proxy_pool=[upstream], probe_interval=300)
+        self.assertEqual(config['observatory']['probeInterval'], '300s')
+        for invalid in (True, 1, 301, '60'):
+            with self.subTest(interval=invalid), self.assertRaises(ValueError):
+                build_local_reality_node(*args, proxy_pool=[upstream], probe_interval=invalid)
         self.assertNotIn('tag', upstream)
 
     def test_reality_rejects_invalid_inputs(self):

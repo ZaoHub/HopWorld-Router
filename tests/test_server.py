@@ -141,8 +141,9 @@ class ServerTests(unittest.TestCase):
         creds = {'uuid':'a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89', 'private_key':'priv', 'public_key':'pub', 'short_id':'abcd'}
         with patch.object(self.store.xray, 'ensure_credentials', side_effect=lambda settings: {**settings, **creds}), \
              patch.object(self.store.xray, 'apply') as apply:
-            result = json.load(self.request('/api/local-node', {'enabled': True, 'public_host': '8.8.8.8', 'port': 8443, 'egress_mode': 'auto', 'auto_target': 'youtube'}))
+            result = json.load(self.request('/api/local-node', {'enabled': True, 'public_host': '8.8.8.8', 'port': 8443, 'egress_mode': 'auto', 'auto_target': 'youtube', 'auto_interval': 300}))
             self.assertEqual(result['local_node']['auto_pool_count'], 1)
+            self.assertEqual(result['local_node']['auto_interval'], 300)
             self.assertNotIn('secret', json.dumps(result))
             self.assertEqual(self.store.local_node_settings()['auto_probe_url'], 'https://www.youtube.com/generate_204')
             self.request('/api/node', {'id': good['id'], 'enabled': False}).close()
@@ -185,6 +186,18 @@ class ServerTests(unittest.TestCase):
              patch.object(self.store.xray, 'auto_observations', return_value=data), \
              patch('router.server.time.time', return_value=1200):
             self.assertEqual(self.store.auto_observation_status()['nodes'][0]['state'], 'stale')
+        settings['auto_interval'] = 300
+        self.store.save_local_node_settings(settings)
+        with patch.object(self.store.xray, 'running', return_value=True), \
+             patch.object(self.store.xray, 'auto_observations', return_value=data), \
+             patch('router.server.time.time', return_value=1200):
+            self.assertEqual(self.store.auto_observation_status()['nodes'][0]['state'], 'ok')
+
+    def test_auto_interval_rejects_invalid_values(self):
+        for value in (True, '60', 1, 301):
+            with self.subTest(value=value), self.assertRaises(HTTPError) as error:
+                self.request('/api/local-node', {'enabled': False, 'auto_interval': value})
+            self.assertEqual(error.exception.code, 400)
 
     def test_local_node_auto_public_host_updates_subscription(self):
         reality = 'vless://a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89@8.8.4.4:8443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.microsoft.com&fp=chrome&pbk=pub&sid=abcd&type=tcp#%E6%9C%AC%E5%9C%B0%E7%BD%91%E7%BB%9C'
