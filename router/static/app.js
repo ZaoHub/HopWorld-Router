@@ -483,6 +483,14 @@ function syncLocalForm(local, acme) {
     if ($('#local-auto-host')) $('#local-auto-host').checked = !!local.auto_public_host;
     if ($('#local-ddns')) $('#local-ddns').checked = !!local.ddns_enabled;
     if ($('#local-host-prefer')) $('#local-host-prefer').value = local.public_host_prefer || 'ipv4';
+    if (local.egress_mode) $('#local-egress-mode').value = local.egress_mode;
+    if (local.auto_target) $('#local-auto-target').value = local.auto_target;
+    if (local.local_proxy) {
+      const select = $('#local-proxy-choice');
+      if (![...select.options].some(o => o.value === local.local_proxy)) select.add(new Option(local.local_proxy, local.local_proxy));
+      select.value = local.local_proxy;
+    }
+    if (local.egress_mode === 'auto') $('#local-auto-summary').textContent = `当前候选 ${local.auto_pool_count || 0} 个；无可用出口时阻断，不直连。`;
     if ($('#local-acme')) $('#local-acme').checked = !!acme.enabled;
     if ($('#local-acme-email')) $('#local-acme-email').value = acme.email || '';
     if ($('#local-acme-challenge')) {
@@ -490,6 +498,13 @@ function syncLocalForm(local, acme) {
     }
   }
   const localEditable = !local?.enabled || localEditing;
+  $('#local-egress-mode').disabled = !localEditable;
+  $('#local-auto-target').disabled = !localEditable;
+  $('#local-proxy-port').disabled = !localEditable;
+  $('#local-proxy-choice').disabled = !localEditable;
+  $('#local-proxy-scan').disabled = !localEditable;
+  $('#local-proxy-settings').hidden = $('#local-egress-mode').value !== 'local_proxy';
+  $('#local-auto-settings').hidden = $('#local-egress-mode').value !== 'auto';
   const readOnlyView = !!local?.enabled && !localEditing;
   const showHostControls = !readOnlyView;
   const autoHost = !!$('#local-auto-host')?.checked;
@@ -1006,8 +1021,29 @@ function localPayload(enabled){
     acme_email: $('#local-acme-email')?.value || '',
     acme_challenge: $('#local-acme-challenge')?.value || 'auto',
     public_host_prefer: $('#local-host-prefer')?.value || 'ipv4',
+    egress_mode: $('#local-egress-mode').value,
+    local_proxy: $('#local-proxy-choice').value,
+    auto_target: $('#local-auto-target').value,
   };
 }
+$('#local-egress-mode').addEventListener('change', () => {
+  $('#local-proxy-settings').hidden = $('#local-egress-mode').value !== 'local_proxy';
+  $('#local-auto-settings').hidden = $('#local-egress-mode').value !== 'auto';
+});
+$('#local-proxy-scan').addEventListener('click', async () => {
+  const button = $('#local-proxy-scan');
+  const raw = $('#local-proxy-port').value;
+  button.disabled = true;
+  note('正在扫描本机代理…');
+  try {
+    const data = await call('/api/local/discover', raw ? {ports: [Number(raw)]} : {});
+    const select = $('#local-proxy-choice');
+    select.replaceChildren(new Option(data.proxies.length ? '请选择代理' : '未发现可用代理', ''));
+    data.proxies.forEach(item => select.add(new Option(`${item.protocol.toUpperCase()} · 127.0.0.1:${item.port}`, `${item.protocol}:${item.port}`)));
+    note(data.proxies.length ? `发现 ${data.proxies.length} 个本机代理，请选择` : '未发现可用代理');
+  } catch (error) { note(error.message, {error: true}); }
+  finally { button.disabled = false; }
+});
 function syncLocalHostModeToggles(ev) {
   const autoEl = $('#local-auto-host');
   const ddnsEl = $('#local-ddns');

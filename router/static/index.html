@@ -74,6 +74,10 @@
       <div class="modal-panel-body"><form id="local-form" class="stacked-form">
         <label for="local-name">节点名称</label>
         <input id="local-name" class="is-readonly" maxlength="40" required value="本地网络" readonly placeholder="订阅里显示的名称">
+        <label for="local-egress-mode">出口方式</label>
+        <select id="local-egress-mode"><option value="default">本机网络（沿用环境代理设置）</option><option value="local_proxy">本机已有 HTTP/SOCKS 代理</option><option value="auto">从已启用的上游节点自动选择</option></select>
+        <div id="local-proxy-settings" hidden><label for="local-proxy-port">扫描端口（留空扫描常用端口）</label><div class="input-row"><input id="local-proxy-port" type="number" min="1" max="65535" placeholder="例如 7890"><button id="local-proxy-scan" type="button" class="secondary">扫描</button></div><label for="local-proxy-choice">使用发现的代理</label><select id="local-proxy-choice"><option value="">请先扫描</option></select><p class="field-hint">仅扫描本服务所在网络空间的 127.0.0.1；仅支持无需认证且允许连接本地地址的代理。</p></div>
+        <div id="local-auto-settings" hidden><label for="local-auto-target">自动换线测试目标</label><select id="local-auto-target"><option value="google">Google</option><option value="youtube">YouTube</option><option value="cloudflare">Cloudflare</option></select><p id="local-auto-summary" class="field-hint">使用列表中所有已启用且支持的上游节点。没有可用出口时阻断，不直连；已有连接不保证不中断。</p></div>
         <fieldset class="local-pub-fieldset" id="local-pub-fieldset">
           <legend class="local-pub-legend">公网属性</legend>
           <div id="local-host-summary" class="local-host-summary" hidden>

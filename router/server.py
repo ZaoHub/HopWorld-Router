@@ -3,6 +3,7 @@ import base64
 from contextlib import contextmanager
 import hmac
 import hashlib
+import ipaddress
 import json
 import os
 import secrets
@@ -16,7 +17,8 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from router.subscription import MAX_SUBSCRIPTION_BYTES, combine_subscriptions, decode_subscription, encode_subscription, parse_subscription
-from router.probe import TARGETS, probe
+from router.probe import TARGETS, TEST_URL, UnsupportedNode, outbound, probe
+from router.local_proxy_discovery import discover
 from router.local_node import DEFAULT_LOCAL_PORT, DEFAULT_NODE_NAME, validate_node_name, validate_public_host
 from router.public_endpoint import detect_public_host, detect_public_ip, is_ip_host
 from router.ddns import publish_ddns
@@ -62,6 +64,7 @@ class NoRedirects(HTTPRedirectHandler):
 
 class Store:
     def __init__(self, path, xray=None, ikev2=None):
+        self._local_lock = threading.RLock()
         self.path = str(path)
         self.data_dir = Path(self.path).parent
         self.xray = xray or XrayService(self.data_dir)
@@ -308,14 +311,15 @@ class Store:
         return changed
 
     def sync_public_endpoint(self, force=False):
-        settings = self.local_node_settings()
-        if not settings.get('enabled'):
+        with self._local_lock:
+            settings = self.local_node_settings()
+            if not settings.get('enabled'):
+                return False
+            if settings.get('ddns_enabled'):
+                return self.sync_ddns(force=force)
+            if settings.get('auto_public_host'):
+                return self.sync_auto_public_host(force=force)
             return False
-        if settings.get('ddns_enabled'):
-            return self.sync_ddns(force=force)
-        if settings.get('auto_public_host'):
-            return self.sync_auto_public_host(force=force)
-        return False
 
     def sync_auto_public_host(self, force=False):
         settings = self.local_node_settings()
@@ -335,9 +339,54 @@ class Store:
         self.save_local_node_settings(settings)
         return changed
 
-    def configure_local_node(self, enabled, public_host=None, port=None, name=None,
+    def _auto_pool(self, settings):
+        pool = []
+        for node in self.nodes():
+            if not node['enabled'] or node['local']:
+                continue
+            link = self.node_link(node['id'])
+            parts = urlsplit(link)
+            try:
+                host = (parts.hostname or '').lower()
+                if host == 'localhost':
+                    continue
+                try:
+                    address = ipaddress.ip_address(host)
+                    if address.is_loopback or address.is_unspecified:
+                        continue
+                except ValueError:
+                    pass
+                if host == (settings.get('public_host') or '').lower() and parts.port == settings.get('port'):
+                    continue
+                pool.append(outbound(link))
+            except (UnsupportedNode, ValueError):
+                continue
+        return pool
+
+    def reconcile_auto_pool(self):
+        with self._local_lock:
+            settings = self.local_node_settings()
+            if not settings.get('enabled') or settings.get('egress_mode') != 'auto':
+                return
+            pool = self._auto_pool(settings)
+            if pool == settings.get('proxy_pool'):
+                return
+            settings['proxy_pool'] = pool
+            try:
+                self.xray.apply(settings)
+            except ValueError:
+                self.xray.stop()
+                raise
+            self.save_local_node_settings(settings)
+
+    def configure_local_node(self, *args, **kwargs):
+        with self._local_lock:
+            return self._configure_local_node(*args, **kwargs)
+
+    def _configure_local_node(self, enabled, public_host=None, port=None, name=None,
                              auto_public_host=None, public_host_prefer=None, ddns_enabled=None,
-                             acme_enabled=None, acme_email=None, acme_challenge=None):
+                             acme_enabled=None, acme_email=None, acme_challenge=None,
+                             egress_mode=None, local_proxy=None, auto_target=None):
         if not isinstance(enabled, bool):
             raise ValueError('本地节点设置无效')
         settings = self.local_node_settings()
@@ -367,6 +416,37 @@ class Store:
             if type(port) is not int or not 1 <= port <= 65535:
                 raise ValueError('端口无效')
             settings['port'] = port
+        if egress_mode is not None:
+            if egress_mode not in ('default', 'auto', 'local_proxy'):
+                raise ValueError('出口模式无效')
+            settings['egress_mode'] = egress_mode
+        if auto_target is not None:
+            if auto_target not in ('google', 'youtube', 'cloudflare'):
+                raise ValueError('自动换线测试目标无效')
+            settings['auto_target'] = auto_target
+        if local_proxy is not None:
+            if not isinstance(local_proxy, str) or len(local_proxy) > 20:
+                raise ValueError('本机代理无效')
+            settings['local_proxy'] = local_proxy
+        mode = settings.get('egress_mode', 'default')
+        if mode == 'auto':
+            settings['proxy_pool'] = self._auto_pool(settings)
+            target = settings.get('auto_target', 'google')
+            settings['auto_probe_url'] = TARGETS[target][1] or TEST_URL
+        elif mode == 'local_proxy':
+            try:
+                protocol, raw_port = (settings.get('local_proxy') or '').split(':')
+                proxy_port = int(raw_port)
+                if protocol not in ('http', 'socks') or not 1 <= proxy_port <= 65535 or proxy_port == settings.get('port'):
+                    raise ValueError()
+            except ValueError:
+                raise ValueError('请选择有效的本机代理，且不能使用本地节点入口端口') from None
+            if enabled and {'protocol': protocol, 'port': proxy_port} not in discover([proxy_port]):
+                raise ValueError('本机代理不可用或无法连接本地地址，请重新扫描')
+            settings['proxy_pool'] = [{'protocol': protocol, 'settings': {'servers': [{'address': '127.0.0.1', 'port': proxy_port}]}}]
+            settings['auto_probe_url'] = TEST_URL
+        else:
+            settings.pop('proxy_pool', None)
         if enabled:
             if settings.get('ddns_enabled'):
                 if not settings.get('public_host') or is_ip_host(settings.get('public_host', '')):
@@ -564,6 +644,8 @@ class Store:
     def restore_local_node(self):
         settings = self.local_node_settings()
         if settings.get('enabled'):
+            if settings.get('egress_mode') == 'auto':
+                settings['proxy_pool'] = self._auto_pool(settings)
             settings = self.xray.ensure_credentials(settings)
             if settings.get('ddns_enabled'):
                 settings, _ = self.refresh_ddns(settings)
@@ -668,7 +750,9 @@ def make_handler(store, password):
             if cancellations[kind].is_set(): return
             failed = False
             if kind == 'update':
-                try: store.refresh(item)
+                try:
+                    store.refresh(item)
+                    store.reconcile_auto_pool()
                 except ValueError: failed = True
             else:
                 owns_probe = False
@@ -898,11 +982,15 @@ def make_handler(store, password):
                     if not store.remove_manual(data.get('id', '')): raise ValueError('节点不存在')
                 elif path == '/api/node': store.set_node_enabled(data.get('id'), data.get('enabled'))
                 elif path == '/api/probe': start_probe(data.get('id'), data.get('target', 'google'))
+                elif path == '/api/local/discover':
+                    ports = data.get('ports')
+                    return self.json(200, {'proxies': discover() if ports is None else discover(ports)})
                 elif path == '/api/local-node':
                     return self.json(200, {'ok': True, 'local_node': store.configure_local_node(
                         bool(data.get('enabled')), data.get('public_host'), data.get('port'), data.get('name'),
                         data.get('auto_public_host'), data.get('public_host_prefer'), data.get('ddns_enabled'),
-                        data.get('acme_enabled'), data.get('acme_email'), data.get('acme_challenge'))})
+                        data.get('acme_enabled'), data.get('acme_email'), data.get('acme_challenge'),
+                        data.get('egress_mode'), data.get('local_proxy'), data.get('auto_target'))})
                 elif path == '/api/ikev2':
                     return self.json(200, {'ok': True, 'ikev2': store.configure_ikev2(
                         bool(data.get('enabled')), data.get('public_host'), data.get('remote_id'),
@@ -916,6 +1004,8 @@ def make_handler(store, password):
                 elif path in ('/api/batch/update/stop', '/api/batch/probe/stop'):
                     cancellations[path.split('/')[-2]].set()
                 else: return self.json(404, {'error': '请求不存在'})
+                if path in ('/api/sources', '/api/refresh', '/api/delete', '/api/manual', '/api/manual/delete', '/api/node'):
+                    store.reconcile_auto_pool()
                 self.json(200, {'ok': True})
             except (ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
                 message = str(exc) if isinstance(exc, ValueError) and str(exc) else '操作失败，请检查输入或订阅状态'
@@ -958,7 +1048,9 @@ def main():
         while not stopped.wait(3600):
             for source in store.sources():
                 if stopped.is_set(): return
-                try: store.refresh(source['id'])
+                try:
+                    store.refresh(source['id'])
+                    store.reconcile_auto_pool()
                 except ValueError: pass
 
     threading.Thread(target=update_loop, daemon=True).start()

@@ -115,6 +115,9 @@ class XrayService:
             settings.get('dest', DEFAULT_REALITY_DEST),
             settings.get('server_name', DEFAULT_REALITY_SERVER_NAME),
             settings.get('name') or DEFAULT_NODE_NAME,
+            (settings.get('proxy_pool') or []) if settings.get('egress_mode') in ('auto', 'local_proxy') else None,
+            settings.get('auto_probe_url'),
+            settings.get('egress_mode') == 'local_proxy',
         )
 
     def public_view(self, settings, running=None):
@@ -130,6 +133,10 @@ class XrayService:
             'dest': settings.get('dest') or DEFAULT_REALITY_DEST,
             'server_name': settings.get('server_name') or DEFAULT_REALITY_SERVER_NAME,
             'running': self.running() if running is None else bool(running),
+            'egress_mode': settings.get('egress_mode', 'default'),
+            'local_proxy': settings.get('local_proxy', ''),
+            'auto_pool_count': len(settings.get('proxy_pool') or []) if settings.get('egress_mode') == 'auto' else 0,
+            'auto_target': settings.get('auto_target', 'google'),
             'link': '',
         }
         if settings.get('enabled') and settings.get('public_host') and settings.get('public_key'):

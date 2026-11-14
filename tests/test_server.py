@@ -130,6 +130,41 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(error.exception.code, 400)
         self.assertFalse(self.store.local_node_settings()['enabled'])
 
+    def test_auto_pool_tracks_enabled_upstreams_without_self_or_unsupported(self):
+        self.request('/api/manual', {'content': '\n'.join([
+            'trojan://secret@example.com:443?security=tls#good',
+            'trojan://secret@127.0.0.1:8443?security=tls#loop',
+            'vless://not-a-uuid@example.net:443#unsupported',
+        ])}).close()
+        nodes = json.load(self.request('/api/status'))['nodes']
+        good = next(n for n in nodes if n['title'] == 'good')
+        creds = {'uuid':'a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89', 'private_key':'priv', 'public_key':'pub', 'short_id':'abcd'}
+        with patch.object(self.store.xray, 'ensure_credentials', side_effect=lambda settings: {**settings, **creds}), \
+             patch.object(self.store.xray, 'apply') as apply:
+            result = json.load(self.request('/api/local-node', {'enabled': True, 'public_host': '8.8.8.8', 'port': 8443, 'egress_mode': 'auto', 'auto_target': 'youtube'}))
+            self.assertEqual(result['local_node']['auto_pool_count'], 1)
+            self.assertNotIn('secret', json.dumps(result))
+            self.assertEqual(self.store.local_node_settings()['auto_probe_url'], 'https://www.youtube.com/generate_204')
+            self.request('/api/node', {'id': good['id'], 'enabled': False}).close()
+            self.assertEqual(self.store.local_node_settings()['proxy_pool'], [])
+            self.assertEqual(apply.call_args.args[0]['proxy_pool'], [])
+
+    def test_discovered_proxy_is_used_only_as_local_node_outbound(self):
+        creds = {'uuid':'a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89', 'private_key':'priv', 'public_key':'pub', 'short_id':'abcd'}
+        with patch('router.server.discover', return_value=[{'protocol': 'http', 'port': 7890}]), \
+             patch.object(self.store.xray, 'ensure_credentials', side_effect=lambda settings: {**settings, **creds}), \
+             patch.object(self.store.xray, 'apply') as apply:
+            result = json.load(self.request('/api/local-node', {'enabled': True, 'public_host': '8.8.8.8', 'port': 8443, 'egress_mode': 'local_proxy', 'local_proxy': 'http:7890'}))
+            self.assertEqual(result['local_node']['local_proxy'], 'http:7890')
+            config, _ = self.store.xray.build(apply.call_args.args[0])
+            self.assertEqual(config['outbounds'][0]['settings']['servers'][0], {'address': '127.0.0.1', 'port': 7890})
+            self.assertNotIn('observatory', config)
+            self.assertNotIn('routing', config)
+
+    def test_auto_pool_does_not_truncate_enabled_nodes(self):
+        self.store.add_manual('\n'.join(f'trojan://secret@node{i}.example.com:443?security=tls' for i in range(40)))
+        self.assertEqual(len(self.store._auto_pool({'public_host': 'entry.example.com', 'port': 8443})), 40)
+
     def test_local_node_auto_public_host_updates_subscription(self):
         reality = 'vless://a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89@8.8.4.4:8443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.microsoft.com&fp=chrome&pbk=pub&sid=abcd&type=tcp#%E6%9C%AC%E5%9C%B0%E7%BD%91%E7%BB%9C'
         def build_link(settings):

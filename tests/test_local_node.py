@@ -82,6 +82,17 @@ class LocalNodeTests(unittest.TestCase):
         )
         self.assertIn('routing', config)
 
+    def test_auto_pool_never_falls_back_to_direct(self):
+        args = ('example.com', 8443, 'a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89', 'priv', 'pub', 'ab12')
+        config, _ = build_local_reality_node(*args, proxy_pool=[])
+        self.assertEqual([item['protocol'] for item in config['outbounds']], ['blackhole'])
+        upstream = {'protocol': 'socks', 'settings': {'servers': [{'address': 'example.com', 'port': 1080}]}}
+        config, _ = build_local_reality_node(*args, proxy_pool=[upstream], probe_url='https://example.com/check')
+        self.assertEqual(config['routing']['balancers'][0]['fallbackTag'], 'blocked')
+        self.assertEqual(config['routing']['balancers'][0]['strategy']['type'], 'leastPing')
+        self.assertEqual(config['observatory']['probeUrl'], 'https://example.com/check')
+        self.assertNotIn('tag', upstream)
+
     def test_reality_rejects_invalid_inputs(self):
         good = ['8.8.8.8', 8443, 'a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89', 'priv', 'pub', 'ab12']
         for index, bad in [(0, ''), (0, 'bad host'), (1, 0), (2, 'not-uuid'), (5, 'zz'), (5, '1')]:

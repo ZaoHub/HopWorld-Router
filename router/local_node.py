@@ -81,7 +81,17 @@ def egress_http_outbound_from_environ():
     return {'protocol': 'http', 'tag': 'egress', 'settings': {'servers': [server]}}
 
 
-def _finish_local_xray_config(config):
+def _finish_local_xray_config(config, proxy_pool=None, probe_url=None, single_proxy=False):
+    if proxy_pool is not None:
+        config['outbounds'] = [{'protocol': 'blackhole', 'tag': 'blocked', 'settings': {}}]
+        if proxy_pool:
+            if single_proxy:
+                config['outbounds'] = [{**proxy_pool[0], 'tag': 'local-proxy'}]
+                return config
+            config['outbounds'] += [{**outbound, 'tag': f'candidate-{index}'} for index, outbound in enumerate(proxy_pool)]
+            config['observatory'] = {'subjectSelector': ['candidate-'], 'probeUrl': probe_url or 'https://www.google.com/generate_204', 'probeInterval': '1m', 'enableConcurrency': True}
+            config['routing'] = {'domainStrategy': 'AsIs', 'balancers': [{'tag': 'auto', 'selector': ['candidate-'], 'fallbackTag': 'blocked', 'strategy': {'type': 'leastPing'}}], 'rules': [{'type': 'field', 'network': 'tcp,udp', 'balancerTag': 'auto'}]}
+        return config
     egress = egress_http_outbound_from_environ()
     if egress:
         config['outbounds'] = [
@@ -133,7 +143,7 @@ def build_local_node(hostname, port, client_id, certificate, private_key, name=D
 
 def build_local_reality_node(public_host, port, client_id, private_key, public_key, short_id,
                              dest=DEFAULT_REALITY_DEST, server_name=DEFAULT_REALITY_SERVER_NAME,
-                             name=DEFAULT_NODE_NAME):
+                             name=DEFAULT_NODE_NAME, proxy_pool=None, probe_url=None, single_proxy=False):
     """Generate a VLESS Reality inbound config and matching client share link."""
     public_host = validate_public_host(public_host)
     port = _validate_port(port)
@@ -171,7 +181,7 @@ def build_local_reality_node(public_host, port, client_id, private_key, public_k
                 },
             },
         }],
-    })
+    }, proxy_pool=proxy_pool, probe_url=probe_url, single_proxy=single_proxy)
     params = urlencode({
         'encryption': 'none',
         'flow': 'xtls-rprx-vision',
