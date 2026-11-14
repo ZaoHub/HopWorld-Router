@@ -338,7 +338,7 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
 
 ### Windows：WSL 2 试用
 
-可在 Windows 的 Ubuntu WSL 2 环境中参考 [WSL 2 试用指南](docs/Windows-WSL2试用指南.md)。该方式运行 Linux 版本，不是 Windows 原生安装包；尚未在 WSL 2 实测。
+可在 Windows 的 Ubuntu WSL 2 环境中参考 [WSL 2 试用指南](docs/Windows-WSL2试用指南.md)，手动启动或试用用户级 systemd 服务。该方式运行 Linux 版本，不是 Windows 原生安装包；尚未在 WSL 2 实测。
 
 </details>
 
