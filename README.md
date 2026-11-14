@@ -59,9 +59,11 @@ HopWorld Router 同时做两件事：**把运行本服务的机器网络做成�
 根据运行环境展开对应教程：
 
 - **Linux 服务器 / VPS**：Debian、Ubuntu、RHEL、Rocky Linux、AlmaLinux。
+- **Linux 虚拟机 / ARM 小主机**：使用 Linux 原生安装教程，并核对设备与架构要求。
 - **Linux Docker**：使用 Docker 在 Linux 主机上运行。
 - **macOS**：使用 Python 在本机试用。
-- **Windows / OpenWrt / NAS**：查看当前支持状态。
+- **Windows + WSL 2**：在 Linux 子系统中试用。
+- **Windows 原生 / OpenWrt / NAS**：查看当前支持状态。
 
 <details>
 <summary><strong>macOS：本机试用</strong></summary>
@@ -93,6 +95,8 @@ export HOPWORLD_ADMIN_PASSWORD='请替换为至少16字符的随机密码'
 ### 全新 Linux 服务器
 
 下面是一台新机器从空目录到能打开管理页的顺序。命令都在服务器上以 root 执行。适用 Debian 12、Ubuntu 22.04 及更新版本，或 RHEL / Rocky / Alma 9 及更新版本。`python3 --version` 须为 3.10 或更高。
+
+Linux 虚拟机、树莓派和其他 ARM 小主机可在系统版本符合上述要求时参考本节。先用 `uname -m` 核对架构，并确认 Xray 有对应版本、设备存储空间充足。虚拟机和家庭网络的入站、端口转发及开机恢复需要各自配置；ARM 和虚拟机部署尚未完成实机验证。
 
 有公网入站的 VPS 按本节安装。没有入站的云电脑仍要自备隧道，本节不包含隧道开通。应使用下列步骤安装，紧急修复脚本不适合作为安装程序。
 
@@ -318,9 +322,18 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
 </details>
 
 <details>
-<summary><strong>Windows / OpenWrt / NAS：支持状态</strong></summary>
+<summary><strong>Windows：WSL 2 试用</strong></summary>
 
-Windows 和 OpenWrt 尚未完成适配，暂无可直接使用的安装教程。NAS 适配计划包括群晖、威联通、极空间、绿联 NAS（UGOS Pro）和飞牛私有云（fnOS）；不同设备的容器网络和系统环境各不相同，Linux Docker 教程不能保证直接适用，尚需在对应设备上验证。Docker Desktop 也需要单独验证。
+### Windows：WSL 2 试用
+
+可在 Windows 的 Ubuntu WSL 2 环境中参考 [WSL 2 试用指南](docs/Windows-WSL2试用指南.md)。该方式运行 Linux 版本，不是 Windows 原生安装包；尚未在 WSL 2 实测。
+
+</details>
+
+<details>
+<summary><strong>Windows 原生 / OpenWrt / NAS：支持状态</strong></summary>
+
+Windows 原生版和 OpenWrt 尚未完成适配，暂无可直接使用的安装教程。NAS 适配计划包括群晖、威联通、极空间、绿联 NAS（UGOS Pro）和飞牛私有云（fnOS）；不同设备的容器网络和系统环境各不相同，Linux Docker 教程不能保证直接适用，尚需在对应设备上验证。Docker Desktop 也需要单独验证。
 
 绿联和飞牛可参考 [NAS 容器试用指南](docs/NAS容器试用指南.md)，该指南尚未在对应设备上实测。
 
