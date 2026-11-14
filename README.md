@@ -322,6 +322,8 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
 
 Windows 和 OpenWrt 尚未完成适配，暂无可直接使用的安装教程。NAS 适配计划包括群晖、威联通、极空间、绿联 NAS（UGOS Pro）和飞牛私有云（fnOS）；不同设备的容器网络和系统环境各不相同，Linux Docker 教程不能保证直接适用，尚需在对应设备上验证。Docker Desktop 也需要单独验证。
 
+绿联和飞牛可参考 [NAS 容器试用指南](docs/NAS容器试用指南.md)，该指南尚未在对应设备上实测。
+
 </details>
 
 ## 测试

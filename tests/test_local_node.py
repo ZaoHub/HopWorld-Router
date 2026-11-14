@@ -98,6 +98,19 @@ class LocalNodeTests(unittest.TestCase):
 
 
 class XrayRenameTests(unittest.TestCase):
+    def test_generate_keys_accepts_xray_output_formats(self):
+        outputs = (
+            'Private key: priv\nPublic key: pub\n',
+            'PrivateKey: priv\nPassword: pub\nHash32: ignored\n',
+            'PrivateKey: priv\nPassword (PublicKey): pub\nHash32: ignored\n',
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            service = XrayService(Path(temp), binary='/usr/bin/xray')
+            for output in outputs:
+                with self.subTest(output=output), unittest.mock.patch('router.xray_service.subprocess.run') as run:
+                    run.return_value.stdout = output
+                    self.assertEqual(service.generate_keys(), ('priv', 'pub'))
+
     def test_renaming_does_not_restart_when_config_is_unchanged(self):
         with tempfile.TemporaryDirectory() as temp:
             service = XrayService(Path(temp), binary=None)

@@ -49,7 +49,7 @@ class XrayService:
             lower = line.lower()
             if 'private' in lower:
                 private_key = line.split(':', 1)[-1].strip()
-            elif 'public' in lower:
+            elif 'public' in lower or lower.split(':', 1)[0].strip() == 'password':
                 public_key = line.split(':', 1)[-1].strip()
         if not private_key or not public_key:
             raise ValueError('无法解析 Reality 密钥')
