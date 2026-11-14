@@ -334,7 +334,7 @@ Windows 和 OpenWrt 尚未完成适配，暂无可直接使用的安装教程。
 
 ## 后续部署目标
 
-Linux x86_64 / ARM64、Linux 虚拟机和 Docker/NAS 优先；OpenWrt、Windows 和透明网关需分别设计、适配并在真实环境验证。macOS 保留原有 HopWorld 应用。
+后续按 Linux 基础验证、NAS 与 ARM 设备、Windows WSL 2 和桌面容器、原生系统服务、OpenWrt 的顺序逐步适配。各平台的工作步骤、功能范围和验收条件见 [运行环境适配路线图](docs/运行环境适配路线图.md)。路线图是开发计划，不代表相应环境已支持或通过测试。
 
 ## 许可证
 
