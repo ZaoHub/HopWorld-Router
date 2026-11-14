@@ -75,7 +75,7 @@ export HOPWORLD_ADMIN_PASSWORD='请替换为至少16字符的随机密码'
 
 下面是一台新机器从空目录到能打开管理页的顺序。命令都在服务器上以 root 执行。适用 Debian 12、Ubuntu 22.04 及更新版本，或 RHEL / Rocky / Alma 9 及更新版本。`python3 --version` 须为 3.10 或更高。
 
-有公网入站的 VPS 按本节安装。没有入站的云电脑仍要自备隧道，本节不包含隧道开通。`deploy/push-to-server.sh` 和 `deploy/hopworld-emergency-repair.sh` 写的是某一台现网机器，不要拿来装新服务器。
+有公网入站的 VPS 按本节安装。没有入站的云电脑仍要自备隧道，本节不包含隧道开通。应使用下列步骤安装，紧急修复脚本不适合作为安装程序。
 
 ### 1. 系统包
 
@@ -83,13 +83,13 @@ Debian / Ubuntu：
 
 ```sh
 apt update
-apt install -y python3 python3-venv python3-pip curl ca-certificates
+apt install -y git python3 python3-venv python3-pip curl ca-certificates
 ```
 
 RHEL / Rocky / Alma：
 
 ```sh
-dnf install -y python3 python3-pip curl ca-certificates
+dnf install -y git python3 python3-pip curl ca-certificates
 ```
 
 ### 2. Xray
@@ -277,13 +277,19 @@ bash /opt/hopworld-router/deploy/hopworld-install-boot.sh
 Linux Docker 可使用主机网络，使仅监听回环地址的管理服务可通过宿主机本地或 SSH 隧道访问：
 
 ```sh
+git clone https://github.com/ZaoHub/HopWorld-Router.git
+cd HopWorld-Router
 docker build -t hopworld-router .
-# 在权限为 600 的 router.env 中设置 HOPWORLD_ADMIN_PASSWORD
+# 设置至少 16 个字符且不含冒号的管理密码，勿提交或分享此文件
+umask 077
+printf 'HOPWORLD_ADMIN_PASSWORD=%s\n' '请替换为随机密码' > router.env
 mkdir -p data
 docker run -d --name hopworld-router --restart unless-stopped --network host --env-file router.env -v "$(pwd)/data:/data" hopworld-router
+docker exec hopworld-router xray version
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
 ```
 
-`router.env` 不应提交或分享。此方式依赖 Linux 的主机网络，Docker Desktop、NAS 等环境可能不同，需要单独验证；请勿将容器改成公网监听后直接暴露管理界面。
+将示例密码替换成自己的随机密码后再启动；最后一条命令返回 `401` 表示管理界面正在运行且需要认证。镜像包含 Xray 和 curl，供节点测试及本地网络节点使用；IKEv2、证书自动签发和 DNS Webhook 的宿主机部署步骤不适用于此容器，需另行配置。此方式依赖 Linux 的主机网络，Docker Desktop、NAS 等环境可能不同，需要单独验证；请勿将容器改成公网监听后直接暴露管理界面。
 
 ## 测试
 
