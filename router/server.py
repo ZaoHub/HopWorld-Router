@@ -378,12 +378,12 @@ class Store:
                 raise ValueError('无法探测公网地址，请检查网络或改为手动填写')
             settings = self.xray.ensure_credentials(settings)
             settings['enabled'] = True
-            self.save_local_node_settings(settings)
             self.xray.apply(settings)
+            self.save_local_node_settings(settings)
         else:
             settings['enabled'] = False
-            self.save_local_node_settings(settings)
             self.xray.apply(settings)
+            self.save_local_node_settings(settings)
         view = self.xray.public_view(settings)
         if acme_enabled is not None or acme_email is not None or acme_challenge is not None:
             acme_on = bool(acme_enabled) if acme_enabled is not None else self.acme_settings().get('enabled')

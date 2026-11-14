@@ -98,6 +98,13 @@ class LocalNodeTests(unittest.TestCase):
 
 
 class XrayRenameTests(unittest.TestCase):
+    def test_xray_launch_error_is_reported(self):
+        with tempfile.TemporaryDirectory() as temp:
+            service = XrayService(Path(temp), binary='/missing/xray')
+            with unittest.mock.patch('router.xray_service.subprocess.Popen', side_effect=OSError('missing')):
+                with self.assertRaisesRegex(ValueError, '无法启动 Xray'):
+                    service._restart_locked()
+
     def test_windows_never_uses_unix_pid_signals(self):
         with tempfile.TemporaryDirectory() as temp:
             service = XrayService(Path(temp), binary='/unused')

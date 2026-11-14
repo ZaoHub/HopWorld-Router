@@ -109,6 +109,16 @@ class ServerTests(unittest.TestCase):
             self.request('/api/local-node', {'enabled': True, 'public_host': '', 'port': 8443})
         self.assertEqual(error.exception.code, 400)
 
+    def test_failed_local_node_start_preserves_saved_settings(self):
+        original = self.store.local_node_settings()
+        with patch.object(self.store.xray, 'ensure_credentials', side_effect=lambda settings: settings), \
+             patch.object(self.store.xray, 'apply', side_effect=ValueError('无法启动 Xray')):
+            with self.assertRaises(HTTPError) as error:
+                self.request('/api/local-node', {'enabled': True, 'public_host': '8.8.8.8', 'port': 8443})
+        self.assertEqual(error.exception.code, 400)
+        self.assertEqual(self.store.local_node_settings(), original)
+        self.assertFalse(json.load(self.request('/api/status'))['local_node']['enabled'])
+
     def test_local_node_auto_public_host_updates_subscription(self):
         reality = 'vless://a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89@8.8.4.4:8443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.microsoft.com&fp=chrome&pbk=pub&sid=abcd&type=tcp#%E6%9C%AC%E5%9C%B0%E7%BD%91%E7%BB%9C'
         def build_link(settings):

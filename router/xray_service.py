@@ -211,12 +211,15 @@ class XrayService:
         if not self.binary:
             raise ValueError('未找到 Xray，请安装后设置 HOPWORLD_XRAY')
         self._stop_locked()
-        process = subprocess.Popen(
-            [self.binary, 'run', '-c', str(self.config_path)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
+        try:
+            process = subprocess.Popen(
+                [self.binary, 'run', '-c', str(self.config_path)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        except OSError as exc:
+            raise ValueError('无法启动 Xray，请检查安装和执行权限') from exc
         self._process = process
         self.pid_path.write_text(str(process.pid), encoding='utf-8')
         os.chmod(self.pid_path, 0o600)
