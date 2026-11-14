@@ -139,6 +139,8 @@ class XrayService:
         return view
 
     def running(self):
+        if os.name == 'nt':
+            return False
         with self._lock:
             if self._process is not None and self._process.poll() is None:
                 return True
@@ -154,6 +156,10 @@ class XrayService:
 
     def apply(self, settings):
         with self._lock:
+            if os.name == 'nt':
+                if settings.get('enabled'):
+                    raise ValueError('Windows 原生环境暂不支持本地网络节点，请使用 WSL 2 或 Docker')
+                return ''
             if settings.get('enabled'):
                 config, link = self.build(settings)
                 payload = json.dumps(config, ensure_ascii=False, indent=2).encode('utf-8')
@@ -168,6 +174,8 @@ class XrayService:
             return ''
 
     def stop(self):
+        if os.name == 'nt':
+            return
         with self._lock:
             self._stop_locked()
 

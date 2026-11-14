@@ -98,6 +98,19 @@ class LocalNodeTests(unittest.TestCase):
 
 
 class XrayRenameTests(unittest.TestCase):
+    def test_windows_never_uses_unix_pid_signals(self):
+        with tempfile.TemporaryDirectory() as temp:
+            service = XrayService(Path(temp), binary='/unused')
+            service.pid_path.write_text('1234', encoding='utf-8')
+            with unittest.mock.patch('router.xray_service.os.name', 'nt'), \
+                 unittest.mock.patch('router.xray_service.os.kill') as kill:
+                self.assertFalse(service.running())
+                self.assertEqual(service.apply({'enabled': False}), '')
+                with self.assertRaisesRegex(ValueError, 'Windows 原生环境暂不支持'):
+                    service.apply({'enabled': True})
+                service.stop()
+                kill.assert_not_called()
+
     def test_generate_keys_accepts_xray_output_formats(self):
         outputs = (
             'Private key: priv\nPublic key: pub\n',
