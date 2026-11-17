@@ -19,7 +19,11 @@
     </div>
   </header>
   <main id="overview" class="page">
-    <div class="page-heading page-heading-compact"><div><div class="breadcrumb">工作台 <span>/</span> 订阅管理</div><h1>订阅管理</h1></div><button type="button" class="heading-link" id="add-source-open-top"><span>＋</span> 添加订阅</button></div>
+    <div class="page-heading page-heading-compact"><div><div class="breadcrumb">工作台 <span>/</span> 订阅管理</div><h1>订阅管理</h1></div><button type="button" class="heading-link heading-icon" id="update-project" aria-label="项目更新" title="项目更新"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button></div>
+    <section id="system-update-banner" class="system-update-banner" aria-label="程序更新" role="status" hidden>
+      <div><strong id="system-update-title">发现程序更新</strong><p id="system-update-description"></p><details id="system-update-details"><summary>查看变动文件</summary><ul id="system-update-files"></ul></details></div>
+      <button id="system-update-apply" type="button" class="primary">更新程序</button>
+    </section>
     <div class="layout">
       <div class="main-column">
         <section class="card card-compact address-card" id="subscription-section"><div class="card-head card-head-tight"><div class="card-title"><span class="icon-box blue" aria-hidden="true">↗</span><div><h2>统一订阅</h2><p>客户端直连节点，流量不经本服务</p></div></div><span class="pill">密钥保护</span></div><p id="subscription-summary" class="field-hint">连接服务后生成</p><p id="subscription-tls-status" class="field-hint subscription-tls-status" hidden></p><div class="side-actions side-actions-split"><button type="button" id="subscription-open" class="primary full">订阅与扫码</button><button type="button" id="copy" class="secondary full">复制</button></div></section>
@@ -249,6 +253,21 @@
         <div class="side-heading"><div class="icon-box blue" aria-hidden="true">＋</div><div><h2 id="add-source-modal-title">添加上游订阅</h2><p>添加一个订阅来源</p></div></div>
       </div>
       <div class="modal-panel-body"><form id="add"><label for="name">订阅名称</label><input id="name" maxlength="100" required placeholder="例如：我的订阅"><label for="url">订阅地址</label><input id="url" type="url" required placeholder="https://…"><p class="field-hint">支持 HTTPS、Base64 及部分 Clash YAML 订阅</p><button type="submit" class="primary full">添加并更新 <span aria-hidden="true">→</span></button></form></div>
+    </div>
+  </div>
+  <div id="update-settings-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="update-settings-title">
+    <button type="button" class="modal-backdrop" data-modal-close="update-settings" aria-label="关闭"></button>
+    <div class="modal-panel card">
+      <div class="modal-panel-head">
+        <button type="button" class="modal-close text-button" data-modal-close="update-settings" aria-label="关闭">关闭</button>
+        <div class="side-heading"><div class="icon-box blue" aria-hidden="true">↻</div><div><h2 id="update-settings-title">项目更新</h2><p>检查并更新本机上的项目文件</p></div></div>
+      </div>
+      <div class="modal-panel-body"><form id="update-settings-form">
+        <label class="checkbox-row" for="update-auto-check"><input id="update-auto-check" type="checkbox" checked><span>自动检测更新</span></label>
+        <p class="field-hint">定期查看 GitHub 是否有新的项目文件。</p>
+        <label class="checkbox-row" for="update-auto-apply"><input id="update-auto-apply" type="checkbox" checked><span>自动更新</span></label>
+        <p class="field-hint">发现变动后自动拉取并重启服务，现有连接可能短暂中断。</p>
+      </form></div>
     </div>
   </div>
 </body></html>
