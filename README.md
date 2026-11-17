@@ -158,9 +158,9 @@ systemctl restart hopworld-router
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
 ```
 
-最后一行应打印 `401`。这表示管理页只在本机监听，且未登录会拒绝。这一段不会安装 Xray、nginx、certbot 或 strongSwan。启用对应功能时，管理页再装：
+最后一行应打印 `401`。这表示管理页只在本机监听，且未登录会拒绝。这一段会尝试安装 sing-box；命令装不上就跳过，安装继续。Xray、nginx、certbot 和 strongSwan 仍不在这一段里。启用对应功能时，管理页再装：
 
-- 启用或保存本地网络节点：安装缺少的 Xray 和 sing-box，并在本机防火墙已经启用时放行该 TCP 端口，以及 Hysteria 2、TUIC 的 UDP 端口。节点测试只安装缺少的 Xray。
+- 启用或保存本地网络节点：安装缺少的 Xray 和 sing-box，并在本机防火墙已经启用时放行该 TCP 端口，以及 Hysteria 2、TUIC 的 UDP 端口。sing-box 没装上时，配置里可点「在线安装 sing-box」。节点测试只安装缺少的 Xray。
 - 申请 Let's Encrypt：安装 nginx 与 certbot，放行 TCP 80，再申请证书。订阅用的 443 站点仍要自己挂上。
 - 启用 IKEv2：安装 strongSwan，放行 UDP 500 和 4500，并写入配置。
 
@@ -188,7 +188,7 @@ ssh -L 8080:127.0.0.1:8080 root@服务器
 
 ### 本地网络节点
 
-在管理页启用「本地网络节点」。默认入站是 TCP **8443**。Hysteria 2 和 TUIC 使用 UDP **8444** 和 **8445**。云厂商安全组放行这几个端口。管理页会安装缺少的 Xray 和 sing-box，并在本机防火墙已经启用时放行这些端口。不要为了这份说明去新开一道防火墙，以免把 SSH 拦在外面。启用后在服务器上确认：
+在管理页启用「本地网络节点」。默认入站是 TCP **8443**。Hysteria 2 和 TUIC 使用 UDP **8444** 和 **8445**。云厂商安全组放行这几个端口。管理页会安装缺少的 Xray 和 sing-box，并在本机防火墙已经启用时放行这些端口。安装命令没装上 sing-box 时，配置里点「在线安装 sing-box」。不要为了这份说明去新开一道防火墙，以免把 SSH 拦在外面。启用后在服务器上确认：
 
 ```sh
 ss -lntp | grep 8443
@@ -250,7 +250,7 @@ HOPWORLD_DDNS_WEBHOOK_URL=http://127.0.0.1:9876/
 bash /opt/hopworld-router/deploy/hopworld-update.sh
 ```
 
-脚本从 GitHub 远程 `origin` 的 `main` 拉取并仅允许快进；目录有未提交或未跟踪文件时会停止。依赖变化时先建立独立虚拟环境，安装成功后再更新；原虚拟环境保留在 `/var/lib/hopworld-router-updates/previous/`。更新会重启服务，现有连接可能短暂中断。服务启动失败时脚本会报告原版本号，请检查 `journalctl -u hopworld-router` 并使用备份恢复代码和数据。该脚本不会更新 systemd 服务文件、系统软件、Xray 或 sing-box。已经执行过 `deploy/hopworld-install-root.sh` 的机器，更新后要再执行一次，已安装的 root 助手才会带上 sing-box，然后 `systemctl restart hopworld-router`。还没跑过该脚本的机器同样补执行一次。非 Git 安装、Docker 和自定义部署请按各自方式更新，不要直接覆盖现有数据。
+脚本从 GitHub 远程 `origin` 的 `main` 拉取并仅允许快进；目录有未提交或未跟踪文件时会停止。依赖变化时先建立独立虚拟环境，安装成功后再更新；原虚拟环境保留在 `/var/lib/hopworld-router-updates/previous/`。更新会重启服务，现有连接可能短暂中断。服务启动失败时脚本会报告原版本号，请检查 `journalctl -u hopworld-router` 并使用备份恢复代码和数据。该脚本不会更新 systemd 服务文件、系统软件、Xray 或 sing-box。已经执行过 `deploy/hopworld-install-root.sh` 的机器，更新后要再执行一次。它会更新已安装的 root 助手，并再试一次 sing-box；这条命令装不上就跳过，然后 `systemctl restart hopworld-router`。还没跑过该脚本的机器同样补执行一次。非 Git 安装、Docker 和自定义部署请按各自方式更新，不要直接覆盖现有数据。
 
 ### 管理页提示未授权时
 
