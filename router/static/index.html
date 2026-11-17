@@ -122,8 +122,9 @@
             </select>
             <label for="local-acme-email">ACME 邮箱</label>
             <input id="local-acme-email" type="email" maxlength="254" placeholder="注册与到期提醒">
-            <div id="local-acme-fw-wrap" class="local-acme-fw" hidden>
-              <p class="local-acme-fw-title">云防火墙入站（TCP）</p>
+            <details id="local-acme-fw-wrap" class="local-acme-fw" hidden>
+              <summary class="local-acme-fw-title">证书校验端口（仅申请证书）</summary>
+              <p class="field-hint">以下端口仅用于证书校验，与节点转发端口无关。</p>
               <table class="local-acme-fw-table" aria-label="校验方式与需放行端口">
                 <thead><tr><th>校验</th><th>入站端口</th></tr></thead>
                 <tbody>
@@ -133,7 +134,7 @@
                   <tr data-challenge="auto"><td>自动</td><td>按检测结果</td></tr>
                 </tbody>
               </table>
-            </div>
+            </details>
           </section>
           <p id="local-acme-status" class="field-hint" hidden></p>
           <label for="local-host">公网地址<span class="label-hint">（IP 或域名）</span></label>
