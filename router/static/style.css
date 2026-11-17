@@ -91,3 +91,13 @@ summary.card-head{cursor:pointer;list-style:none}summary.card-head::-webkit-deta
 
 #acme-form .checkbox-row{display:flex;align-items:center;gap:10px;margin:14px 0!important;font-weight:600;color:#35598f;font-size:13px;cursor:pointer}#acme-form .checkbox-row input{width:18px;height:18px;flex:none;accent-color:#2866ed}#acme-form .local-acme-fw-title{cursor:pointer}#acme-form .local-acme-fw[open] .local-acme-fw-title{margin-bottom:8px}
 #acme-form select{width:100%;border:1px solid #e0e7f0;border-radius:9px;padding:11px 12px;color:#253c5a;background:#fff;min-height:42px;font-size:13px}#acme-form select:focus-visible{outline:3px solid #a9c8ff;outline-offset:2px}
+.system-update-banner:not([hidden]){display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin:0 0 16px;padding:16px 18px;border:1px solid #c9ddff;border-radius:12px;background:#f1f6ff;color:#294a78}
+.system-update-banner strong{font-size:14px}.system-update-banner p{margin:6px 0;font-size:12px;line-height:1.5;color:#536b8e}.system-update-banner details{font-size:12px}.system-update-banner summary{cursor:pointer}.system-update-banner ul{max-height:180px;overflow:auto;margin:8px 0 0;padding-left:20px;overflow-wrap:anywhere}.system-update-banner button{flex:none}
+@media(max-width:560px){.system-update-banner:not([hidden]){flex-direction:column}.system-update-banner button{width:100%}}
+#update-settings-form .checkbox-row{display:flex;align-items:center;gap:10px;margin:16px 0 4px!important;font-weight:600;color:#35598f;font-size:13px;cursor:pointer}
+#update-settings-form .checkbox-row input{width:18px;height:18px;flex:none;accent-color:#2866ed}
+#update-settings-form .field-hint{margin-top:0!important}
+.heading-icon{width:42px;min-width:42px;height:42px;padding:0;justify-content:center;border-radius:12px}
+.heading-icon svg{width:18px;height:18px;display:block;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.heading-icon.is-busy svg{animation:connection-spin .8s linear infinite}
+@media(max-width:640px){.heading-icon{width:44px;min-width:44px;height:44px;padding:0}}
