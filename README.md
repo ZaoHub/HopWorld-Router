@@ -98,7 +98,7 @@ export HOPWORLD_ADMIN_PASSWORD='请替换为至少16字符的随机密码'
 .venv/bin/python -m router.server
 ```
 
-将密码替换为至少 16 个字符且不含冒号的随机字符串。打开 `http://127.0.0.1:8080`，用户名为 `admin`，密码为上面设置的值。程序只监听 `127.0.0.1`；配置保存在 `./data/router.db`。可用 `HOPWORLD_DATA` 指定数据目录，`HOPWORLD_PORT` 指定监听端口。停止服务按 `Ctrl+C`。需要用户登录后后台运行时，可参考 [macOS 后台服务试用指南](docs/macOS后台服务试用指南.md)；尚未实测。节点测试和本地网络节点还需安装 Xray，节点测试还需 curl。
+将密码替换为至少 16 个字符且不含冒号的随机字符串。打开 `http://127.0.0.1:8080`，用户名为 `admin`，密码为上面设置的值。程序只监听 `127.0.0.1`；配置保存在 `./data/router.db`。可用 `HOPWORLD_DATA` 指定数据目录，`HOPWORLD_PORT` 指定监听端口。停止服务按 `Ctrl+C`。需要用户登录后后台运行时，可参考 [macOS 后台服务试用指南](docs/macOS后台服务试用指南.md)；尚未实测。节点测试和本地网络节点还需自行安装 Xray，节点测试还需 curl。管理页自动安装缺少的组件只用于下方的 Linux systemd 安装。
 
 生成的地址默认仅能从运行服务的机器访问。访问远程服务器的管理界面时，可通过 SSH 本地转发并让两端使用相同端口，例如 `ssh -L 8080:127.0.0.1:8080 user@server`，然后访问本机 `127.0.0.1:8080`。不要直接将 HTTP 管理界面或未保护的数据库暴露到公网。若需其他设备远程获取订阅，须另行部署受信任的 HTTPS 反向代理，仅转发 `/s/` 路径，并避免在访问日志中记录订阅地址；管理接口仍应限于本机或 SSH 隧道。
 
@@ -363,7 +363,7 @@ docker exec hopworld-router xray version
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
 ```
 
-将示例密码替换成自己的随机密码后再启动；最后一条命令返回 `401` 表示管理界面正在运行且需要认证。镜像包含 Xray 和 curl，供节点测试及本地网络节点使用；IKEv2、证书自动签发和 DNS Webhook 的宿主机部署步骤不适用于此容器，需另行配置。此方式依赖 Linux 的主机网络，Docker Desktop、NAS 等环境可能不同，需要单独验证；请勿将容器改成公网监听后直接暴露管理界面。
+将示例密码替换成自己的随机密码后再启动；最后一条命令返回 `401` 表示管理界面正在运行且需要认证。镜像包含 Xray 和 curl，供节点测试及本地网络节点使用。不要在容器里执行 `deploy/hopworld-install-root.sh`；管理页自动安装组件只用于上一节的 systemd 安装。IKEv2、证书自动签发和 DNS Webhook 的宿主机部署步骤不适用于此容器，需另行配置。此方式依赖 Linux 的主机网络，Docker Desktop、NAS 等环境可能不同，需要单独验证；请勿将容器改成公网监听后直接暴露管理界面。
 
 </details>
 
@@ -372,7 +372,7 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
 
 ### Docker Desktop 试用
 
-可参考 [Docker Desktop 试用指南](docs/Docker-Desktop试用指南.md)，使用独立的 Compose 配置将管理端口映射到本机。该方案尚未在 Docker Desktop 实测。
+可参考 [Docker Desktop 试用指南](docs/Docker-Desktop试用指南.md)，使用独立的 Compose 配置将管理端口映射到本机。镜像自带 Xray；不要在容器里做 Linux 的 root 授权。该方案尚未在 Docker Desktop 实测。
 
 </details>
 
@@ -381,7 +381,7 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
 
 ### Windows：WSL 2 试用
 
-可在 Windows 的 Ubuntu WSL 2 环境中参考 [WSL 2 试用指南](docs/Windows-WSL2试用指南.md)，手动启动或试用用户级 systemd 服务。该方式运行 Linux 版本，不是 Windows 原生安装包；尚未在 WSL 2 实测。
+可在 Windows 的 Ubuntu WSL 2 环境中参考 [WSL 2 试用指南](docs/Windows-WSL2试用指南.md)，手动启动或试用用户级 systemd 服务。该方式以当前用户运行，管理页不会自动安装系统组件。它运行的是 Linux 版本，不是 Windows 原生安装包；尚未在 WSL 2 实测。
 
 </details>
 
@@ -390,7 +390,7 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
 
 ### Windows 原生试用
 
-可参考 [Windows 原生试用指南](docs/Windows原生试用指南.md)，使用 Python 手动启动订阅管理。此方案尚未在 Windows 实测；本地网络节点、后台服务及系统集成尚未完成。
+可参考 [Windows 原生试用指南](docs/Windows原生试用指南.md)，使用 Python 手动启动订阅管理。此方案尚未在 Windows 实测；管理页不会安装 Xray，本地网络节点、后台服务及系统集成尚未完成。
 
 </details>
 
@@ -399,7 +399,7 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
 
 ### OpenWrt 原生试用
 
-已准备实验性的 procd 服务模板及 [OpenWrt 试用指南](docs/OpenWrt试用指南.md)，仅覆盖订阅管理。尚无安装包，且未在 OpenWrt 设备上验证；透明网关、IKEv2 和其他系统集成不在此方案范围内。
+已准备实验性的 procd 服务模板及 [OpenWrt 试用指南](docs/OpenWrt试用指南.md)，仅覆盖订阅管理。Linux 的组件授权不适用于 OpenWrt。尚无安装包，且未在 OpenWrt 设备上验证；透明网关、IKEv2 和其他系统集成不在此方案范围内。
 
 </details>
 
@@ -408,7 +408,7 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
 
 NAS 适配计划包括群晖、威联通、极空间、绿联 NAS（UGOS Pro）和飞牛私有云（fnOS）；不同设备的容器网络和系统环境各不相同，Linux Docker 教程不能保证直接适用，尚需在对应设备上验证。Docker Desktop 试用方案也需要单独验证。
 
-绿联和飞牛可参考 [NAS 容器试用指南](docs/NAS容器试用指南.md)，该指南尚未在对应设备上实测。
+绿联和飞牛可参考 [NAS 容器试用指南](docs/NAS容器试用指南.md)，该指南尚未在对应设备上实测。容器镜像自带 Xray；不要在 NAS 上执行 Linux 的 root 授权。
 
 </details>
 
