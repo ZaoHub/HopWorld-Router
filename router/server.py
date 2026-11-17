@@ -458,7 +458,7 @@ class Store:
                     raise ValueError()
             except ValueError:
                 raise ValueError('请选择有效的本机代理，且不能使用本地节点入口端口') from None
-            if enabled and {'protocol': protocol, 'port': proxy_port} not in discover([proxy_port]):
+            if enabled and not any(item.get('protocol') == protocol and item.get('port') == proxy_port for item in discover([proxy_port])):
                 raise ValueError('本机代理不可用或无法连接本地地址，请重新扫描')
             settings['proxy_pool'] = [{'protocol': protocol, 'settings': {'servers': [{'address': '127.0.0.1', 'port': proxy_port}]}}]
             settings['auto_probe_url'] = TEST_URL

@@ -476,6 +476,21 @@ function scheduleLocalDnsHintsPreview() {
   clearTimeout(dnsHintsTimer);
   dnsHintsTimer = setTimeout(() => { void fetchLocalDnsHintsPreview(); }, 280);
 }
+function showLocalProxyProtocol() {
+  const select = $('#local-proxy-choice');
+  const option = select.selectedOptions[0];
+  const text = $('#local-proxy-protocol');
+  if (!select.value) {
+    text.textContent = '请扫描并选择代理，以查看 TCP 和 UDP 状态。';
+    return;
+  }
+  const tcp = option?.dataset.scanned ? '已验证' : '待扫描';
+  const udp = option?.dataset.udp || (select.value.startsWith('http:') ? 'unsupported' : 'unknown');
+  const labels = {supported: '已验证', unsupported: '不支持', unknown: '待验证'};
+  const detail = udp === 'supported' ? '扫描验证了本机回环 UDP 转发，公网访问仍需实际测试。' :
+    udp === 'unsupported' ? 'HTTP 代理不支持 UDP 转发。' : '请重新扫描并实际测试 UDP。';
+  text.textContent = `TCP：${tcp} · UDP：${labels[udp] || labels.unknown}。${option?.dataset.scanned ? 'TCP 扫描验证了本机回环连接。' : ''}${detail}`;
+}
 function syncLocalForm(local, acme) {
   acme = acme || {};
   if (local && !localEditing) {
@@ -508,6 +523,7 @@ function syncLocalForm(local, acme) {
   $('#local-proxy-choice').disabled = !localEditable;
   $('#local-proxy-scan').disabled = !localEditable;
   $('#local-proxy-settings').hidden = $('#local-egress-mode').value !== 'local_proxy';
+  showLocalProxyProtocol();
   $('#local-auto-settings').hidden = $('#local-egress-mode').value !== 'auto';
   const readOnlyView = !!local?.enabled && !localEditing;
   const showHostControls = !readOnlyView;
@@ -1063,8 +1079,10 @@ function localPayload(enabled){
 $('#local-egress-mode').addEventListener('change', () => {
   $('#local-proxy-settings').hidden = $('#local-egress-mode').value !== 'local_proxy';
   $('#local-auto-settings').hidden = $('#local-egress-mode').value !== 'auto';
+  showLocalProxyProtocol();
   void refreshAutoObservations();
 });
+$('#local-proxy-choice').addEventListener('change', showLocalProxyProtocol);
 $('#local-proxy-scan').addEventListener('click', async () => {
   const button = $('#local-proxy-scan');
   const raw = $('#local-proxy-port').value;
@@ -1074,7 +1092,14 @@ $('#local-proxy-scan').addEventListener('click', async () => {
     const data = await call('/api/local/discover', raw ? {ports: [Number(raw)]} : {});
     const select = $('#local-proxy-choice');
     select.replaceChildren(new Option(data.proxies.length ? '请选择代理' : '未发现可用代理', ''));
-    data.proxies.forEach(item => select.add(new Option(`${item.protocol.toUpperCase()} · 127.0.0.1:${item.port}`, `${item.protocol}:${item.port}`)));
+    data.proxies.forEach(item => {
+      const udp = {supported: '已验证', unsupported: '不支持', unknown: '待验证'}[item.udp] || '待验证';
+      const option = new Option(`${item.protocol.toUpperCase()} · 127.0.0.1:${item.port} · TCP 已验证 / UDP ${udp}`, `${item.protocol}:${item.port}`);
+      option.dataset.scanned = 'true';
+      option.dataset.udp = item.udp || 'unknown';
+      select.add(option);
+    });
+    showLocalProxyProtocol();
     note(data.proxies.length ? `发现 ${data.proxies.length} 个本机代理，请选择` : '未发现可用代理');
   } catch (error) { note(error.message, {error: true}); }
   finally { button.disabled = false; }

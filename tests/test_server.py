@@ -152,7 +152,7 @@ class ServerTests(unittest.TestCase):
 
     def test_discovered_proxy_is_used_only_as_local_node_outbound(self):
         creds = {'uuid':'a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89', 'private_key':'priv', 'public_key':'pub', 'short_id':'abcd'}
-        with patch('router.server.discover', return_value=[{'protocol': 'http', 'port': 7890}]), \
+        with patch('router.server.discover', return_value=[{'protocol': 'http', 'port': 7890, 'tcp': 'supported', 'udp': 'unsupported'}]), \
              patch.object(self.store.xray, 'ensure_credentials', side_effect=lambda settings: {**settings, **creds}), \
              patch.object(self.store.xray, 'apply') as apply:
             result = json.load(self.request('/api/local-node', {'enabled': True, 'public_host': '8.8.8.8', 'port': 8443, 'egress_mode': 'local_proxy', 'local_proxy': 'http:7890'}))
