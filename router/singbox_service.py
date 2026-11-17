@@ -40,13 +40,14 @@ class SingboxService:
             hy2_port, tuic_port = quic_ports(port)
         except ValueError:
             hy2_port = tuic_port = 0
+        missing = not self.binary
         if not settings.get('enabled'):
-            return {'available': False, 'error': '', 'hy2_port': hy2_port, 'tuic_port': tuic_port}
-        if not self.binary:
-            return {'available': False, 'error': '未找到 sing-box，Hysteria 2 和 TUIC 未加入订阅', 'hy2_port': hy2_port, 'tuic_port': tuic_port}
+            return {'available': False, 'error': '', 'missing': missing, 'hy2_port': hy2_port, 'tuic_port': tuic_port}
+        if missing:
+            return {'available': False, 'error': '未找到 sing-box，Hysteria 2 和 TUIC 未加入订阅', 'missing': True, 'hy2_port': hy2_port, 'tuic_port': tuic_port}
         if not self.running():
-            return {'available': False, 'error': 'Hysteria 2 / TUIC 未在运行', 'hy2_port': hy2_port, 'tuic_port': tuic_port}
-        return {'available': True, 'error': '', 'hy2_port': hy2_port, 'tuic_port': tuic_port}
+            return {'available': False, 'error': 'Hysteria 2 / TUIC 未在运行', 'missing': False, 'hy2_port': hy2_port, 'tuic_port': tuic_port}
+        return {'available': True, 'error': '', 'missing': False, 'hy2_port': hy2_port, 'tuic_port': tuic_port}
 
     def links(self, settings):
         with self._lock:

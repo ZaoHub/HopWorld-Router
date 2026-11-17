@@ -625,6 +625,24 @@ class Store:
         )
         return build_dns_hints(settings, probe=True)
 
+    def install_singbox(self):
+        with self._local_lock:
+            completed = root_exec.ensure_singbox()
+            if not self.singbox.locate():
+                if completed is None:
+                    raise ValueError('系统操作未授权，请先用 root 执行 deploy/hopworld-install-root.sh')
+                raise ValueError('未能安装 sing-box')
+            settings = self.local_node_settings()
+            if root_exec._singbox_present():
+                hy2, tuic = quic_ports(int(settings.get('port') or DEFAULT_LOCAL_PORT))
+                root_exec.open_port('udp', hy2)
+                root_exec.open_port('udp', tuic)
+            if settings.get('enabled'):
+                self.singbox.apply(settings, self._quic_certificate(settings))
+            view = self.xray.public_view(settings)
+            view['quic'] = self.singbox.public_view(settings)
+            return view
+
     def local_node_status(self):
         settings = self.local_node_settings()
         view = self.xray.public_view(settings)
@@ -1147,6 +1165,8 @@ def make_handler(store, password):
                 elif path == '/api/local/discover':
                     ports = data.get('ports')
                     return self.json(200, {'proxies': discover() if ports is None else discover(ports)})
+                elif path == '/api/local/singbox':
+                    return self.json(200, {'ok': True, 'local_node': store.install_singbox()})
                 elif path == '/api/local-node':
                     return self.json(200, {'ok': True, 'local_node': store.configure_local_node(
                         bool(data.get('enabled')), data.get('public_host'), data.get('port'), data.get('name'),
