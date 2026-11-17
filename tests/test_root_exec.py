@@ -43,7 +43,26 @@ class RootExecTests(unittest.TestCase):
                  patch.object(store.xray, 'apply', return_value=''):
                 store.configure_local_node(True, '8.8.8.8', 8443, '本地网络')
             self.assertIn(('xray',), calls)
+            self.assertIn(('sing-box',), calls)
             self.assertIn(('open', 'tcp', '8443'), calls)
+
+    def test_prepare_local_node_opens_quic_ports_after_singbox_install(self):
+        calls = []
+
+        def run(*args, **kwargs):
+            calls.append(args)
+            return object()
+
+        with patch('router.root_exec.run', side_effect=run), \
+             patch('router.root_exec.shutil.which', return_value='/usr/local/bin/sing-box'):
+            self.assertIsNotNone(root_exec.prepare_local_node(8443))
+        self.assertEqual(calls, [
+            ('xray',),
+            ('sing-box',),
+            ('open', 'tcp', '8443'),
+            ('open', 'udp', '8444'),
+            ('open', 'udp', '8445'),
+        ])
 
 
 if __name__ == '__main__':

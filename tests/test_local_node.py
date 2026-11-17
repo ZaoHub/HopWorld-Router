@@ -177,6 +177,19 @@ class QuicLinkTests(unittest.TestCase):
                 self.assertEqual(missing.apply(settings), [])
             idle.assert_not_called()
 
+    def test_self_signed_cert_works_without_openssl_addext(self):
+        if not shutil.which('openssl'):
+            self.skipTest('openssl missing')
+        with tempfile.TemporaryDirectory() as temp:
+            service = SingboxService(Path(temp), binary='/usr/bin/sing-box')
+            cert, key = service._self_signed('8.8.8.8')
+            text = subprocess.run(
+                ['openssl', 'x509', '-in', cert, '-noout', '-text'],
+                check=True, capture_output=True, text=True, timeout=10,
+            ).stdout
+            self.assertIn('8.8.8.8', text)
+            self.assertTrue(Path(key).is_file())
+
 
 class XrayRenameTests(unittest.TestCase):
     def test_node_traffic_uses_private_metrics_for_every_egress_mode(self):
