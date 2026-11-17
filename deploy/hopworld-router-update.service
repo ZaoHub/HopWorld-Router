@@ -1,0 +1,9 @@
+[Unit]
+Description=HopWorld Router page update
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/local/libexec/hopworld-router-page-update
