@@ -19,6 +19,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 from router.subscription import MAX_SUBSCRIPTION_BYTES, combine_subscriptions, decode_subscription, encode_subscription, parse_subscription
 from router.probe import TARGETS, TEST_URL, UnsupportedNode, outbound, probe
 from router.local_proxy_discovery import discover
+from router import system_update
 from router.local_node import DEFAULT_LOCAL_PORT, DEFAULT_NODE_NAME, validate_node_name, validate_public_host
 from router.public_endpoint import detect_public_host, detect_public_ip, is_ip_host
 from router.ddns import publish_ddns
@@ -139,6 +140,31 @@ class Store:
             with self.connect() as db:
                 db.execute('UPDATE sources SET error=? WHERE id=?', ('更新失败，请检查订阅地址、格式和网络', source_id))
             raise ValueError('更新失败，请检查订阅地址、格式和网络') from None
+
+    def update_prefs(self):
+        prefs = {'auto_check': True, 'auto_apply': True}
+        with self.connect() as db:
+            row = db.execute('SELECT value FROM settings WHERE key=?', ('project_update',)).fetchone()
+        if not row:
+            return prefs
+        try:
+            data = json.loads(row['value'])
+        except (ValueError, TypeError):
+            return prefs
+        if isinstance(data, dict):
+            if type(data.get('auto_check')) is bool:
+                prefs['auto_check'] = data['auto_check']
+            if type(data.get('auto_apply')) is bool:
+                prefs['auto_apply'] = data['auto_apply']
+        return prefs
+
+    def save_update_prefs(self, auto_check, auto_apply):
+        if type(auto_check) is not bool or type(auto_apply) is not bool:
+            raise ValueError('更新设置无效')
+        prefs = {'auto_check': auto_check, 'auto_apply': auto_apply}
+        with self.connect() as db:
+            db.execute('INSERT OR REPLACE INTO settings VALUES (?, ?)', ('project_update', json.dumps(prefs)))
+        return prefs
 
     def token(self):
         with self.connect() as db:
@@ -968,6 +994,10 @@ def make_handler(store, password):
                 return self.json(200, store.auto_observation_status())
             if path == '/api/local/traffic':
                 return self.json(200, store.local_traffic_status())
+            if path == '/api/system/update':
+                status = dict(system_update.status())
+                status.update(store.update_prefs())
+                return self.json(200, status)
             if path == '/api/local/dns-hints':
                 if not self.authorized():
                     return
@@ -1056,6 +1086,15 @@ def make_handler(store, password):
                         raise ValueError('证书设置无效')
                     with store._local_lock:
                         return self.json(200, {'ok': True, 'acme': store.configure_acme(data['enabled'], data['email'], data['challenge'])})
+                elif path == '/api/system/update':
+                    if 'auto_check' in data or 'auto_apply' in data:
+                        if set(data) != {'auto_check', 'auto_apply'}:
+                            raise ValueError('更新设置无效')
+                        return self.json(200, {'ok': True, **store.save_update_prefs(data['auto_check'], data['auto_apply'])})
+                    if data:
+                        raise ValueError('更新请求不能包含参数')
+                    system_update.start()
+                    return self.json(200, {'ok': True})
                 elif path == '/api/ikev2':
                     return self.json(200, {'ok': True, 'ikev2': store.configure_ikev2(
                         bool(data.get('enabled')), data.get('public_host'), data.get('remote_id'),
@@ -1119,6 +1158,26 @@ def main():
                 except ValueError: pass
 
     threading.Thread(target=update_loop, daemon=True).start()
+
+    def project_update_loop():
+        while not stopped.is_set():
+            wait = 600
+            try:
+                if store.update_prefs()['auto_apply']:
+                    status = system_update.status()
+                    if status.get('state') == 'checking':
+                        wait = 3
+                    elif status.get('state') == 'available' and status.get('changed_files'):
+                        try:
+                            system_update.start()
+                        except ValueError:
+                            pass
+            except Exception:
+                pass
+            if stopped.wait(wait):
+                return
+
+    threading.Thread(target=project_update_loop, daemon=True).start()
 
     def public_host_loop():
         interval = max(10, int(os.environ.get('HOPWORLD_PUBLIC_HOST_POLL', '30')))
