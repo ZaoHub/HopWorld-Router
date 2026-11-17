@@ -179,6 +179,34 @@ class ServerTests(unittest.TestCase):
         self.assertNotIn('hy2-password-value', json.dumps(status))
         self.assertNotIn('tuic-password-value', json.dumps(status))
 
+    def test_online_singbox_install_starts_when_node_enabled(self):
+        settings = self.store.local_node_settings()
+        settings.update({'enabled': True, 'public_host': '8.8.8.8', 'port': 8443})
+        self.store.save_local_node_settings(settings)
+
+        def locate():
+            self.store.singbox.binary = '/usr/local/bin/sing-box'
+            return self.store.singbox.binary
+
+        with patch('router.root_exec.ensure_singbox', return_value=object()), \
+             patch('router.root_exec._singbox_present', return_value=True), \
+             patch('router.root_exec.open_port') as open_port, \
+             patch.object(self.store.singbox, 'locate', side_effect=locate), \
+             patch.object(self.store.singbox, 'apply', return_value=[]) as apply, \
+             patch.object(self.store.singbox, 'running', return_value=True):
+            result = json.load(self.request('/api/local/singbox', {}))
+        apply.assert_called_once()
+        self.assertEqual(open_port.call_args_list[0].args, ('udp', 8444))
+        self.assertEqual(open_port.call_args_list[1].args, ('udp', 8445))
+        self.assertTrue(result['local_node']['quic']['available'])
+
+    def test_online_singbox_install_reports_failure(self):
+        with patch('router.root_exec.ensure_singbox', side_effect=ValueError('无法确定 sing-box 版本')):
+            with self.assertRaises(HTTPError) as error:
+                self.request('/api/local/singbox', {})
+        self.assertEqual(error.exception.code, 400)
+        self.assertIn('sing-box', error.exception.read().decode())
+
     def test_local_node_requires_public_host(self):
         with self.assertRaises(HTTPError) as error:
             self.request('/api/local-node', {'enabled': True, 'public_host': '', 'port': 8443})
