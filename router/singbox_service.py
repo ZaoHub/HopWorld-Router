@@ -23,6 +23,16 @@ class SingboxService:
         self._lock = threading.Lock()
         self._process = None
 
+    def locate(self):
+        found = os.environ.get('HOPWORLD_SINGBOX') or shutil.which('sing-box')
+        if not found and os.access('/usr/local/bin/sing-box', os.X_OK):
+            found = '/usr/local/bin/sing-box'
+        if not found and os.access('/usr/bin/sing-box', os.X_OK):
+            found = '/usr/bin/sing-box'
+        if found:
+            self.binary = found
+        return self.binary
+
     def public_view(self, settings):
         from router.local_node import quic_ports, DEFAULT_LOCAL_PORT
         port = int(settings.get('port') or DEFAULT_LOCAL_PORT)
@@ -108,9 +118,17 @@ class SingboxService:
             raise ValueError('无法生成 Hysteria 2 / TUIC 证书，请安装 openssl 或先签发域名证书')
         try:
             san = f'IP:{host}' if _is_ip(host) else f'DNS:{host}'
+            config = directory / 'openssl.cnf'
+            config.write_text(
+                '[req]\nprompt = no\ndistinguished_name = req_distinguished_name\nx509_extensions = v3_req\n'
+                '[req_distinguished_name]\nCN = hopworld\n'
+                f'[v3_req]\nsubjectAltName = {san}\n',
+                encoding='utf-8',
+            )
+            os.chmod(config, 0o600)
             subprocess.run(
                 [openssl, 'req', '-x509', '-newkey', 'rsa:2048', '-keyout', str(key), '-out', str(cert),
-                 '-days', '825', '-nodes', '-subj', '/CN=hopworld', '-addext', f'subjectAltName={san}'],
+                 '-days', '825', '-nodes', '-config', str(config)],
                 check=True, capture_output=True, timeout=20,
             )
         except (OSError, subprocess.SubprocessError) as exc:

@@ -540,6 +540,7 @@ class Store:
                 raise ValueError('无法探测公网地址，请检查网络或改为手动填写')
             if root_exec.prepare_local_node(settings.get('port') or DEFAULT_LOCAL_PORT):
                 self.xray.locate()
+                self.singbox.locate()
             settings = self.xray.ensure_credentials(settings)
             settings['enabled'] = True
             self.xray.apply(settings)
@@ -776,6 +777,7 @@ class Store:
         if settings.get('enabled'):
             if root_exec.prepare_local_node(settings.get('port') or DEFAULT_LOCAL_PORT):
                 self.xray.locate()
+                self.singbox.locate()
             if settings.get('egress_mode') == 'auto':
                 settings['proxy_pool'], settings['auto_pool_ids'] = self._auto_pool_entries(settings)
             settings = self.xray.ensure_credentials(settings)

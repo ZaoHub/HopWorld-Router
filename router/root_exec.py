@@ -42,6 +42,10 @@ def ensure_xray():
     return run('xray', timeout=180)
 
 
+def ensure_singbox():
+    return run('sing-box', timeout=300)
+
+
 def open_port(proto, port):
     number = int(port)
     if proto not in ('tcp', 'udp') or not 1 <= number <= 65535:
@@ -49,10 +53,17 @@ def open_port(proto, port):
     return run('open', proto, str(number), timeout=60)
 
 
+def _singbox_present():
+    if os.environ.get('HOPWORLD_SINGBOX') or shutil.which('sing-box'):
+        return True
+    return os.access('/usr/local/bin/sing-box', os.X_OK) or os.access('/usr/bin/sing-box', os.X_OK)
+
+
 def prepare_local_node(port):
     ran = ensure_xray()
+    ensure_singbox()
     open_port('tcp', port)
-    if shutil.which('sing-box') or os.environ.get('HOPWORLD_SINGBOX'):
+    if _singbox_present():
         from router.local_node import quic_ports
         hy2, tuic = quic_ports(int(port))
         open_port('udp', hy2)
