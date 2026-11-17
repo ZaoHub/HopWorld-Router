@@ -1020,6 +1020,8 @@ async function refresh() {
   const quicLine = !local.enabled ? '' : (quic.available ? `Hysteria 2 UDP ${quic.hy2_port}、TUIC UDP ${quic.tuic_port} 已加入订阅` : (quic.error || ''));
   $('#local-protocol-status').textContent = protocolLine;
   $('#local-protocol-detail').textContent = [protocol?.detail || '', quicLine].filter(Boolean).join(' ');
+  const singboxInstall = $('#local-singbox-install');
+  if (singboxInstall) singboxInstall.hidden = !quic.missing;
   $('#local-node-protocol-summary').textContent = quicLine || protocolLine;
   if (localSummary) {
     localSummary.textContent = local.enabled ? localLine : '尚未启用 · 点击查看可启用或修改';
@@ -1354,6 +1356,20 @@ $('#local-dns-verify')?.addEventListener('click', () => { void runLocalDnsVerify
 $('#local-edit').onclick=()=>{localEditing=true;syncLocalForm({enabled:true,name:$('#local-name').value,public_host:$('#local-host').value,port:Number($('#local-port').value),auto_public_host:$('#local-auto-host')?.checked});$('#local-name').focus();};
 $('#local-cancel').onclick=async()=>{localEditing=false;await refresh();note('已取消编辑');};
 $('#local-form').onsubmit=e=>e.preventDefault();
+$('#local-singbox-install')?.addEventListener('click', async () => {
+  const button = $('#local-singbox-install');
+  button.disabled = true;
+  note('正在在线安装 sing-box…');
+  try {
+    await call('/api/local/singbox', {});
+    await refresh();
+    note('sing-box 已安装');
+  } catch (error) {
+    note(error.message, {error: true});
+  } finally {
+    button.disabled = false;
+  }
+});
 $('#local-toggle').onclick=async()=>{
   const button=$('#local-toggle');
   const on=button.textContent==='停用';
