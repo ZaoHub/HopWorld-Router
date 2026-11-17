@@ -370,5 +370,20 @@ class ServerTests(unittest.TestCase):
         with self.assertRaises(HTTPError):
             self.request('/api/batch/probe', {'groups':[]})
 
+    def test_project_update_prefs_default_on_and_can_be_saved(self):
+        with patch('router.server.system_update.status', return_value={'state': 'current', 'changed_files': [], 'error': ''}):
+            status = json.load(self.request('/api/system/update'))
+        self.assertTrue(status['auto_check'])
+        self.assertTrue(status['auto_apply'])
+        saved = json.load(self.request('/api/system/update', {'auto_check': False, 'auto_apply': True}))
+        self.assertEqual(saved['auto_check'], False)
+        self.assertEqual(saved['auto_apply'], True)
+        with patch('router.server.system_update.status', return_value={'state': 'current', 'changed_files': [], 'error': ''}):
+            status = json.load(self.request('/api/system/update'))
+        self.assertFalse(status['auto_check'])
+        self.assertTrue(status['auto_apply'])
+        with self.assertRaises(HTTPError):
+            self.request('/api/system/update', {'auto_check': 'yes', 'auto_apply': True})
+
 
 if __name__ == '__main__': unittest.main()
