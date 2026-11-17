@@ -20,6 +20,7 @@ from router.local_node import (
     DEFAULT_NODE_NAME,
     DEFAULT_REALITY_DEST,
     DEFAULT_REALITY_SERVER_NAME,
+    LOCAL_EGRESS_SOCKS_PORT,
     build_local_reality_node,
     validate_public_host,
 )
@@ -36,6 +37,14 @@ class XrayService:
         self._metrics_lock = threading.Lock()
         self._metrics_dir = None
         self._process = None
+
+    def locate(self):
+        found = os.environ.get('HOPWORLD_XRAY') or shutil.which('xray')
+        if not found and os.access('/usr/local/bin/xray', os.X_OK):
+            found = '/usr/local/bin/xray'
+        if found:
+            self.binary = found
+        return self.binary
 
     def generate_keys(self):
         if not self.binary:
@@ -108,6 +117,10 @@ class XrayService:
         updated.setdefault('server_name', DEFAULT_REALITY_SERVER_NAME)
         updated.setdefault('port', DEFAULT_LOCAL_PORT)
         updated.setdefault('name', DEFAULT_NODE_NAME)
+        if not isinstance(updated.get('hy2_password'), str) or len(updated['hy2_password']) < 16:
+            updated['hy2_password'] = secrets.token_urlsafe(18)
+        if not isinstance(updated.get('tuic_password'), str) or len(updated['tuic_password']) < 16:
+            updated['tuic_password'] = secrets.token_urlsafe(18)
         return updated
 
     def _metrics_path(self):
@@ -148,6 +161,10 @@ class XrayService:
             config['inbounds'].append({'tag': 'internal-metrics-in', 'listen': path, 'protocol': 'dokodemo-door', 'settings': {'address': '127.0.0.1', 'port': 80, 'network': 'tcp'}})
             routing = config.setdefault('routing', {'domainStrategy': 'AsIs', 'rules': []})
             routing['rules'].insert(0, {'type': 'field', 'inboundTag': ['internal-metrics-in'], 'outboundTag': 'internal-metrics'})
+        config['inbounds'].append({
+            'listen': '127.0.0.1', 'port': LOCAL_EGRESS_SOCKS_PORT, 'protocol': 'socks', 'tag': 'local-socks-in',
+            'settings': {'auth': 'noauth', 'udp': True},
+        })
         return config, link
 
     def _metrics(self):
@@ -182,13 +199,14 @@ class XrayService:
 
     def node_traffic(self):
         payload = self._metrics()
-        try:
-            traffic = payload['stats']['inbound']['local-node-in']
-            up, down = traffic['uplink'], traffic['downlink']
-        except (TypeError, KeyError):
+        counted = _inbound_bytes(payload, 'local-node-in')
+        if counted is None:
             return None
-        if any(type(value) is not int or value < 0 for value in (up, down)):
-            return None
+        up, down = counted
+        extra = _inbound_bytes(payload, 'local-socks-in')
+        if extra is not None:
+            up += extra[0]
+            down += extra[1]
         try:
             instance = str(self.pid_path.stat().st_mtime_ns)
         except OSError:
@@ -394,3 +412,14 @@ class XrayService:
             os.kill(pid, signal.SIGKILL)
         except OSError:
             pass
+
+
+def _inbound_bytes(payload, tag):
+    try:
+        traffic = payload['stats']['inbound'][tag]
+        up, down = traffic['uplink'], traffic['downlink']
+    except (TypeError, KeyError):
+        return None
+    if any(type(value) is not int or value < 0 for value in (up, down)):
+        return None
+    return up, down

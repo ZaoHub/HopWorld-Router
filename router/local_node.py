@@ -10,6 +10,7 @@ DEFAULT_REALITY_DEST = 'www.microsoft.com:443'
 DEFAULT_REALITY_SERVER_NAME = 'www.microsoft.com'
 DEFAULT_LOCAL_PORT = 8443
 DEFAULT_NODE_NAME = '本地网络'
+LOCAL_EGRESS_SOCKS_PORT = 37891
 
 
 def _parse_client_id(client_id):
@@ -196,3 +197,72 @@ def build_local_reality_node(public_host, port, client_id, private_key, public_k
     })
     link = f'vless://{client_id}@{_link_host(public_host)}:{port}?{params}#{quote(name)}'
     return config, link
+
+
+def quic_ports(port):
+    """UDP ports for Hysteria 2 and TUIC, distinct from the VLESS port and the loopback SOCKS port."""
+    port = _validate_port(port)
+    used = {port, LOCAL_EGRESS_SOCKS_PORT}
+    found = []
+    for candidate in (port + 1, port + 2, port - 1, port - 2, 8444, 8445):
+        if 1 <= candidate <= 65535 and candidate not in used:
+            found.append(candidate)
+            used.add(candidate)
+        if len(found) == 2:
+            return found[0], found[1]
+    raise ValueError('没有可用的 Hysteria 2 / TUIC 端口')
+
+
+def _secret(value, label):
+    if not isinstance(value, str) or not 16 <= len(value) <= 128 or any(char in value for char in ':/@?# \x00'):
+        raise ValueError(f'{label}无效')
+    return value
+
+
+def _protocol_label(name, suffix):
+    label = f'{name} {suffix}'
+    if len(label) <= 40:
+        return label
+    room = 40 - len(suffix) - 1
+    return suffix[:40] if room < 1 else f'{name[:room]} {suffix}'
+
+
+def build_quic_links(public_host, port, client_id, hy2_password, tuic_password, name=DEFAULT_NODE_NAME, insecure=True):
+    """Share links for the same local egress, carried over Hysteria 2 and TUIC."""
+    public_host = validate_public_host(public_host)
+    port = _validate_port(port)
+    client_id = _parse_client_id(client_id)
+    hy2_password = _secret(hy2_password, 'Hysteria 2 密码')
+    tuic_password = _secret(tuic_password, 'TUIC 密码')
+    name = validate_node_name(name)
+    hy2_port, tuic_port = quic_ports(port)
+    host = _link_host(public_host)
+    hy2_query = {'sni': public_host}
+    tuic_query = {'congestion_control': 'bbr', 'udp_relay_mode': 'native', 'alpn': 'h3', 'sni': public_host}
+    if insecure:
+        hy2_query['insecure'] = '1'
+        tuic_query['allow_insecure'] = '1'
+    hy2 = f"hysteria2://{quote(hy2_password, safe='')}@{host}:{hy2_port}?{urlencode(hy2_query)}#{quote(_protocol_label(name, 'Hysteria2'))}"
+    tuic = f"tuic://{client_id}:{quote(tuic_password, safe='')}@{host}:{tuic_port}?{urlencode(tuic_query)}#{quote(_protocol_label(name, 'TUIC'))}"
+    return hy2, tuic
+
+
+def build_singbox_config(public_host, port, client_id, hy2_password, tuic_password, certificate, key):
+    """Sing-box inbounds that forward into the local Xray SOCKS egress."""
+    public_host = validate_public_host(public_host)
+    client_id = _parse_client_id(client_id)
+    hy2_password = _secret(hy2_password, 'Hysteria 2 密码')
+    tuic_password = _secret(tuic_password, 'TUIC 密码')
+    if not all(isinstance(path, str) and path.startswith('/') and '\x00' not in path for path in (certificate, key)):
+        raise ValueError('证书和私钥必须使用绝对路径')
+    hy2_port, tuic_port = quic_ports(port)
+    tls = {'enabled': True, 'server_name': public_host, 'certificate_path': certificate, 'key_path': key, 'alpn': ['h3']}
+    return {
+        'log': {'level': 'warn'},
+        'inbounds': [
+            {'type': 'hysteria2', 'tag': 'hy2-in', 'listen': '0.0.0.0', 'listen_port': hy2_port, 'users': [{'name': 'hopworld', 'password': hy2_password}], 'tls': tls},
+            {'type': 'tuic', 'tag': 'tuic-in', 'listen': '0.0.0.0', 'listen_port': tuic_port, 'users': [{'uuid': client_id, 'password': tuic_password}], 'congestion_control': 'bbr', 'tls': dict(tls)},
+        ],
+        # shortcut: IPv4 only; listen on :: as well when clients connect over IPv6 without NAT64.
+        'outbounds': [{'type': 'socks', 'tag': 'egress', 'server': '127.0.0.1', 'server_port': LOCAL_EGRESS_SOCKS_PORT, 'version': '5'}],
+    }

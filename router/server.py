@@ -20,13 +20,15 @@ from router.subscription import MAX_SUBSCRIPTION_BYTES, combine_subscriptions, d
 from router.probe import TARGETS, TEST_URL, UnsupportedNode, outbound, probe
 from router.local_proxy_discovery import discover
 from router import system_update
-from router.local_node import DEFAULT_LOCAL_PORT, DEFAULT_NODE_NAME, validate_node_name, validate_public_host
+from router.local_node import DEFAULT_LOCAL_PORT, DEFAULT_NODE_NAME, LOCAL_EGRESS_SOCKS_PORT, quic_ports, validate_node_name, validate_public_host
 from router.public_endpoint import detect_public_host, detect_public_ip, is_ip_host
 from router.ddns import publish_ddns
 from router.acme import days_until_expiry, short_acme_error, sync_certificate, validate_acme_challenge, validate_acme_email
 from router.dns_hints import build_dns_hints
 from router.dns_verify import verify_dns_resolution
 from router.public_urls import build_public_urls
+from router.singbox_service import SingboxService
+from router import root_exec
 from router.xray_service import XrayService
 from router.ikev2_service import Ikev2Service, build_mobileconfig, validate_psk, validate_remote_id
 
@@ -64,11 +66,12 @@ class NoRedirects(HTTPRedirectHandler):
 
 
 class Store:
-    def __init__(self, path, xray=None, ikev2=None):
+    def __init__(self, path, xray=None, ikev2=None, singbox=None):
         self._local_lock = threading.RLock()
         self.path = str(path)
         self.data_dir = Path(self.path).parent
         self.xray = xray or XrayService(self.data_dir)
+        self.singbox = singbox or SingboxService(self.data_dir)
         self.ikev2 = ikev2 or Ikev2Service(self.data_dir)
         self._dns_verify_cache = None
         self._dns_verify_key = ''
@@ -201,6 +204,39 @@ class Store:
         except ValueError:
             return ''
 
+    def local_links(self, settings=None):
+        settings = settings or self.local_node_settings()
+        link = self.local_link(settings)
+        if not link:
+            return []
+        return [link, *self.singbox.links(settings)]
+
+    def _quic_certificate(self, settings):
+        acme = self.acme_settings()
+        cert = acme.get('cert_path') or ''
+        key = acme.get('key_path') or ''
+        host = (settings.get('public_host') or '').lower()
+        if cert and key and Path(cert).is_file() and Path(key).is_file() and (acme.get('domain') or '').lower() == host and not (acme.get('error') or '').strip():
+            return cert, key
+        return None
+
+    def _start_quic(self, settings):
+        try:
+            self.singbox.apply(settings, self._quic_certificate(settings))
+        except ValueError:
+            self.xray.stop()
+            self.singbox.stop()
+            raise
+
+    def _reload_quic(self):
+        settings = self.local_node_settings()
+        if not settings.get('enabled'):
+            return
+        try:
+            self.singbox.apply(settings, self._quic_certificate(settings))
+        except ValueError:
+            pass
+
     def subscription(self):
         try:
             self.sync_public_endpoint(force=True)
@@ -210,7 +246,7 @@ class Store:
             rows = db.execute('SELECT links FROM sources ORDER BY id').fetchall()
             manual = [row['link'] for row in db.execute('SELECT link FROM manual_nodes ORDER BY rowid')]
             disabled = {row['id'] for row in db.execute('SELECT id FROM disabled_nodes')}
-        local = [link] if (link := self.local_link()) else []
+        local = self.local_links()
         links = combine_subscriptions([json.loads(row['links']) for row in rows] + [manual, local])
         links = [link for link in links if node_id(link) not in disabled]
         return encode_subscription(links) if links else ''
@@ -235,10 +271,11 @@ class Store:
         for group, group_links in source_links:
             for link in group_links: membership.setdefault(node_id(link), set()).add(group)
         for identifier in manual: membership.setdefault(identifier, set()).add('manual')
-        local_link = self.local_link()
-        local_links = [local_link] if local_link else []
-        if local_link:
-            membership.setdefault(node_id(local_link), set()).add('local')
+        local_links = self.local_links()
+        local_ids = set()
+        for link in local_links:
+            local_ids.add(node_id(link))
+            membership.setdefault(node_id(link), set()).add('local')
         links = combine_subscriptions([group_links for _, group_links in source_links] + [list(manual.values()), local_links])
         result = []
         for index, link in enumerate(links, 1):
@@ -247,7 +284,7 @@ class Store:
             title = unquote(parts.fragment).strip()[:120] or f'节点 {index}'
             result.append({'id': identifier, 'title': title, 'protocol': parts.scheme.lower(),
                            'enabled': identifier not in disabled, 'manual': identifier in manual,
-                           'local': bool(local_link and identifier == node_id(local_link)),
+                           'local': identifier in local_ids,
                            'groups': sorted(membership[identifier])})
         return result
 
@@ -255,7 +292,7 @@ class Store:
         with self.connect() as db:
             rows = db.execute('SELECT links FROM sources ORDER BY id').fetchall()
             manual = [row['link'] for row in db.execute('SELECT link FROM manual_nodes ORDER BY rowid')]
-        local = [link] if (link := self.local_link()) else []
+        local = self.local_links()
         for link in combine_subscriptions([json.loads(row['links']) for row in rows] + [manual, local]):
             if node_id(link) == identifier: return link
         raise ValueError('节点不存在')
@@ -372,9 +409,9 @@ class Store:
             sources = [json.loads(row['links']) for row in db.execute('SELECT links FROM sources ORDER BY id')]
             manual = [row['link'] for row in db.execute('SELECT link FROM manual_nodes ORDER BY rowid')]
             disabled = {row['id'] for row in db.execute('SELECT id FROM disabled_nodes')}
-        local_link = self.local_link()
+        local_links = set(self.local_links())
         for link in combine_subscriptions(sources + [manual]):
-            if node_id(link) in disabled or link == local_link:
+            if node_id(link) in disabled or link in local_links:
                 continue
             parts = urlsplit(link)
             try:
@@ -480,7 +517,8 @@ class Store:
             try:
                 protocol, raw_port = (settings.get('local_proxy') or '').split(':')
                 proxy_port = int(raw_port)
-                if protocol not in ('http', 'socks') or not 1 <= proxy_port <= 65535 or proxy_port == settings.get('port'):
+                reserved = {settings.get('port'), LOCAL_EGRESS_SOCKS_PORT, *quic_ports(settings.get('port'))}
+                if protocol not in ('http', 'socks') or not 1 <= proxy_port <= 65535 or proxy_port in reserved:
                     raise ValueError()
             except ValueError:
                 raise ValueError('请选择有效的本机代理，且不能使用本地节点入口端口') from None
@@ -500,15 +538,20 @@ class Store:
                 settings, _ = self.refresh_auto_public_host(settings)
             if not settings.get('public_host'):
                 raise ValueError('无法探测公网地址，请检查网络或改为手动填写')
+            if root_exec.prepare_local_node(settings.get('port') or DEFAULT_LOCAL_PORT):
+                self.xray.locate()
             settings = self.xray.ensure_credentials(settings)
             settings['enabled'] = True
             self.xray.apply(settings)
+            self._start_quic(settings)
             self.save_local_node_settings(settings)
         else:
             settings['enabled'] = False
+            self.singbox.apply(settings)
             self.xray.apply(settings)
             self.save_local_node_settings(settings)
         view = self.xray.public_view(settings)
+        view['quic'] = self.singbox.public_view(settings)
         if acme_enabled is not None or acme_email is not None or acme_challenge is not None:
             acme_on = bool(acme_enabled) if acme_enabled is not None else self.acme_settings().get('enabled')
             email = acme_email if acme_email is not None else self.acme_settings().get('email')
@@ -584,6 +627,7 @@ class Store:
     def local_node_status(self):
         settings = self.local_node_settings()
         view = self.xray.public_view(settings)
+        view['quic'] = self.singbox.public_view(settings)
         return self.attach_dns_hints(view, settings)
 
     def local_traffic_status(self):
@@ -678,6 +722,7 @@ class Store:
             domain = (self.local_node_settings().get('public_host') or '').strip()
             if not domain or is_ip_host(domain):
                 raise ValueError('ACME 需要域名公网地址')
+            root_exec.prepare_acme()
             try:
                 view = sync_certificate(
                     self.data_dir,
@@ -695,6 +740,8 @@ class Store:
                 settings['key_path'] = ''
                 settings['domain'] = domain
         self.save_acme_settings(settings)
+        if not settings.get('error'):
+            self._reload_quic()
         return self.acme_status()
 
     def sync_acme_certificate(self):
@@ -721,11 +768,14 @@ class Store:
             self.save_acme_settings(settings)
             return False
         self.save_acme_settings(settings)
+        self._reload_quic()
         return True
 
     def restore_local_node(self):
         settings = self.local_node_settings()
         if settings.get('enabled'):
+            if root_exec.prepare_local_node(settings.get('port') or DEFAULT_LOCAL_PORT):
+                self.xray.locate()
             if settings.get('egress_mode') == 'auto':
                 settings['proxy_pool'], settings['auto_pool_ids'] = self._auto_pool_entries(settings)
             settings = self.xray.ensure_credentials(settings)
@@ -735,6 +785,7 @@ class Store:
                 settings, _ = self.refresh_auto_public_host(settings)
             self.save_local_node_settings(settings)
             self.xray.apply(settings)
+            self._reload_quic()
 
     def ikev2_settings(self):
         with self.connect() as db:
@@ -767,6 +818,7 @@ class Store:
         if enabled:
             if not settings.get('public_host'):
                 raise ValueError('请先填写公网地址')
+            root_exec.prepare_ikev2()
             settings = self.ikev2.ensure_credentials(
                 settings, rotate_psk=bool(rotate_psk), new_psk=custom_psk,
             )
@@ -789,6 +841,7 @@ class Store:
     def restore_ikev2(self):
         settings = self.ikev2_settings()
         if settings.get('enabled'):
+            root_exec.prepare_ikev2()
             settings = self.ikev2.ensure_credentials(settings)
             self.save_ikev2_settings(settings)
             self.ikev2.apply(settings)
@@ -828,7 +881,7 @@ def make_handler(store, password):
                         if probe_results.get(identifier, {}).get('status') != 'testing':
                             probe_results.pop(identifier, None)
 
-        def run_item(item):
+        def run_item(item, xray_block=None):
             if cancellations[kind].is_set(): return
             failed = False
             if kind == 'update':
@@ -836,6 +889,11 @@ def make_handler(store, password):
                     store.refresh(item)
                     store.reconcile_auto_pool()
                 except ValueError: failed = True
+            elif xray_block:
+                result = {'status': 'unavailable', 'detail': xray_block, 'target': TARGETS[target][0]}
+                with probe_lock:
+                    probe_results[item] = result
+                failed = True
             else:
                 owns_probe = False
                 try:
@@ -858,10 +916,16 @@ def make_handler(store, password):
 
         def worker():
             try:
+                xray_block = None
+                if kind == 'probe':
+                    try:
+                        root_exec.ensure_xray()
+                    except ValueError as exc:
+                        xray_block = str(exc)
                 if kind == 'probe':
                     from concurrent.futures import ThreadPoolExecutor
                     with ThreadPoolExecutor(max_workers=4) as pool:
-                        list(pool.map(run_item, items))
+                        list(pool.map(lambda item: run_item(item, xray_block), items))
                 else:
                     for item in items:
                         if cancellations[kind].is_set(): break
@@ -883,9 +947,15 @@ def make_handler(store, password):
             probe_results[identifier] = {'status': 'testing', 'detail': '正在测试'}
         def worker():
             try:
-                result = probe(link, target=target)
-            except Exception:
-                result = {'status': 'failed', 'detail': '测试失败'}
+                try:
+                    root_exec.ensure_xray()
+                except ValueError as exc:
+                    result = {'status': 'unavailable', 'detail': str(exc)}
+                else:
+                    try:
+                        result = probe(link, target=target)
+                    except Exception:
+                        result = {'status': 'failed', 'detail': '测试失败'}
             finally:
                 probe_slots.release()
             result['target'] = TARGETS[target][0]
@@ -1211,6 +1281,7 @@ def main():
     finally:
         stopped.set()
         store.xray.stop()
+        store.singbox.stop()
         server.server_close()
 
 
