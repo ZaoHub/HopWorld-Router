@@ -13,7 +13,7 @@ cd /你的路径/HopWorld-Router
 
 按提示输入两次至少 16 个字符且不包含冒号的管理密码，输入时不会显示。脚本会在当前用户的 `~/Library/LaunchAgents/com.hopworld.router.local.plist` 创建配置，权限为 `600`；已存在时不会覆盖。配置文件含有管理密码，不要分享或提交。数据和日志保存在项目的 `data/` 目录，同样需要保护。
 
-脚本记录当前项目的绝对路径，移动或删除项目目录后需重新创建配置。服务仅监听 `127.0.0.1:8080`。使用节点测试或本地网络节点时，还需安装对应架构的 Xray；服务的 PATH 包含 `/opt/homebrew/bin` 和 `/usr/local/bin`。
+脚本记录当前项目的绝对路径，移动或删除项目目录后需重新创建配置。服务仅监听 `127.0.0.1:8080`。使用节点测试或本地网络节点时，还需自行安装对应架构的 Xray；服务的 PATH 包含 `/opt/homebrew/bin` 和 `/usr/local/bin`。不要执行 Linux 的 `deploy/hopworld-install-root.sh`，管理页不会在 macOS 上自动安装 Xray、证书工具或 strongSwan。
 
 ## 2. 加载和检查
 

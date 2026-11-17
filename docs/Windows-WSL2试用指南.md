@@ -70,7 +70,7 @@ systemctl --user status hopworld-router.service
 
 ## 4. 功能与数据
 
-- 上面的命令仅准备订阅管理。节点测试还需要 Xray 和 curl，本地网络节点还需要 Xray，以及从客户端到 WSL 入站端口的实际网络路径。Xray 应使用与 WSL CPU 架构匹配的 Linux 版本；可参考项目 README 的 Linux Xray 安装步骤。
+- 上面的命令只准备订阅管理，并且以当前 Ubuntu 用户运行，不是 README 里的 `hopworld-router` 系统服务。不要执行 `deploy/hopworld-install-root.sh`。管理页不会在这里自动安装 Xray、nginx、certbot 或 strongSwan，也不会改 Windows 防火墙。节点测试和本地网络节点仍要自行安装与 WSL CPU 架构匹配的 Linux 版 Xray，可参考 README 的 Xray 安装命令；客户端还要有到达 WSL 入站端口的网络路径。
 - WSL 的外网入站与端口转发取决于 Windows、WSL 网络模式、防火墙和上游路由；不要把 Windows 上能打开管理页视作公网节点已可访问。
 - 该试用方式不配置 IKEv2、证书自动签发或动态 DNS 的系统集成。它们需要单独配置和验证。
 - 数据默认保存在 `~/HopWorld-Router/data/`，包含订阅、节点凭据和访问密钥。备份时先停止服务并保护备份；不要提交或分享 `data/`、环境文件或订阅地址。

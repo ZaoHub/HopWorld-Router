@@ -60,4 +60,4 @@ chmod 755 /usr/libexec/hopworld-router /etc/init.d/hopworld-router
 
 停止后可先备份 `/etc/hopworld-router.env` 和 `/etc/hopworld-router/data`，再根据需要移除模板与代码；停止服务不会删除数据。设备升级、重启恢复及卸载仍需在目标固件验证。
 
-节点测试需要兼容设备架构的 Xray 与 curl，本地网络节点还涉及端口和入站网络；二者均未在本方案中验证。IKEv2、证书自动签发、动态 DNS 和透明网关不在当前试用范围。请按[运行环境适配路线图](运行环境适配路线图.md)记录每项结果。
+节点测试需要兼容设备架构的 Xray 与 curl，本地网络节点还涉及端口和入站网络；二者均未在本方案中验证。不要执行 `deploy/hopworld-install-root.sh`：这条授权依赖 apt、dnf 或 yum，以及 systemd 上的本机防火墙，OpenWrt 不适用，管理页也不会在这里自动安装 Xray。IKEv2、证书自动签发、动态 DNS 和透明网关不在当前试用范围。请按[运行环境适配路线图](运行环境适配路线图.md)记录每项结果。

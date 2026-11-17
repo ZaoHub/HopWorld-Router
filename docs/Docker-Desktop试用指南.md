@@ -57,7 +57,7 @@ docker compose -f compose.desktop.yaml logs --tail=100 hopworld-router
 
 ## 功能范围
 
-镜像包含 Xray 和 curl，可供订阅管理与节点测试使用，但在 Docker Desktop 上尚未完成实际验证。默认配置只映射管理端口，本地网络节点端口没有映射。
+镜像包含 Xray 和 curl，可供订阅管理与节点测试使用，但在 Docker Desktop 上尚未完成实际验证。这是镜像自带的，不是管理页自动安装。不要在容器里执行 `deploy/hopworld-install-root.sh`；那条授权只用于 Linux systemd 安装，不会改 Docker Desktop 的端口映射，也不会改 macOS 或 Windows 的防火墙。默认配置只映射管理端口，本地网络节点端口没有映射。
 
 ### 可选：映射本地节点端口
 
