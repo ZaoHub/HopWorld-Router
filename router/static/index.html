@@ -50,7 +50,7 @@
         <section class="card list-card" id="node-section"><details><summary class="card-head"><div class="card-title"><span class="icon-box cyan" aria-hidden="true">◇</span><div><h2>节点列表</h2><p>测试后按可用性和延迟排序</p></div></div><span id="node-count" class="count">0 个节点</span></summary><fieldset class="group-selector"><legend>批量测试订阅组</legend><p>默认全部参与；点「编辑」勾选要测的组，未勾选的不测。</p><label class="sr-only" for="probe-group-filter">筛选订阅组</label><div class="group-filter-row"><input type="search" id="probe-group-filter" class="group-filter" placeholder="筛选订阅组…" autocomplete="off"><button id="probe-groups-edit" class="secondary" type="button">编辑</button></div><div id="probe-groups" class="group-list" role="list"></div></fieldset><div class="batch-bar batch-bar-probe"><div class="probe-target-picks"><label for="test-target-category">分组</label><select id="test-target-category"><option value="general">通用</option><option value="ai">AI</option><option value="social">社交媒体</option></select><label for="test-target">目标</label><select id="test-target"></select><button id="batch-probe" class="secondary" type="button">批量测试</button></div><span id="probe-progress" role="status"></span></div><div id="nodes" class="list"><p class="empty">连接服务后查看节点</p></div></details></section>
       </div>
       <aside class="side-column"><section class="card form-card card-compact" id="add-source"><div class="side-heading"><div class="icon-box blue" aria-hidden="true">＋</div><div><h2>添加上游订阅</h2><p>从订阅链接拉取节点</p></div></div><p id="add-source-summary" class="field-hint">尚无上游订阅 · 点击添加</p><button type="button" id="add-source-open" class="primary full">添加上游订阅 <span aria-hidden="true">→</span></button></section>
-        <section class="card form-card card-compact" id="local-node"><div class="side-heading"><div class="icon-box violet" aria-hidden="true">◎</div><div><h2>本地网络节点</h2><p>VLESS Reality 出口</p></div></div><p id="local-node-summary" class="field-hint">尚未启用</p><p id="local-node-protocol-summary" class="field-hint"></p><button type="button" id="local-node-open" class="secondary full">查看与配置</button></section>
+        <section class="card form-card card-compact" id="local-node"><div class="side-heading"><div class="icon-box violet" aria-hidden="true">◎</div><div><h2>本地网络节点</h2><p>VLESS Reality，可转 Hysteria 2 / TUIC</p></div></div><p id="local-node-summary" class="field-hint">尚未启用</p><p id="local-node-protocol-summary" class="field-hint"></p><button type="button" id="local-node-open" class="secondary full">查看与配置</button></section>
         <section class="card form-card card-compact" id="acme-card"><div class="side-heading"><div class="icon-box blue" aria-hidden="true">◇</div><div><h2>SSL 证书</h2><p>订阅 HTTPS 证书</p></div></div><p id="acme-card-summary" class="field-hint">正在读取…</p><button type="button" id="acme-open" class="secondary full">查看与配置</button></section>
         <section class="card form-card card-compact" id="ikev2"><div class="side-heading"><div class="icon-box blue" aria-hidden="true">⌁</div><div><h2>系统 VPN（IKEv2）</h2><p>iPhone 蜂窝 PSK</p></div></div><p id="ikev2-summary" class="field-hint">尚未启用</p><div class="side-actions side-actions-split"><button type="button" id="ikev2-open" class="secondary full">配置</button><button type="button" id="ikev2-settings-open" class="secondary full">设置</button></div></section>
         <section class="card form-card card-compact" id="manual-import"><div class="side-heading"><div class="icon-box cyan" aria-hidden="true">⌁</div><div><h2>手动导入节点</h2><p>粘贴节点链接</p></div></div><p id="manual-summary" class="field-hint">暂无手动节点</p><button type="button" id="manual-open" class="secondary full">导入节点</button></section>
@@ -67,13 +67,13 @@
     <div class="modal-panel card notice-panel">
       <div class="modal-panel-head">
         <button type="button" class="modal-close text-button" data-modal-close="local-node-notice" aria-label="关闭">关闭</button>
-        <div class="side-heading"><div class="icon-box violet" aria-hidden="true">◎</div><div><h2 id="local-node-notice-title">本地网络节点尚未启用</h2><p>启用后订阅里会多一个 Reality 出口</p></div></div>
+        <div class="side-heading"><div class="icon-box violet" aria-hidden="true">◎</div><div><h2 id="local-node-notice-title">本地网络节点尚未启用</h2><p>启用后订阅包含 Reality；装有 sing-box 时再加入 Hysteria 2 和 TUIC</p></div></div>
       </div>
       <div class="modal-panel-body">
-        <p class="notice-lead">当前未开启 <strong>本地网络节点</strong>，客户端订阅中不会出现本机 VLESS 出口。</p>
+        <p class="notice-lead">当前未开启 <strong>本地网络节点</strong>，客户端订阅中不会出现本机出口。</p>
         <ul class="notice-list">
-          <li>适合 Shadowrocket 等代理：更新订阅即可多一个直连 VPS 的节点</li>
-          <li>需在安全组放行 TCP 端口（默认 8443）</li>
+          <li>适合 Shadowrocket 等代理：更新订阅后可用 VLESS Reality，以及 Hysteria 2、TUIC</li>
+          <li>需在安全组放行 TCP 端口（默认 8443）；Hysteria 2 和 TUIC 还要放行对应 UDP 端口</li>
           <li>与 IKEv2 系统 VPN 可同时使用，互不影响</li>
         </ul>
         <div class="form-actions notice-actions"><button type="button" id="local-node-notice-go" class="primary">去启用</button><button type="button" class="secondary" data-modal-close="local-node-notice">本次先不启用</button></div>

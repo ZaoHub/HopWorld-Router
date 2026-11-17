@@ -1016,9 +1016,11 @@ async function refresh() {
   if (localStatus) localStatus.textContent = localLine;
   const protocol = local.egress_protocol_info;
   const protocolLine = protocol ? `TCP：${protocol.tcp} · UDP：${protocol.udp}` : 'TCP / UDP 配置状态暂不可用';
+  const quic = local.quic || {};
+  const quicLine = !local.enabled ? '' : (quic.available ? `Hysteria 2 UDP ${quic.hy2_port}、TUIC UDP ${quic.tuic_port} 已加入订阅` : (quic.error || ''));
   $('#local-protocol-status').textContent = protocolLine;
-  $('#local-protocol-detail').textContent = protocol?.detail || '';
-  $('#local-node-protocol-summary').textContent = protocolLine;
+  $('#local-protocol-detail').textContent = [protocol?.detail || '', quicLine].filter(Boolean).join(' ');
+  $('#local-node-protocol-summary').textContent = quicLine || protocolLine;
   if (localSummary) {
     localSummary.textContent = local.enabled ? localLine : '尚未启用 · 点击查看可启用或修改';
   }
@@ -1233,7 +1235,7 @@ $('#acme-form').addEventListener('submit', async e => {
   const button = $('#acme-save');
   const enabled = $('#local-acme').checked;
   button.disabled = true;
-  if (enabled) note('正在申请证书（约 1 分钟）…', {duration: 0});
+  if (enabled) note('正在申请证书，缺少的组件会自动安装…', {duration: 0});
   try {
     const result = await call('/api/acme', {enabled, email: $('#local-acme-email').value, challenge: $('#local-acme-challenge').value});
     clearNote();
@@ -1357,7 +1359,7 @@ $('#local-toggle').onclick=async()=>{
   const on=button.textContent==='停用';
   if(on&&!confirm('停用后订阅中将移除本地网络节点，继续吗？'))return;
   button.disabled=true;
-  note(on?'正在停用…':'正在启用本地网络节点…');
+  note(on?'正在停用…':'正在启用本地网络节点，缺少的组件会自动安装…');
   try{
     await call('/api/local-node',localPayload(!on));
     localEditing=false;
@@ -1368,6 +1370,7 @@ $('#local-toggle').onclick=async()=>{
 $('#local-save').onclick=async()=>{
   const button=$('#local-save');
   button.disabled=true;
+  note('正在保存，缺少的组件会自动安装…');
   try{
     await call('/api/local-node',localPayload(true));
     localEditing=false;
@@ -1379,7 +1382,7 @@ $('#local-save').onclick=async()=>{
 function ikev2Payload(extra={}){const body={enabled:true,public_host:$('#ikev2-host').value,remote_id:$('#ikev2-remote-id').value,...extra};const psk=$('#ikev2-psk').value.trim();if(psk)body.psk=psk;return body;}
 $('#ikev2-edit').onclick=()=>{ikev2Editing=true;syncIkev2Form({enabled:true, psk:$('#ikev2-psk').value});$('#ikev2-host').focus();};
 $('#ikev2-cancel').onclick=async()=>{endIkev2Edit();await refresh();note('已取消编辑');};
-$('#ikev2-save').onclick=async()=>{const psk=$('#ikev2-psk').value.trim();if(psk&&!/^[\dA-Za-z]{8,32}$/.test(psk)){note('共享密钥须为 8–32 位字母或数字');return;}if(!confirm('保存后需在 iPhone 重装描述文件或同步 VPN 配置，继续吗？'))return;const button=$('#ikev2-save');button.disabled=true;try{const result=await call('/api/ikev2',ikev2Payload());endIkev2Edit();if(result.ikev2)applyIkev2Ui(result.ikev2);await refresh();note('IKEv2 配置已保存');}catch(error){note(error.message,{error:true});}finally{button.disabled=false;}};
+$('#ikev2-save').onclick=async()=>{const psk=$('#ikev2-psk').value.trim();if(psk&&!/^[\dA-Za-z]{8,32}$/.test(psk)){note('共享密钥须为 8–32 位字母或数字');return;}if(!confirm('保存后需在 iPhone 重装描述文件或同步 VPN 配置，继续吗？'))return;const button=$('#ikev2-save');button.disabled=true;note('正在保存，缺少的组件会自动安装…');try{const result=await call('/api/ikev2',ikev2Payload());endIkev2Edit();if(result.ikev2)applyIkev2Ui(result.ikev2);await refresh();note('IKEv2 配置已保存');}catch(error){note(error.message,{error:true});}finally{button.disabled=false;}};
 $('#ikev2-form').onsubmit=e=>e.preventDefault();
 $('#ikev2-toggle').onclick=async()=>{
   const button=$('#ikev2-toggle');
@@ -1390,7 +1393,7 @@ $('#ikev2-toggle').onclick=async()=>{
     if(psk&&!/^[\dA-Za-z]{8,32}$/.test(psk)){note('共享密钥须为 8–32 位字母或数字');return;}
   }
   button.disabled=true;
-  note(on?'正在停用…':'正在启用系统 VPN…');
+  note(on?'正在停用…':'正在启用系统 VPN，缺少的组件会自动安装…');
   try{
     if(on){
       const result=await call('/api/ikev2',{enabled:false,public_host:$('#ikev2-host').value,remote_id:$('#ikev2-remote-id').value});
