@@ -560,6 +560,16 @@ class Store:
         view = self.xray.public_view(settings)
         return self.attach_dns_hints(view, settings)
 
+    def local_traffic_status(self):
+        with self._local_lock:
+            settings = self.local_node_settings()
+            if not settings.get('enabled'):
+                return {'state': 'inactive'}
+            if not self.xray.running():
+                return {'state': 'stopped'}
+            traffic = self.xray.node_traffic()
+            return {'state': 'ok', **traffic} if traffic is not None else {'state': 'unavailable'}
+
     def auto_observation_status(self):
         with self._local_lock:
             settings = self.local_node_settings()
@@ -956,6 +966,8 @@ def make_handler(store, password):
                 })
             if path == '/api/local/auto-status':
                 return self.json(200, store.auto_observation_status())
+            if path == '/api/local/traffic':
+                return self.json(200, store.local_traffic_status())
             if path == '/api/local/dns-hints':
                 if not self.authorized():
                     return

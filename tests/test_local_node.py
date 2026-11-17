@@ -127,6 +127,38 @@ class LocalNodeTests(unittest.TestCase):
 
 
 class XrayRenameTests(unittest.TestCase):
+    def test_node_traffic_uses_private_metrics_for_every_egress_mode(self):
+        with tempfile.TemporaryDirectory() as temp:
+            service = XrayService(Path(temp), binary='/unused')
+            base = {'public_host': 'example.com', 'port': 8443,
+                    'uuid': 'a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89',
+                    'private_key': 'priv', 'public_key': 'pub', 'short_id': 'abcd'}
+            for mode in ('default', 'local_proxy', 'auto'):
+                with self.subTest(mode=mode):
+                    config, _ = service.build({**base, 'egress_mode': mode, 'proxy_pool': []})
+                    self.assertEqual(config['inbounds'][0]['tag'], 'local-node-in')
+                    self.assertEqual(config['stats'], {})
+                    self.assertTrue(config['policy']['system']['statsInboundUplink'])
+                    self.assertTrue(config['policy']['system']['statsInboundDownlink'])
+                    self.assertEqual(config['routing']['rules'][0]['inboundTag'], ['internal-metrics-in'])
+                    self.assertEqual(Path(config['inbounds'][1]['listen']).parent.stat().st_mode & 0o777, 0o700)
+
+    def test_node_traffic_validates_metrics_and_preserves_zero(self):
+        with tempfile.TemporaryDirectory() as temp:
+            service = XrayService(Path(temp), binary='/unused')
+            service.pid_path.write_text('1234')
+            for up, down in ((0, 0), (123, 456)):
+                payload = {'stats': {'inbound': {'local-node-in': {'uplink': up, 'downlink': down}}}}
+                with unittest.mock.patch.object(service, '_metrics', return_value=payload):
+                    traffic = service.node_traffic()
+                    self.assertEqual((traffic['up_bytes'], traffic['down_bytes'], traffic['total_bytes']), (up, down, up + down))
+                    self.assertIsInstance(traffic['instance'], str)
+            for payload in (None, {}, {'stats': {'inbound': {}}},
+                            {'stats': {'inbound': {'local-node-in': {'uplink': True, 'downlink': 1}}}},
+                            {'stats': {'inbound': {'local-node-in': {'uplink': -1, 'downlink': 1}}}}):
+                with unittest.mock.patch.object(service, '_metrics', return_value=payload):
+                    self.assertIsNone(service.node_traffic())
+
     def test_protocol_status_uses_running_configuration(self):
         with tempfile.TemporaryDirectory() as temp:
             service = XrayService(Path(temp), binary='/unused')

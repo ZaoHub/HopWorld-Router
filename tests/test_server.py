@@ -66,6 +66,9 @@ class ServerTests(unittest.TestCase):
         with self.assertRaises(HTTPError) as error: self.request('/s/' + old, auth=False)
         self.assertEqual(error.exception.code, 404)
 
+    def test_rejects_insecure_upstream_url(self):
+        with self.assertRaises(HTTPError): self.request('/api/sources', {'name':'x', 'url':'http://example.test'})
+
     def test_independent_acme_settings_preserve_node(self):
         settings = self.store.local_node_settings()
         settings.update({'enabled': True, 'public_host': 'node.example.com', 'port': 8443})
@@ -101,8 +104,23 @@ class ServerTests(unittest.TestCase):
             self.request('/api/acme', valid, origin=False)
         self.assertEqual(error.exception.code, 403)
 
-    def test_rejects_insecure_upstream_url(self):
-        with self.assertRaises(HTTPError): self.request('/api/sources', {'name':'x', 'url':'http://example.test'})
+    def test_local_traffic_requires_auth_and_reports_availability(self):
+        with self.assertRaises(HTTPError) as error:
+            self.request('/api/local/traffic', auth=False)
+        self.assertEqual(error.exception.code, 401)
+        self.assertEqual(json.load(self.request('/api/local/traffic')), {'state': 'inactive'})
+        settings = self.store.local_node_settings()
+        settings['enabled'] = True
+        self.store.save_local_node_settings(settings)
+        with patch.object(self.store.xray, 'running', return_value=False):
+            self.assertEqual(json.load(self.request('/api/local/traffic')), {'state': 'stopped'})
+        with patch.object(self.store.xray, 'running', return_value=True), \
+             patch.object(self.store.xray, 'node_traffic', return_value=None):
+            self.assertEqual(json.load(self.request('/api/local/traffic')), {'state': 'unavailable'})
+        counters = {'up_bytes': 0, 'down_bytes': 0, 'total_bytes': 0, 'instance': '123'}
+        with patch.object(self.store.xray, 'running', return_value=True), \
+             patch.object(self.store.xray, 'node_traffic', return_value=counters):
+            self.assertEqual(json.load(self.request('/api/local/traffic')), {'state': 'ok', **counters})
 
     def test_local_node_joins_subscription_when_enabled(self):
         link = 'vless://a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89@8.8.8.8:8443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.microsoft.com&fp=chrome&pbk=pub&sid=abcd&type=tcp#%E6%9C%AC%E5%9C%B0%E7%BD%91%E7%BB%9C'
@@ -195,7 +213,7 @@ class ServerTests(unittest.TestCase):
             config, _ = self.store.xray.build(apply.call_args.args[0])
             self.assertEqual(config['outbounds'][0]['settings']['servers'][0], {'address': '127.0.0.1', 'port': 7890})
             self.assertNotIn('observatory', config)
-            self.assertNotIn('routing', config)
+            self.assertEqual(config['routing']['rules'], [{'type': 'field', 'inboundTag': ['internal-metrics-in'], 'outboundTag': 'internal-metrics'}])
 
     def test_auto_pool_does_not_truncate_enabled_nodes(self):
         self.store.add_manual('\n'.join(f'trojan://secret@node{i}.example.com:443?security=tls' for i in range(40)))

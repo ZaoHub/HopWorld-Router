@@ -23,6 +23,18 @@
     <div class="layout">
       <div class="main-column">
         <section class="card card-compact address-card" id="subscription-section"><div class="card-head card-head-tight"><div class="card-title"><span class="icon-box blue" aria-hidden="true">↗</span><div><h2>统一订阅</h2><p>客户端直连节点，流量不经本服务</p></div></div><span class="pill">密钥保护</span></div><p id="subscription-summary" class="field-hint">连接服务后生成</p><p id="subscription-tls-status" class="field-hint subscription-tls-status" hidden></p><div class="side-actions side-actions-split"><button type="button" id="subscription-open" class="primary full">订阅与扫码</button><button type="button" id="copy" class="secondary full">复制</button></div></section>
+        <section class="card list-card" id="local-traffic-monitor" hidden>
+          <div class="card-head"><div class="card-title"><span class="icon-box violet" aria-hidden="true">◎</span><div><h2>本地网络节点流量</h2><p>仅统计经过本地网络节点的流量</p></div></div></div>
+          <p id="local-traffic-status" class="field-hint">正在读取流量…</p>
+          <div id="local-traffic-values" class="local-traffic-values" hidden>
+            <div><span>上行速度</span><strong id="local-traffic-up-rate">—</strong></div>
+            <div><span>下行速度</span><strong id="local-traffic-down-rate">—</strong></div>
+            <div><span>累计上行</span><strong id="local-traffic-up">—</strong></div>
+            <div><span>累计下行</span><strong id="local-traffic-down">—</strong></div>
+            <div><span>累计合计</span><strong id="local-traffic-total">—</strong></div>
+          </div>
+          <p class="field-hint">统计包含连接协议开销；累计流量从 Xray 启动时开始计算，重启后清零。订阅中直连的其他节点不计入。</p>
+        </section>
         <section class="card list-card" id="ikev2-monitor" hidden>
           <div class="card-head"><div class="card-title"><span class="icon-box blue" aria-hidden="true">⌁</span><div><h2>IKEv2 连接监视</h2><p>UDP 500 第一包起显示，含正在连接</p></div></div><span id="ikev2-monitor-count" class="count">0 台在线</span></div>
           <p id="ikev2-monitor-summary" class="field-hint">尚未启用 IKEv2</p>

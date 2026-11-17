@@ -6,6 +6,10 @@ let probeTimer;
 let autoObservationTimer;
 let autoObservationBusy = false;
 let ikev2Timer;
+let localTrafficTimer;
+let localTrafficEnabled = false;
+let localTrafficGeneration = 0;
+let localTrafficSample = null;
 const selectedGroups = new Set();
 const seenGroups = new Set();
 let groupSignature = '';
@@ -574,6 +578,54 @@ function fmtTrafficBytes(n) {
   if (v < 1073741824) return `${(v / 1048576).toFixed(2)} MB`;
   return `${(v / 1073741824).toFixed(2)} GB`;
 }
+function setLocalTrafficEnabled(enabled) {
+  if (enabled === localTrafficEnabled) return;
+  localTrafficEnabled = enabled;
+  const generation = ++localTrafficGeneration;
+  clearTimeout(localTrafficTimer);
+  localTrafficSample = null;
+  $('#local-traffic-monitor').hidden = !enabled;
+  if (enabled) {
+    $('#local-traffic-status').textContent = '正在读取流量…';
+    $('#local-traffic-values').hidden = true;
+    void refreshLocalTraffic(generation);
+  }
+}
+async function refreshLocalTraffic(generation) {
+  try {
+    const data = await call('/api/local/traffic');
+    if (generation !== localTrafficGeneration) return;
+    const ok = data.state === 'ok' && Number.isFinite(data.up_bytes) && Number.isFinite(data.down_bytes)
+      && data.up_bytes >= 0 && data.down_bytes >= 0;
+    $('#local-traffic-values').hidden = !ok;
+    if (!ok) {
+      const messages = {inactive: '本地网络节点尚未启用', stopped: '本地网络节点未运行', unavailable: '暂时无法读取流量'};
+      $('#local-traffic-status').textContent = messages[data.state] || '暂时无法读取流量';
+      localTrafficSample = null;
+    } else {
+      const now = performance.now();
+      const previous = localTrafficSample;
+      const seconds = previous ? (now - previous.time) / 1000 : 0;
+      const canCalculate = data.instance && previous?.instance === data.instance && seconds > 0
+        && data.up_bytes >= previous.up && data.down_bytes >= previous.down;
+      $('#local-traffic-up-rate').textContent = canCalculate ? `${fmtTrafficBytes(Math.round((data.up_bytes - previous.up) / seconds))}/s` : '—';
+      $('#local-traffic-down-rate').textContent = canCalculate ? `${fmtTrafficBytes(Math.round((data.down_bytes - previous.down) / seconds))}/s` : '—';
+      $('#local-traffic-up').textContent = fmtTrafficBytes(data.up_bytes);
+      $('#local-traffic-down').textContent = fmtTrafficBytes(data.down_bytes);
+      $('#local-traffic-total').textContent = fmtTrafficBytes(data.up_bytes + data.down_bytes);
+      $('#local-traffic-status').textContent = '上行：客户端发往节点 · 下行：节点发往客户端';
+      localTrafficSample = {instance: data.instance, up: data.up_bytes, down: data.down_bytes, time: now};
+    }
+  } catch {
+    if (generation !== localTrafficGeneration) return;
+    localTrafficSample = null;
+    $('#local-traffic-values').hidden = true;
+    $('#local-traffic-status').textContent = '暂时无法读取流量';
+  }
+  if (generation === localTrafficGeneration && localTrafficEnabled) {
+    localTrafficTimer = setTimeout(() => refreshLocalTraffic(generation), 2000);
+  }
+}
 async function call(path, data) {
   const options = data ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)} : {};
   const response = await fetch(path, options);
@@ -823,6 +875,7 @@ async function refresh() {
   const nodes = $('#nodes'); nodes.replaceChildren();
   $('#node-count').textContent = `${data.nodes.length} 个节点`;
   const local = data.local_node || {};
+  setLocalTrafficEnabled(!!local.enabled);
   syncLocalForm(local, data.acme || {});
   maybeShowLocalNodeNotice(local);
   const localStatus = $('#local-status');

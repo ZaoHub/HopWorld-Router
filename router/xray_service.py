@@ -139,15 +139,18 @@ class XrayService:
             settings.get('egress_mode') == 'local_proxy',
             settings.get('auto_interval', 60),
         )
-        if settings.get('egress_mode') == 'auto' and settings.get('proxy_pool'):
-            path = self._metrics_path()
-            if path:
-                config['metrics'] = {'tag': 'internal-metrics'}
-                config['inbounds'].append({'tag': 'internal-metrics-in', 'listen': path, 'protocol': 'dokodemo-door', 'settings': {'address': '127.0.0.1', 'port': 80, 'network': 'tcp'}})
-                config['routing']['rules'].insert(0, {'type': 'field', 'inboundTag': ['internal-metrics-in'], 'outboundTag': 'internal-metrics'})
+        path = self._metrics_path()
+        if path:
+            config['inbounds'][0]['tag'] = 'local-node-in'
+            config['stats'] = {}
+            config['policy'] = {'system': {'statsInboundUplink': True, 'statsInboundDownlink': True}}
+            config['metrics'] = {'tag': 'internal-metrics'}
+            config['inbounds'].append({'tag': 'internal-metrics-in', 'listen': path, 'protocol': 'dokodemo-door', 'settings': {'address': '127.0.0.1', 'port': 80, 'network': 'tcp'}})
+            routing = config.setdefault('routing', {'domainStrategy': 'AsIs', 'rules': []})
+            routing['rules'].insert(0, {'type': 'field', 'inboundTag': ['internal-metrics-in'], 'outboundTag': 'internal-metrics'})
         return config, link
 
-    def auto_observations(self):
+    def _metrics(self):
         path = self._metrics_path()
         if not path:
             return None
@@ -166,12 +169,31 @@ class XrayService:
             payload = json.loads(raw)
             if not isinstance(payload, dict):
                 return None
-            observations = payload.get('observatory')
-            return observations if isinstance(observations, dict) else None
+            return payload
         except (OSError, ValueError, http.client.HTTPException):
             return None
         finally:
             conn.close()
+
+    def auto_observations(self):
+        payload = self._metrics()
+        observations = payload.get('observatory') if payload else None
+        return observations if isinstance(observations, dict) else None
+
+    def node_traffic(self):
+        payload = self._metrics()
+        try:
+            traffic = payload['stats']['inbound']['local-node-in']
+            up, down = traffic['uplink'], traffic['downlink']
+        except (TypeError, KeyError):
+            return None
+        if any(type(value) is not int or value < 0 for value in (up, down)):
+            return None
+        try:
+            instance = str(self.pid_path.stat().st_mtime_ns)
+        except OSError:
+            instance = None
+        return {'up_bytes': up, 'down_bytes': down, 'total_bytes': up + down, 'instance': instance}
 
     def public_view(self, settings, running=None):
         is_running = self.running() if running is None else bool(running)
