@@ -85,3 +85,5 @@ summary.card-head{cursor:pointer;list-style:none}summary.card-head::-webkit-deta
 #local-form select,#local-form .local-auto-only select{width:100%;border:1px solid #e0e7f0;border-radius:9px;padding:11px 36px 11px 12px;color:#253c5a;background:#fff;min-height:42px;font-size:13px;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2367789a' d='M1.5 1.5 6 6l4.5-4.5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
 #local-form select:disabled{background-color:#eef2f8;color:#8b99aa;cursor:not-allowed;opacity:1}
 #local-form select:focus-visible{outline:3px solid #a9c8ff;outline-offset:2px;border-color:#c5d4f0}
+#local-form .local-protocol-status{margin-top:10px;padding:12px 14px;border:1px solid #e8eef7;border-radius:10px;background:#f8fafe;color:#53637a;font-size:12px;line-height:1.6}
+#local-form .local-protocol-status p{margin:4px 0 0;color:#53637a;font-size:12px;overflow-wrap:anywhere}

@@ -22,6 +22,8 @@ HopWorld Router 同时做两件事：**把运行本服务的机器网络做成�
 
 这与「手动导入一条 HTTP/SOCKS 节点」不同：本地网络节点由本服务生成并维护 Xray 配置，协议为 VLESS Reality（默认端口见管理页）；已有本机代理可扫描后选作该节点的出口。
 
+本地网络节点支持转发 UDP：客户端需要支持并启用 VLESS Reality 的 UDP 转发，服务器需要能够向目标发送和接收 UDP。客户端连接 Reality 入站使用 TCP，不需要为该入站端口额外开放同号 UDP 端口。选择本机网络且没有环境 HTTP 代理时，UDP 通过服务器直接出站；如使用环境 HTTP 代理、本机代理或上游自动换线，UDP 是否可用取决于所选出口，普通 HTTP 代理不支持 UDP。节点的网页测速成功不代表 UDP 已验证。
+
 **出口方式**可在本地节点设置中选择：
 
 - **本机网络**：使用本机出口；如已设置 `HTTP_PROXY` / `HTTPS_PROXY`，仍沿用原有环境代理规则。
@@ -187,6 +189,16 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
 ```
 
 最后一行应打印 `401`。这表示管理页只在本机监听，且未登录会拒绝。`systemctl status hopworld-router` 应为 active。
+
+### 更新已有的服务器安装
+
+以下方法适用于上述 `/opt/hopworld-router` Git 安装和 `hopworld-router` systemd 服务。更新前请备份数据目录（默认 `/var/lib/hopworld-router`）和 `/etc/hopworld-router.env`，备份包含节点和订阅凭据，应限制访问；数据库正在使用时应使用 SQLite 在线备份或先停止服务后复制。备份完成并确认服务运行后，以 root 执行：
+
+```sh
+bash /opt/hopworld-router/deploy/hopworld-update.sh
+```
+
+脚本从 GitHub 远程 `origin` 的 `main` 拉取并仅允许快进；目录有未提交或未跟踪文件时会停止。依赖变化时先建立独立虚拟环境，安装成功后再更新；原虚拟环境保留在 `/var/lib/hopworld-router-updates/previous/`。更新会重启服务，现有连接可能短暂中断。服务启动失败时脚本会报告原版本号，请检查 `journalctl -u hopworld-router` 并使用备份恢复代码和数据。该脚本不会更新 systemd 服务文件、系统软件或 Xray。非 Git 安装、Docker 和自定义部署请按各自方式更新，不要直接覆盖现有数据。
 
 ### 6. 打开管理页
 

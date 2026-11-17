@@ -3,7 +3,7 @@
 .env.*
 !.env.example
 router.env
-.venv/
+.venv
 data/
 config.local.*
 *.log

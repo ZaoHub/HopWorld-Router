@@ -174,6 +174,7 @@ class XrayService:
             conn.close()
 
     def public_view(self, settings, running=None):
+        is_running = self.running() if running is None else bool(running)
         view = {
             'enabled': bool(settings.get('enabled')),
             'port': int(settings.get('port') or DEFAULT_LOCAL_PORT),
@@ -185,7 +186,8 @@ class XrayService:
             'name': settings.get('name') or DEFAULT_NODE_NAME,
             'dest': settings.get('dest') or DEFAULT_REALITY_DEST,
             'server_name': settings.get('server_name') or DEFAULT_REALITY_SERVER_NAME,
-            'running': self.running() if running is None else bool(running),
+            'running': is_running,
+            'egress_protocol_info': self._protocol_info(settings, is_running),
             'egress_mode': settings.get('egress_mode', 'default'),
             'local_proxy': settings.get('local_proxy', ''),
             'auto_pool_count': len(settings.get('proxy_pool') or []) if settings.get('egress_mode') == 'auto' else 0,
@@ -193,6 +195,8 @@ class XrayService:
             'auto_interval': settings.get('auto_interval', 60),
             'link': '',
         }
+        if any(os.environ.get(key, '').strip() for key in ('HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy')):
+            view['egress_protocol_info']['detail'] += ' Router 服务环境检测到 HTTP_PROXY / HTTPS_PROXY；请确认当前出口配置。'
         if settings.get('enabled') and settings.get('public_host') and settings.get('public_key'):
             try:
                 _, link = self.build(settings)
@@ -200,6 +204,33 @@ class XrayService:
             except ValueError:
                 view['link'] = ''
         return view
+
+    def _protocol_info(self, settings, running):
+        if not settings.get('enabled') or not running:
+            return {'tcp': '未运行', 'udp': '未运行', 'detail': '启用本地网络节点后显示配置状态。'}
+        try:
+            config = json.loads(self.config_path.read_text(encoding='utf-8'))
+            outbounds = config['outbounds']
+            if not isinstance(outbounds, list) or not outbounds:
+                raise ValueError('invalid outbounds')
+        except (OSError, ValueError, KeyError, TypeError):
+            return {'tcp': '无法确认', 'udp': '无法确认', 'detail': '无法读取运行配置，请检查本地节点状态。'}
+        tags = {item.get('tag'): item.get('protocol') for item in outbounds if isinstance(item, dict)}
+        if tags.get('egress') == 'http':
+            udp, detail = '不支持', '当前使用环境 HTTP 代理出口，公网 UDP 无法通过。请在服务环境中移除 HTTP_PROXY / HTTPS_PROXY 并重启服务，前提是服务器可以直连公网。'
+        elif tags.get('local-proxy') == 'http':
+            udp, detail = '不支持', '当前使用本机 HTTP 代理出口，UDP 无法通过。'
+        elif tags.get('local-proxy') == 'socks':
+            udp, detail = '待验证', 'SOCKS 出口是否支持 UDP 需要实际测试；代理扫描只验证 TCP。'
+        elif any(str(tag).startswith('candidate-') for tag in tags if tag):
+            udp, detail = '取决于上游', '自动换线的 UDP 支持取决于所选上游，网页测速不能证明 UDP 可用。'
+        elif tags.get('blocked') == 'blackhole':
+            return {'tcp': '已阻断', 'udp': '已阻断', 'detail': '没有可用的出口配置。'}
+        elif tags.get('direct') == 'freedom':
+            udp, detail = '已配置', '服务器直连出口已配置 TCP 和 UDP；客户端、服务器网络及防火墙仍需支持，实际可用性尚未测试。'
+        else:
+            return {'tcp': '无法确认', 'udp': '无法确认', 'detail': '当前出口配置无法识别，请检查本地节点状态。'}
+        return {'tcp': '已配置', 'udp': udp, 'detail': detail}
 
     def running(self):
         if os.name == 'nt':

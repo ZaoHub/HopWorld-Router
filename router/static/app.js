@@ -845,6 +845,11 @@ async function refresh() {
       : '已启用，但 Xray 未在运行')
     : '尚未启用';
   if (localStatus) localStatus.textContent = localLine;
+  const protocol = local.egress_protocol_info;
+  const protocolLine = protocol ? `TCP：${protocol.tcp} · UDP：${protocol.udp}` : 'TCP / UDP 配置状态暂不可用';
+  $('#local-protocol-status').textContent = protocolLine;
+  $('#local-protocol-detail').textContent = protocol?.detail || '';
+  $('#local-node-protocol-summary').textContent = protocolLine;
   if (localSummary) {
     const acmeHint = local.enabled ? formatAcmeLine(data.acme) : '';
     localSummary.textContent = local.enabled

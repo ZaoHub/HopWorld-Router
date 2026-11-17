@@ -1,8 +1,10 @@
 import os
+import json
 import shutil
 import subprocess
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
@@ -83,6 +85,14 @@ class LocalNodeTests(unittest.TestCase):
         )
         self.assertIn('routing', config)
 
+    def test_reality_direct_egress_supports_udp(self):
+        with unittest.mock.patch.dict(os.environ, {}, clear=True):
+            config, _ = build_local_reality_node(
+                'example.com', 8443, 'a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89', 'priv', 'pub', 'ab12',
+            )
+        self.assertEqual(config['inbounds'][0]['protocol'], 'vless')
+        self.assertEqual(config['outbounds'], [{'protocol': 'freedom', 'tag': 'direct'}])
+
     def test_auto_pool_never_falls_back_to_direct(self):
         args = ('example.com', 8443, 'a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89', 'priv', 'pub', 'ab12')
         config, _ = build_local_reality_node(*args, proxy_pool=[])
@@ -117,6 +127,25 @@ class LocalNodeTests(unittest.TestCase):
 
 
 class XrayRenameTests(unittest.TestCase):
+    def test_protocol_status_uses_running_configuration(self):
+        with tempfile.TemporaryDirectory() as temp:
+            service = XrayService(Path(temp), binary='/unused')
+            settings = {'enabled': True}
+            cases = [
+                ([{'tag': 'direct', 'protocol': 'freedom'}], '已配置'),
+                ([{'tag': 'egress', 'protocol': 'http'}], '不支持'),
+                ([{'tag': 'local-proxy', 'protocol': 'http'}], '不支持'),
+                ([{'tag': 'local-proxy', 'protocol': 'socks'}], '待验证'),
+                ([{'tag': 'candidate-0', 'protocol': 'vless'}], '取决于上游'),
+                ([{'tag': 'blocked', 'protocol': 'blackhole'}], '已阻断'),
+            ]
+            for outbounds, expected in cases:
+                service.config_path.write_text(json.dumps({'outbounds': outbounds}))
+                self.assertEqual(service.public_view(settings, running=True)['egress_protocol_info']['udp'], expected)
+            self.assertEqual(service.public_view(settings, running=False)['egress_protocol_info']['udp'], '未运行')
+            service.config_path.unlink()
+            self.assertEqual(service.public_view(settings, running=True)['egress_protocol_info']['udp'], '无法确认')
+
     def test_auto_observations_use_private_socket_not_public_listener(self):
         with tempfile.TemporaryDirectory() as temp:
             service = XrayService(Path(temp), binary='/usr/bin/xray')
