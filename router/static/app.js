@@ -637,6 +637,134 @@ async function call(path, data) {
   }
   return response.json();
 }
+let systemUpdateTimer;
+let systemUpdatePolling = false;
+let systemUpdateStarted = 0;
+let systemUpdateTarget = '';
+let systemUpdateSawRunning = false;
+let systemUpdateFailure = '';
+function renderSystemUpdate(status) {
+  const banner = $('#system-update-banner');
+  const title = $('#system-update-title');
+  const description = $('#system-update-description');
+  const details = $('#system-update-details');
+  const list = $('#system-update-files');
+  const button = $('#system-update-apply');
+  const files = Array.isArray(status.changed_files) ? status.changed_files : [];
+  const available = status.state === 'available' && files.length > 0;
+  if (status.state === 'failed' && systemUpdateStarted) systemUpdateFailure = status.error || '请检查服务状态后重试。';
+  const failed = !!systemUpdateFailure;
+  if (available && !systemUpdateStarted && !failed) systemUpdateTarget = status.target || '';
+  if (status.state === 'updating') {
+    systemUpdateSawRunning = true;
+    if (!systemUpdateStarted) systemUpdateStarted = Date.now();
+  }
+  const completed = systemUpdateStarted && status.state === 'current'
+    && (systemUpdateSawRunning || (systemUpdateTarget && status.current === systemUpdateTarget));
+  const pending = !!systemUpdateStarted && !completed && !failed;
+  if (!available && !pending && !failed) {
+    banner.hidden = true;
+    if (completed) {
+      systemUpdateStarted = 0;
+      systemUpdateSawRunning = false;
+      note('项目文件已更新，请刷新页面查看最新界面');
+    }
+    syncProjectUpdateButton();
+    return;
+  }
+  banner.hidden = false;
+  list.replaceChildren();
+  for (const file of files) {
+    const item = document.createElement('li');
+    item.textContent = String(file);
+    list.append(item);
+  }
+  details.hidden = !files.length || pending;
+  button.hidden = (!available || pending) && !failed;
+  button.disabled = pending;
+  button.dataset.action = failed ? 'check' : 'apply';
+  button.textContent = failed ? '重新检查' : '更新程序';
+  title.textContent = failed ? '程序更新失败' : pending ? '正在更新程序' : '发现程序更新';
+  description.textContent = failed ? systemUpdateFailure : pending
+    ? '正在等待更新和服务重启，已有连接可能短暂中断。'
+    : `GitHub 有 ${files.length} 个变动文件。更新会重启服务，已有连接可能短暂中断。`;
+  if (failed) systemUpdateStarted = 0;
+  syncProjectUpdateButton();
+}
+function syncProjectUpdateButton() {
+  const button = $('#update-project');
+  if (!button) return;
+  const pending = !!systemUpdateStarted;
+  button.classList.toggle('is-busy', pending);
+  button.setAttribute('aria-label', pending ? '正在更新项目文件' : '项目更新');
+}
+let updatePrefs = {auto_check: true, auto_apply: true};
+let savingUpdatePrefs = false;
+function syncUpdatePrefInputs() {
+  const check = $('#update-auto-check');
+  const apply = $('#update-auto-apply');
+  if (check) check.checked = updatePrefs.auto_check;
+  if (apply) apply.checked = updatePrefs.auto_apply;
+}
+function rememberUpdatePrefs(status) {
+  if (savingUpdatePrefs || typeof status.auto_check !== 'boolean' || typeof status.auto_apply !== 'boolean') return;
+  updatePrefs = {auto_check: status.auto_check, auto_apply: status.auto_apply};
+  syncUpdatePrefInputs();
+}
+async function applySystemUpdate(automatic) {
+  if (!automatic && !confirm('更新将重启服务，现有连接可能短暂中断。继续吗？')) return;
+  systemUpdateStarted = Date.now();
+  systemUpdateSawRunning = false;
+  systemUpdateFailure = '';
+  renderSystemUpdate({state: 'updating'});
+  try {
+    await call('/api/system/update', {});
+  } catch (error) {
+    if (!(error instanceof TypeError)) {
+      renderSystemUpdate({state: 'failed', error: error.message});
+      return;
+    }
+  }
+  if (!systemUpdatePolling) void checkSystemUpdate();
+}
+async function checkSystemUpdate() {
+  if (systemUpdatePolling) return;
+  systemUpdatePolling = true;
+  clearTimeout(systemUpdateTimer);
+  let delay = 600000;
+  try {
+    const status = await call('/api/system/update');
+    rememberUpdatePrefs(status);
+    if (status.state === 'checking') delay = 3000;
+    if (systemUpdateStarted && Date.now() - systemUpdateStarted > 120000 && status.state !== 'current') {
+      renderSystemUpdate({state: 'failed', error: '等待更新超时，请检查服务状态。'});
+    } else {
+      renderSystemUpdate(status);
+    }
+    const canAutoApply = updatePrefs.auto_apply && status.state === 'available'
+      && Array.isArray(status.changed_files) && status.changed_files.length
+      && !systemUpdateStarted && !systemUpdateFailure;
+    if (canAutoApply) await applySystemUpdate(true);
+  } catch (error) {
+    if (systemUpdateStarted && Date.now() - systemUpdateStarted > 120000) {
+      renderSystemUpdate({state: 'failed', error: '暂时无法连接服务，请检查更新状态。'});
+    }
+  } finally {
+    systemUpdatePolling = false;
+    if (updatePrefs.auto_check || systemUpdateStarted) {
+      systemUpdateTimer = setTimeout(checkSystemUpdate, systemUpdateStarted ? 5000 : delay);
+    }
+  }
+}
+$('#system-update-apply')?.addEventListener('click', async () => {
+  if ($('#system-update-apply').dataset.action === 'check') {
+    systemUpdateFailure = '';
+    await checkSystemUpdate();
+    return;
+  }
+  await applySystemUpdate();
+});
+void checkSystemUpdate();
 let noteHideTimer = 0;
 function humanizeApiMessage(text) {
   if (text == null) return '';
@@ -945,6 +1073,7 @@ const MODAL_IDS = {
   ikev2: 'ikev2-modal',
   'ikev2-settings': 'ikev2-settings-modal',
   manual: 'manual-modal',
+  'update-settings': 'update-settings-modal',
 };
 function syncModalBodyScroll() {
   const open = Object.values(MODAL_IDS).some(id => {
@@ -965,7 +1094,7 @@ function closeModal(key) {
   modal.hidden = true;
   syncModalBodyScroll();
   if (key === 'local-node-notice') localNodeNoticeSuppressed = true;
-  if (key !== 'ikev2-settings' && key !== 'local-node-notice') refresh().catch(() => {});
+  if (key !== 'ikev2-settings' && key !== 'local-node-notice' && key !== 'update-settings') refresh().catch(() => {});
 }
 async function openIkev2SettingsModal() {
   try {
@@ -1049,10 +1178,38 @@ function openManualModal() {
   syncModalBodyScroll();
   $('#links')?.focus();
 }
-for (const id of ['add-source-open', 'add-source-open-top']) {
-  const btn = $('#' + id);
-  if (btn) btn.onclick = openAddSourceModal;
+const addSourceOpen = $('#add-source-open');
+if (addSourceOpen) addSourceOpen.onclick = openAddSourceModal;
+$('#update-project')?.addEventListener('click', () => {
+  const modal = $('#update-settings-modal');
+  if (!modal) return;
+  syncUpdatePrefInputs();
+  modal.hidden = false;
+  syncModalBodyScroll();
+});
+async function saveUpdatePrefs() {
+  const previous = updatePrefs;
+  const next = {
+    auto_check: !!$('#update-auto-check')?.checked,
+    auto_apply: !!$('#update-auto-apply')?.checked,
+  };
+  updatePrefs = next;
+  savingUpdatePrefs = true;
+  try {
+    await call('/api/system/update', next);
+  } catch (error) {
+    updatePrefs = previous;
+    syncUpdatePrefInputs();
+    note(error.message, {error: true});
+    return;
+  } finally {
+    savingUpdatePrefs = false;
+  }
+  clearTimeout(systemUpdateTimer);
+  if (next.auto_check || next.auto_apply || systemUpdateStarted) void checkSystemUpdate();
 }
+$('#update-auto-check')?.addEventListener('change', saveUpdatePrefs);
+$('#update-auto-apply')?.addEventListener('change', saveUpdatePrefs);
 $('#subscription-open')?.addEventListener('click', openSubscriptionModal);
 $('#local-node-open')?.addEventListener('click', openLocalNodeModal);
 $('#acme-open')?.addEventListener('click', async () => {
@@ -1105,7 +1262,7 @@ document.querySelectorAll('[data-modal-close]').forEach(el => {
 });
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
-  for (const key of ['ikev2-settings', 'local-node-notice', 'subscription', 'manual', 'ikev2', 'local-node', 'acme', 'add-source']) {
+  for (const key of ['update-settings', 'ikev2-settings', 'local-node-notice', 'subscription', 'manual', 'ikev2', 'local-node', 'acme', 'add-source']) {
     const m = $(`#${MODAL_IDS[key]}`);
     if (m && !m.hidden) {
       closeModal(key);
