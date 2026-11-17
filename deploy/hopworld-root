@@ -56,6 +56,29 @@ ensure_xray() {
   [[ -x /usr/local/bin/xray ]] || command -v xray >/dev/null 2>&1
 }
 
+# musl 包可在 CentOS 7 上运行；已有 sing-box 时不升级。
+ensure_singbox() {
+  if [[ -x /usr/local/bin/sing-box ]] || command -v sing-box >/dev/null 2>&1; then
+    return 0
+  fi
+  local arch version url tmp
+  case "$(uname -m)" in
+    x86_64) arch=amd64 ;;
+    aarch64|arm64) arch=arm64 ;;
+    armv7l) arch=armv7 ;;
+    *) echo "不支持的架构: $(uname -m)" >&2; exit 1 ;;
+  esac
+  install_packages curl ca-certificates tar
+  version="$(curl -fsSL https://api.github.com/repos/SagerNet/sing-box/releases/latest | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p' | head -n 1)"
+  [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "无法确定 sing-box 版本" >&2; exit 1; }
+  url="https://github.com/SagerNet/sing-box/releases/download/v${version}/sing-box-${version}-linux-${arch}-musl.tar.gz"
+  tmp="$(mktemp -d)"
+  curl -fsSL "$url" | tar -xz -C "$tmp" || { rm -rf "$tmp"; exit 1; }
+  install -m 755 "$tmp"/sing-box-*/sing-box /usr/local/bin/sing-box || { rm -rf "$tmp"; exit 1; }
+  rm -rf "$tmp"
+  [[ -x /usr/local/bin/sing-box ]]
+}
+
 ensure_acme() {
   local webroot=/var/www/acme certbot_bin
   if ! command -v nginx >/dev/null 2>&1 || ! command -v certbot >/dev/null 2>&1; then
@@ -116,6 +139,7 @@ ensure_ikev2() {
 action="${1:-}"
 case "$action" in
   xray) ensure_xray ;;
+  sing-box) ensure_singbox ;;
   open)
     proto="${2:-}"
     port="${3:-}"
