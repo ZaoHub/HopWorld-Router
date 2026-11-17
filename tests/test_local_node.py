@@ -8,7 +8,16 @@ import unittest.mock
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from router.local_node import build_local_node, build_local_reality_node, validate_public_host
+from router.local_node import (
+    LOCAL_EGRESS_SOCKS_PORT,
+    build_local_node,
+    build_local_reality_node,
+    build_quic_links,
+    build_singbox_config,
+    quic_ports,
+    validate_public_host,
+)
+from router.singbox_service import SingboxService
 from router.xray_service import XrayService
 
 
@@ -126,6 +135,49 @@ class LocalNodeTests(unittest.TestCase):
             validate_public_host('not a host')
 
 
+class QuicLinkTests(unittest.TestCase):
+    def test_hysteria2_and_tuic_use_the_same_egress_ports_and_secrets(self):
+        hy2, tuic = build_quic_links(
+            '8.8.8.8', 8443, 'a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89',
+            'hy2-password-value', 'tuic-password-value', name='家里宽带', insecure=True,
+        )
+        hy2_parts, tuic_parts = urlsplit(hy2), urlsplit(tuic)
+        self.assertEqual((hy2_parts.scheme, hy2_parts.hostname, hy2_parts.port, hy2_parts.username), ('hysteria2', '8.8.8.8', 8444, 'hy2-password-value'))
+        self.assertEqual((tuic_parts.scheme, tuic_parts.port, tuic_parts.username, tuic_parts.password), ('tuic', 8445, 'a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89', 'tuic-password-value'))
+        self.assertEqual(parse_qs(hy2_parts.query)['insecure'], ['1'])
+        self.assertEqual(parse_qs(tuic_parts.query)['allow_insecure'], ['1'])
+        self.assertEqual(unquote(hy2_parts.fragment), '家里宽带 Hysteria2')
+        self.assertEqual(unquote(tuic_parts.fragment), '家里宽带 TUIC')
+        config = build_singbox_config('8.8.8.8', 8443, 'a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89', 'hy2-password-value', 'tuic-password-value', '/cert.pem', '/key.pem')
+        self.assertEqual([item['type'] for item in config['inbounds']], ['hysteria2', 'tuic'])
+        self.assertEqual(config['outbounds'][0]['server_port'], LOCAL_EGRESS_SOCKS_PORT)
+        self.assertEqual(quic_ports(65535), (65534, 65533))
+        self.assertNotIn(LOCAL_EGRESS_SOCKS_PORT, quic_ports(LOCAL_EGRESS_SOCKS_PORT - 1))
+        with self.assertRaises(ValueError):
+            build_quic_links('8.8.8.8', 8443, 'a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89', 'short', 'tuic-password-value')
+
+    def test_singbox_publishes_links_only_after_it_stays_up(self):
+        with tempfile.TemporaryDirectory() as temp:
+            service = SingboxService(Path(temp), binary='/usr/bin/sing-box')
+            settings = {
+                'enabled': True, 'public_host': '8.8.8.8', 'port': 8443, 'name': '本地网络',
+                'uuid': 'a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89',
+                'hy2_password': 'hy2-password-value', 'tuic_password': 'tuic-password-value',
+            }
+            with unittest.mock.patch.object(service, '_self_signed', return_value=('/cert.pem', '/key.pem')), \
+                 unittest.mock.patch('router.singbox_service.subprocess.Popen') as popen:
+                popen.return_value.wait.side_effect = subprocess.TimeoutExpired('sing-box', 0.5)
+                popen.return_value.poll.return_value = None
+                links = service.apply(settings)
+            self.assertEqual(popen.call_args.args[0][:3], ['/usr/bin/sing-box', 'run', '-c'])
+            self.assertEqual([urlsplit(link).scheme for link in links], ['hysteria2', 'tuic'])
+            self.assertTrue(json.loads((Path(temp) / 'singbox-local.meta.json').read_text())['insecure'])
+            missing = SingboxService(Path(temp) / 'absent', binary='')
+            with unittest.mock.patch('router.singbox_service.subprocess.Popen') as idle:
+                self.assertEqual(missing.apply(settings), [])
+            idle.assert_not_called()
+
+
 class XrayRenameTests(unittest.TestCase):
     def test_node_traffic_uses_private_metrics_for_every_egress_mode(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -142,6 +194,11 @@ class XrayRenameTests(unittest.TestCase):
                     self.assertTrue(config['policy']['system']['statsInboundDownlink'])
                     self.assertEqual(config['routing']['rules'][0]['inboundTag'], ['internal-metrics-in'])
                     self.assertEqual(Path(config['inbounds'][1]['listen']).parent.stat().st_mode & 0o777, 0o700)
+                    socks = config['inbounds'][-1]
+                    self.assertEqual(socks['tag'], 'local-socks-in')
+                    self.assertEqual(socks['listen'], '127.0.0.1')
+                    self.assertEqual(socks['port'], LOCAL_EGRESS_SOCKS_PORT)
+                    self.assertTrue(socks['settings']['udp'])
 
     def test_node_traffic_validates_metrics_and_preserves_zero(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -153,6 +210,13 @@ class XrayRenameTests(unittest.TestCase):
                     traffic = service.node_traffic()
                     self.assertEqual((traffic['up_bytes'], traffic['down_bytes'], traffic['total_bytes']), (up, down, up + down))
                     self.assertIsInstance(traffic['instance'], str)
+            both = {'stats': {'inbound': {'local-node-in': {'uplink': 1, 'downlink': 2}, 'local-socks-in': {'uplink': 10, 'downlink': 20}}}}
+            with unittest.mock.patch.object(service, '_metrics', return_value=both):
+                traffic = service.node_traffic()
+                self.assertEqual((traffic['up_bytes'], traffic['down_bytes'], traffic['total_bytes']), (11, 22, 33))
+            bad_socks = {'stats': {'inbound': {'local-node-in': {'uplink': 1, 'downlink': 2}, 'local-socks-in': {'uplink': -1, 'downlink': 1}}}}
+            with unittest.mock.patch.object(service, '_metrics', return_value=bad_socks):
+                self.assertEqual(service.node_traffic()['up_bytes'], 1)
             for payload in (None, {}, {'stats': {'inbound': {}}},
                             {'stats': {'inbound': {'local-node-in': {'uplink': True, 'downlink': 1}}}},
                             {'stats': {'inbound': {'local-node-in': {'uplink': -1, 'downlink': 1}}}}):

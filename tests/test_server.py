@@ -30,6 +30,7 @@ class ServerTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.store = Store(Path(self.temp.name) / 'db')
+        self.store.singbox.binary = ''
         self.server = ThreadingHTTPServer(('127.0.0.1', 0), make_handler(self.store, 'a-long-safe-password'))
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -156,6 +157,27 @@ class ServerTests(unittest.TestCase):
         with self.assertRaises(HTTPError) as error:
             self.request('/api/local-node', {'enabled': False, 'public_host': '8.8.8.8', 'port': 8443, 'name': ' '})
         self.assertEqual(error.exception.code, 400)
+
+    def test_local_network_subscription_includes_hysteria2_and_tuic(self):
+        settings = self.store.xray.default_settings('8.8.8.8')
+        settings.update({
+            'enabled': True, 'public_host': '8.8.8.8', 'port': 8443, 'name': '本地网络',
+            'uuid': 'a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89',
+            'private_key': 'priv', 'public_key': 'pub', 'short_id': 'abcd',
+            'hy2_password': 'hy2-password-value', 'tuic_password': 'tuic-password-value',
+        })
+        self.store.save_local_node_settings(settings)
+        self.store.singbox.meta_path.write_text('{"insecure": true}', encoding='utf-8')
+        idle = json.load(self.request('/api/status'))
+        self.assertIn('sing-box', idle['local_node']['quic']['error'])
+        with patch.object(self.store.singbox, '_alive_locked', return_value=True):
+            status = json.load(self.request('/api/status'))
+            body = base64.b64decode(self.request('/s/' + status['token'], auth=False).read()).decode()
+        self.assertEqual({node['protocol'] for node in status['nodes'] if node.get('local')}, {'vless', 'hysteria2', 'tuic'})
+        self.assertIn('hysteria2://', body)
+        self.assertIn('tuic://', body)
+        self.assertNotIn('hy2-password-value', json.dumps(status))
+        self.assertNotIn('tuic-password-value', json.dumps(status))
 
     def test_local_node_requires_public_host(self):
         with self.assertRaises(HTTPError) as error:
