@@ -14,7 +14,7 @@ HopWorld Router 同时做两件事：**把运行本服务的机器网络做成�
 
 支持纯文本、Base64 格式节点链接，以及部分 Clash YAML 节点的转换。暂不支持的协议或参数会跳过并显示数量，不会悄悄丢弃参数；例如 XHTTP 的非 auto 模式暂不转换。暂不支持订阅重定向或完整协议参数验证。上游订阅地址由管理员提供，请勿为不受信任的用户开放管理界面。
 
-订阅和节点列表默认收起，可批量更新全部订阅；节点测试可勾选一个或多个订阅组、手动导入组，或逐个测试。所选组内的节点无需逐个勾选，多个所选组里相同的链接只测试一次；测试结束后，可用节点按延迟从低到高排列。批量任务最多并发测试四个节点，可请求停止，当前运行的请求完成后退出。测试通过独立 Xray 进程请求选定的 Google、YouTube 或 TikTok 测试地址，显示该请求的延迟，不等于下载带宽，也不证明其他网站、UDP 或长期连接可用；测试失败也不能单独证明节点失效。需安装 Xray 和 curl，或通过 `HOPWORLD_XRAY` 指定 Xray 路径。当前仅接入 VLESS、Trojan、VMess、现代 Shadowsocks、SOCKS5、HTTP/HTTPS 的部分参数；其他协议或未识别参数会标为暂不支持，尚未达到 HopWorld 的完整协议范围。
+订阅和节点列表默认收起，可批量更新全部订阅；节点测试可勾选一个或多个订阅组、手动导入组，或逐个测试。所选组内的节点无需逐个勾选，多个所选组里相同的链接只测试一次；测试结束后，可用节点按延迟从低到高排列。批量任务最多并发测试四个节点，可请求停止，当前运行的请求完成后退出。测试通过独立 Xray 进程请求选定的 Google、YouTube 或 TikTok 测试地址，显示该请求的延迟，不等于下载带宽，也不证明其他网站、UDP 或长期连接可用；测试失败也不能单独证明节点失效。需有 Xray 和 curl，或通过 `HOPWORLD_XRAY` 指定 Xray 路径。Linux 上做过一次 root 授权后，管理页会安装缺少的 Xray，见下方「授权管理页安装缺少的组件」。当前仅接入 VLESS、Trojan、VMess、现代 Shadowsocks、SOCKS5、HTTP/HTTPS 的部分参数；其他协议或未识别参数会标为暂不支持，尚未达到 HopWorld 的完整协议范围。
 
 ### 本地网络节点（VLESS Reality）
 
@@ -42,7 +42,7 @@ HopWorld Router 同时做两件事：**把运行本服务的机器网络做成�
 2. **出口 IP 写进订阅**
    开启 **出口 IP 写进订阅**（原「自动跟随出口」）。探测到的 IP 直接写入 `vless://`；**订阅 `/s/…` token 不变**，但节点地址会变，客户端需自动更新订阅。固定 IP 的 VPS 请关闭上述两项，只填 IP 即可。
 
-**Let's Encrypt（90 天）自动证书：** 勾选 **Let's Encrypt**，填写邮箱与 **校验方式**：**DNS-01**（无需开放 80，需 DNSPod `HOPWORLD_DDNS_*` 或 Webhook `HOPWORLD_ACME_DNS_WEBHOOK_URL`）、**HTTP-01（80）**（webroot：`HOPWORLD_ACME_WEBROOT`）、**TLS-ALPN-01（443）**（`HOPWORLD_ACME_TLS_ALPN=1`）、或 **自动**（有 DNS API 则优先 DNS，否则 webroot）。VPS 可执行 `deploy/hopworld-install-acme-webroot.sh`；证书在 `HOPWORLD_DATA/certs/<域名>/`，**≤3 天** 自动续期。HTTPS 反代 nginx 时执行 `deploy/hopworld-install-certbot-renew-hook.sh`，续期后自动 `reload nginx` 并同步证书副本。
+**Let's Encrypt（90 天）自动证书：** 勾选 **Let's Encrypt**，填写邮箱与 **校验方式**：**DNS-01**（无需开放 80，需 DNSPod `HOPWORLD_DDNS_*` 或 Webhook `HOPWORLD_ACME_DNS_WEBHOOK_URL`）、**HTTP-01（80）**（webroot：`HOPWORLD_ACME_WEBROOT`）、**TLS-ALPN-01（443）**（`HOPWORLD_ACME_TLS_ALPN=1`）、或 **自动**（有 DNS API 则优先 DNS，否则 webroot）。做过 root 授权时，管理页申请 HTTP-01 会安装 nginx 与 certbot 并放行本机 TCP 80；也可以执行 `deploy/hopworld-install-acme-webroot.sh`。证书在 `HOPWORLD_DATA/certs/<域名>/`，**≤3 天** 自动续期。HTTPS 反代 nginx 时执行 `deploy/hopworld-install-certbot-renew-hook.sh`，续期后自动 `reload nginx` 并同步证书副本。订阅路径的 443 站点不会自动挂上。
 
 若运行环境**不能直连公网**、必须走平台提供的 `HTTP_PROXY` / `HTTPS_PROXY`（如云电脑 hatch 出口），启用或保存本地节点时只要进程中带有这些环境变量，Xray 会把客户端流量经该 HTTP 中转出站；与 `~/HopWorld/http_proxy.py` 类似，**不要**用 `env -u` 清空代理变量后启动 Router。
 
@@ -60,7 +60,7 @@ HopWorld Router 同时做两件事：**把运行本服务的机器网络做成�
 
 ### 系统 VPN（IKEv2）
 
-可选启用 strongSwan IKEv2（PSK），供 iPhone 等通过系统 VPN 连入本机；提供描述文件下载链接，并可在管理页监视在线设备与上网诊断。IKEv2 **不**作为 Clash 等客户端订阅里的一条代理链接，可与本地 Reality 节点同时使用。
+可选启用 strongSwan IKEv2（PSK），供 iPhone 等通过系统 VPN 连入本机；做过 root 授权后，管理页启用时会安装缺少的 strongSwan。提供描述文件下载链接，并可在管理页监视在线设备与上网诊断。IKEv2 **不**作为 Clash 等客户端订阅里的一条代理链接，可与本地 Reality 节点同时使用。
 
 ### 尚未完整实现
 
@@ -134,7 +134,7 @@ dnf install -y git python3 python3-pip curl ca-certificates
 
 ### 2. Xray
 
-本地网络节点和节点延迟测试都要 Xray。只做订阅汇总可以跳过，以后补装再重启服务即可。
+本地网络节点和节点延迟测试都要 Xray。只做订阅汇总可以跳过。做过下方的 root 授权后，在管理页启用节点或测试会安装缺少的 Xray；否则用下面的命令补装，再重启服务。
 
 ```sh
 bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
@@ -200,7 +200,7 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
 bash /opt/hopworld-router/deploy/hopworld-update.sh
 ```
 
-脚本从 GitHub 远程 `origin` 的 `main` 拉取并仅允许快进；目录有未提交或未跟踪文件时会停止。依赖变化时先建立独立虚拟环境，安装成功后再更新；原虚拟环境保留在 `/var/lib/hopworld-router-updates/previous/`。更新会重启服务，现有连接可能短暂中断。服务启动失败时脚本会报告原版本号，请检查 `journalctl -u hopworld-router` 并使用备份恢复代码和数据。该脚本不会更新 systemd 服务文件、系统软件或 Xray。非 Git 安装、Docker 和自定义部署请按各自方式更新，不要直接覆盖现有数据。
+脚本从 GitHub 远程 `origin` 的 `main` 拉取并仅允许快进；目录有未提交或未跟踪文件时会停止。依赖变化时先建立独立虚拟环境，安装成功后再更新；原虚拟环境保留在 `/var/lib/hopworld-router-updates/previous/`。更新会重启服务，现有连接可能短暂中断。服务启动失败时脚本会报告原版本号，请检查 `journalctl -u hopworld-router` 并使用备份恢复代码和数据。该脚本不会更新 systemd 服务文件、系统软件或 Xray。要让管理页自动安装缺少的组件，更新后另执行一次 `bash deploy/hopworld-install-root.sh` 并重启服务。非 Git 安装、Docker 和自定义部署请按各自方式更新，不要直接覆盖现有数据。
 
 ### 6. 打开管理页
 
@@ -214,9 +214,26 @@ ssh -L 8080:127.0.0.1:8080 root@服务器
 
 到这里，订阅汇总已经可用：在管理页添加上游订阅或手动节点，复制订阅地址。该地址默认只有服务器本机能打开。手机要远程拉取订阅，继续做第 8 步。
 
+### 授权管理页安装缺少的组件
+
+服务以 `hopworld-router` 运行，不能自己装包。要让管理页在启用功能时自动安装缺少的组件并放行本机防火墙，以 root 执行一次：
+
+```sh
+bash /opt/hopworld-router/deploy/hopworld-install-root.sh
+systemctl restart hopworld-router
+```
+
+系统需要能用 apt、dnf 或 yum，并且 Python 已经是 3.10 或更高。CentOS 7 要先单独装好 Python 3.11 和本服务，再做这次授权。授权之后：
+
+- 启用或保存本地网络节点、做节点测试：缺少 Xray 时安装，并在本机防火墙已经启用时放行该 TCP 端口。sing-box 已经安装时，一并放行它使用的 UDP 端口；不会自动安装 sing-box。
+- 申请 Let's Encrypt：安装 nginx 与 certbot，放行 TCP 80，再申请证书。`/s/` 使用的 443 站点仍要按第 8 步后半自己挂上。
+- 启用 IKEv2：安装 strongSwan，放行 UDP 500 和 4500，并写入配置。
+
+云厂商安全组、DNS 密钥仍要自己处理。本机没有启用防火墙时，不会为了放行去新开一道。未做这次授权时，管理页只提示缺少组件，下面的命令可以手工执行。
+
 ### 7. 本地网络节点
 
-在管理页启用「本地网络节点」。默认入站是 TCP **8443**，Xray 监听 `0.0.0.0`。云厂商安全组放行 TCP 8443。本机若已经启用防火墙，再执行对应的一条：
+在管理页启用「本地网络节点」。默认入站是 TCP **8443**，Xray 监听 `0.0.0.0`。云厂商安全组放行 TCP 8443。已做过上面的授权时，管理页会安装缺少的 Xray，并在本机防火墙已经启用时放行该端口。否则在防火墙已经启用时执行对应的一条：
 
 ```sh
 ufw allow 8443/tcp
@@ -233,7 +250,7 @@ ss -lntp | grep 8443
 
 ### 8. 手机用 HTTPS 拉取订阅
 
-只反代 `/s/`，管理页仍走 SSH 隧道。先把域名 A 记录指到本机，并在安全组放行 TCP 80 和 TCP 443。证书签发完成后，80 可以继续留着给续期用。
+只反代 `/s/`，管理页仍走 SSH 隧道。先把域名 A 记录指到本机，并在安全组放行 TCP 80 和 TCP 443。证书签发完成后，80 可以继续留着给续期用。已做过上面的授权时，在管理页申请 HTTP-01 会安装 nginx、certbot 并放行本机 TCP 80；下面是手工做法。443 上的订阅站点两种做法都要自己挂上。
 
 Debian / Ubuntu：
 
@@ -296,6 +313,8 @@ HOPWORLD_DDNS_WEBHOOK_URL=http://127.0.0.1:9876/
 
 ### 10. 系统 VPN（IKEv2，可选）
 
+已做过上面的授权时，在管理页启用即可安装 strongSwan，并在本机防火墙已经启用时放行 UDP 500 和 4500。下面是手工做法。云安全组仍要自己放行这两个 UDP 端口。
+
 ```sh
 # Debian / Ubuntu
 apt install -y strongswan strongswan-swanctl
@@ -310,7 +329,7 @@ visudo -cf /etc/sudoers.d/hopworld-router-ikev2
 bash /opt/hopworld-router/deploy/hopworld-install-boot.sh
 ```
 
-安全组放行 UDP 500 和 UDP 4500。本机防火墙若已启用，同样放行这两个 UDP 端口。然后在管理页启用 IKEv2。
+手工安装时，安全组放行 UDP 500 和 UDP 4500；本机防火墙若已启用，同样放行这两个 UDP 端口。然后在管理页启用 IKEv2。
 
 `deploy/hopworld-ikev2-apply` 里给 VPN 客户端回访本机预留的 TCP 端口是 8080 和 40300。SSH 不是 40300 时，安装前把这两处 `40300` 改成你的 SSH 端口。
 
