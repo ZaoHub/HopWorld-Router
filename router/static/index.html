@@ -35,6 +35,7 @@
       </div>
       <aside class="side-column"><section class="card form-card card-compact" id="add-source"><div class="side-heading"><div class="icon-box blue" aria-hidden="true">＋</div><div><h2>添加上游订阅</h2><p>从订阅链接拉取节点</p></div></div><p id="add-source-summary" class="field-hint">尚无上游订阅 · 点击添加</p><button type="button" id="add-source-open" class="primary full">添加上游订阅 <span aria-hidden="true">→</span></button></section>
         <section class="card form-card card-compact" id="local-node"><div class="side-heading"><div class="icon-box violet" aria-hidden="true">◎</div><div><h2>本地网络节点</h2><p>VLESS Reality 出口</p></div></div><p id="local-node-summary" class="field-hint">尚未启用</p><p id="local-node-protocol-summary" class="field-hint"></p><button type="button" id="local-node-open" class="secondary full">查看与配置</button></section>
+        <section class="card form-card card-compact" id="acme-card"><div class="side-heading"><div class="icon-box blue" aria-hidden="true">◇</div><div><h2>SSL 证书</h2><p>订阅 HTTPS 证书</p></div></div><p id="acme-card-summary" class="field-hint">正在读取…</p><button type="button" id="acme-open" class="secondary full">查看与配置</button></section>
         <section class="card form-card card-compact" id="ikev2"><div class="side-heading"><div class="icon-box blue" aria-hidden="true">⌁</div><div><h2>系统 VPN（IKEv2）</h2><p>iPhone 蜂窝 PSK</p></div></div><p id="ikev2-summary" class="field-hint">尚未启用</p><div class="side-actions side-actions-split"><button type="button" id="ikev2-open" class="secondary full">配置</button><button type="button" id="ikev2-settings-open" class="secondary full">设置</button></div></section>
         <section class="card form-card card-compact" id="manual-import"><div class="side-heading"><div class="icon-box cyan" aria-hidden="true">⌁</div><div><h2>手动导入节点</h2><p>粘贴节点链接</p></div></div><p id="manual-summary" class="field-hint">暂无手动节点</p><button type="button" id="manual-open" class="secondary full">导入节点</button></section>
         <div class="help-card"><div class="help-icon" aria-hidden="true">i</div><div><strong>使用提示</strong><p>主栏与侧栏均为摘要 + 弹窗；连接说明在「订阅与扫码」里查看。</p></div></div>
@@ -90,7 +91,6 @@
               <span class="local-host-summary-label">公网入口</span>
               <span id="local-host-summary-mode" class="local-host-summary-mode"></span>
             </div>
-            <p id="local-acme-summary" class="local-acme-summary field-hint" hidden></p>
           </div>
           <section id="local-host-section" class="local-host-section is-off" aria-label="公网入口配置">
             <label class="checkbox-row" for="local-ddns" title="与「出口 IP 写进订阅」不可同时开启">
@@ -109,34 +109,7 @@
                 <option value="ipv4_first">IPv4，失败再用 IPv6</option>
               </select>
             </div>
-            <label class="checkbox-row" for="local-acme">
-              <input id="local-acme" type="checkbox">
-              <span>免费 SSL 证书（Let's Encrypt）</span>
-            </label>
-            <label for="local-acme-challenge">校验方式</label>
-            <select id="local-acme-challenge" disabled>
-              <option value="auto">自动</option>
-              <option value="dns">DNS-01（无需 80）</option>
-              <option value="http">HTTP-01（80）</option>
-              <option value="tls-alpn">TLS-ALPN-01（443）</option>
-            </select>
-            <label for="local-acme-email">ACME 邮箱</label>
-            <input id="local-acme-email" type="email" maxlength="254" placeholder="注册与到期提醒">
-            <details id="local-acme-fw-wrap" class="local-acme-fw" hidden>
-              <summary class="local-acme-fw-title">证书校验端口（仅申请证书）</summary>
-              <p class="field-hint">以下端口仅用于证书校验，与节点转发端口无关。</p>
-              <table class="local-acme-fw-table" aria-label="校验方式与需放行端口">
-                <thead><tr><th>校验</th><th>入站端口</th></tr></thead>
-                <tbody>
-                  <tr data-challenge="dns"><td>DNS-01</td><td>不需要</td></tr>
-                  <tr data-challenge="http"><td>HTTP-01</td><td>80</td></tr>
-                  <tr data-challenge="tls-alpn"><td>TLS-ALPN-01</td><td>443</td></tr>
-                  <tr data-challenge="auto"><td>自动</td><td>按检测结果</td></tr>
-                </tbody>
-              </table>
-            </details>
           </section>
-          <p id="local-acme-status" class="field-hint" hidden></p>
           <label for="local-host">公网地址<span class="label-hint">（IP 或域名）</span></label>
           <div class="local-host-wrap">
             <input id="local-host" class="is-readonly" maxlength="253" required readonly placeholder="例如 node.example.com">
@@ -168,6 +141,22 @@
           <button id="local-save" class="secondary" type="button" hidden>保存</button>
           <button id="local-cancel" class="secondary" type="button" hidden>取消</button>
         </div>
+      </form></div>
+    </div>
+  </div>
+  <div id="acme-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="acme-modal-title">
+    <button type="button" class="modal-backdrop" data-modal-close="acme" aria-label="关闭"></button>
+    <div class="modal-panel card">
+      <div class="modal-panel-head"><button type="button" class="modal-close text-button" data-modal-close="acme" aria-label="关闭">关闭</button><div class="side-heading"><div class="icon-box blue" aria-hidden="true">◇</div><div><h2 id="acme-modal-title">SSL 证书</h2><p>为订阅访问申请 HTTPS 证书</p></div></div></div>
+      <div class="modal-panel-body"><form id="acme-form" class="stacked-form">
+        <p id="acme-domain" class="field-hint"></p>
+        <label class="checkbox-row" for="local-acme"><input id="local-acme" type="checkbox"><span>免费 SSL 证书（Let's Encrypt）</span></label>
+        <label for="local-acme-challenge">校验方式</label>
+        <select id="local-acme-challenge"><option value="auto">自动</option><option value="dns">DNS-01（无需 80）</option><option value="http">HTTP-01（80）</option><option value="tls-alpn">TLS-ALPN-01（443）</option></select>
+        <label for="local-acme-email">ACME 邮箱</label><input id="local-acme-email" type="email" maxlength="254" placeholder="注册与到期提醒">
+        <details id="local-acme-fw-wrap" class="local-acme-fw" hidden><summary class="local-acme-fw-title">证书校验端口（仅申请证书）</summary><p class="field-hint">以下端口仅用于证书校验，与节点转发端口无关。</p><table class="local-acme-fw-table" aria-label="校验方式与需放行端口"><thead><tr><th>校验</th><th>入站端口</th></tr></thead><tbody><tr data-challenge="dns"><td>DNS-01</td><td>不需要</td></tr><tr data-challenge="http"><td>HTTP-01</td><td>80</td></tr><tr data-challenge="tls-alpn"><td>TLS-ALPN-01</td><td>443</td></tr><tr data-challenge="auto"><td>自动</td><td>按检测结果</td></tr></tbody></table></details>
+        <p id="local-acme-status" class="field-hint" role="status" hidden></p>
+        <div class="form-actions"><button id="acme-save" class="primary" type="submit">保存</button><button class="secondary" type="button" data-modal-close="acme">取消</button></div>
       </form></div>
     </div>
   </div>

@@ -53,16 +53,16 @@ summary.card-head{cursor:pointer;list-style:none}summary.card-head::-webkit-deta
 #local-form .local-host-section.is-off .local-auto-only{display:none}
 #local-form .local-host-section.is-off .local-auto-hint{margin-bottom:0}
 #local-form .local-dns-hints{margin:12px 0 4px;padding:12px 14px;border:1px solid #e0e8f4;border-radius:10px;background:#f6f9fd}
-#local-form .local-acme-fw{margin:10px 0 0;padding:10px 12px;border:1px solid #e0e8f4;border-radius:8px;background:#f8fafd}
-#local-form .local-acme-fw-title{margin:0 0 8px;font-size:12px;font-weight:650;color:#53637a}
-#local-form .local-acme-fw-table{width:100%;border-collapse:collapse;font-size:12px}
-#local-form .local-acme-fw-table th,#local-form .local-acme-fw-table td{padding:6px 8px;text-align:left;border-bottom:1px solid #e8edf5}
-#local-form .local-acme-fw-table th{font-weight:650;color:#53637a}
-#local-form .local-acme-fw-table tr.is-active td{color:#1a4fa8;font-weight:650;background:#eef4ff}
-#local-form #local-acme-status.is-acme-error{color:#9b2c2c}
+#acme-form .local-acme-fw{margin:10px 0 0;padding:10px 12px;border:1px solid #e0e8f4;border-radius:8px;background:#f8fafd}
+#acme-form .local-acme-fw-title{margin:0 0 8px;font-size:12px;font-weight:650;color:#53637a}
+#acme-form .local-acme-fw-table{width:100%;border-collapse:collapse;font-size:12px}
+#acme-form .local-acme-fw-table th,#acme-form .local-acme-fw-table td{padding:6px 8px;text-align:left;border-bottom:1px solid #e8edf5}
+#acme-form .local-acme-fw-table th{font-weight:650;color:#53637a}
+#acme-form .local-acme-fw-table tr.is-active td{color:#1a4fa8;font-weight:650;background:#eef4ff}
+#acme-form #local-acme-status.is-acme-error{color:#9b2c2c}
 #local-form .local-acme-summary.is-acme-error{color:#9b2c2c}
 .subscription-tls-status.is-acme-error{color:#9b2c2c}
-#local-form #local-acme-status.is-acme-pending{color:#8a6a2c}
+#acme-form #local-acme-status.is-acme-pending{color:#8a6a2c}
 #local-form .local-dns-hints-title{margin:0 0 8px;font-size:12px;font-weight:650;color:#53637a}
 #local-form .local-dns-hints-summary{margin:0 0 10px;font-size:12px;line-height:1.65;color:#667a94}
 #local-form .local-dns-table-wrap{overflow-x:auto}
@@ -87,3 +87,6 @@ summary.card-head{cursor:pointer;list-style:none}summary.card-head::-webkit-deta
 #local-form select:focus-visible{outline:3px solid #a9c8ff;outline-offset:2px;border-color:#c5d4f0}
 #local-form .local-protocol-status{margin-top:10px;padding:12px 14px;border:1px solid #e8eef7;border-radius:10px;background:#f8fafe;color:#53637a;font-size:12px;line-height:1.6}
 #local-form .local-protocol-status p{margin:4px 0 0;color:#53637a;font-size:12px;overflow-wrap:anywhere}
+
+#acme-form .checkbox-row{display:flex;align-items:center;gap:10px;margin:14px 0!important;font-weight:600;color:#35598f;font-size:13px;cursor:pointer}#acme-form .checkbox-row input{width:18px;height:18px;flex:none;accent-color:#2866ed}#acme-form .local-acme-fw-title{cursor:pointer}#acme-form .local-acme-fw[open] .local-acme-fw-title{margin-bottom:8px}
+#acme-form select{width:100%;border:1px solid #e0e7f0;border-radius:9px;padding:11px 12px;color:#253c5a;background:#fff;min-height:42px;font-size:13px}#acme-form select:focus-visible{outline:3px solid #a9c8ff;outline-offset:2px}

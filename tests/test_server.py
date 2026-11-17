@@ -66,6 +66,41 @@ class ServerTests(unittest.TestCase):
         with self.assertRaises(HTTPError) as error: self.request('/s/' + old, auth=False)
         self.assertEqual(error.exception.code, 404)
 
+    def test_independent_acme_settings_preserve_node(self):
+        settings = self.store.local_node_settings()
+        settings.update({'enabled': True, 'public_host': 'node.example.com', 'port': 8443})
+        self.store.save_local_node_settings(settings)
+        certificate = {'domain': 'node.example.com', 'challenge': 'http', 'challenge_effective': 'HTTP-01'}
+        with patch('router.server.sync_certificate', return_value=certificate) as sync, \
+             patch.object(self.store.xray, 'apply') as apply:
+            response = json.load(self.request('/api/acme', {'enabled': True, 'email': 'test@example.com', 'challenge': 'http'}))
+            self.assertTrue(response['acme']['enabled'])
+            self.assertEqual(response['acme']['domain'], 'node.example.com')
+            sync.assert_called_once_with(self.store.data_dir, 'node.example.com', 'test@example.com', True, 'http')
+            apply.assert_not_called()
+        self.assertEqual(self.store.local_node_settings(), settings)
+        response = json.load(self.request('/api/acme', {'enabled': False, 'email': '', 'challenge': 'auto'}))
+        self.assertFalse(response['acme']['enabled'])
+        self.assertEqual(self.store.local_node_settings(), settings)
+
+    def test_independent_acme_rejects_invalid_inputs(self):
+        original_node = self.store.local_node_settings()
+        original_acme = self.store.acme_settings()
+        valid = {'enabled': False, 'email': '', 'challenge': 'auto'}
+        for change in ({'enabled': 'false'}, {'enabled': None}, {'email': 123}, {'email': 'invalid'},
+                       {'challenge': None}, {'challenge': 'invalid'}, {'enabled': True, 'email': ''}):
+            with self.subTest(change=change), self.assertRaises(HTTPError) as error:
+                self.request('/api/acme', {**valid, **change})
+            self.assertEqual(error.exception.code, 400)
+            self.assertEqual(self.store.acme_settings(), original_acme)
+            self.assertEqual(self.store.local_node_settings(), original_node)
+        with self.assertRaises(HTTPError) as error:
+            self.request('/api/acme', valid, auth=False)
+        self.assertEqual(error.exception.code, 401)
+        with self.assertRaises(HTTPError) as error:
+            self.request('/api/acme', valid, origin=False)
+        self.assertEqual(error.exception.code, 403)
+
     def test_rejects_insecure_upstream_url(self):
         with self.assertRaises(HTTPError): self.request('/api/sources', {'name':'x', 'url':'http://example.test'})
 

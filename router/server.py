@@ -1039,6 +1039,11 @@ def make_handler(store, password):
                         data.get('auto_public_host'), data.get('public_host_prefer'), data.get('ddns_enabled'),
                         data.get('acme_enabled'), data.get('acme_email'), data.get('acme_challenge'),
                         data.get('egress_mode'), data.get('local_proxy'), data.get('auto_target'), data.get('auto_interval'))})
+                elif path == '/api/acme':
+                    if type(data.get('enabled')) is not bool or not isinstance(data.get('email'), str) or not isinstance(data.get('challenge'), str):
+                        raise ValueError('证书设置无效')
+                    with store._local_lock:
+                        return self.json(200, {'ok': True, 'acme': store.configure_acme(data['enabled'], data['email'], data['challenge'])})
                 elif path == '/api/ikev2':
                     return self.json(200, {'ok': True, 'ikev2': store.configure_ikev2(
                         bool(data.get('enabled')), data.get('public_host'), data.get('remote_id'),

@@ -434,20 +434,8 @@ function syncAcmeFwHint(acme, showHostControls) {
 }
 function renderAcmeStatus(acme, showHostControls) {
   const el = $('#local-acme-status');
-  const summary = $('#local-acme-summary');
   const acmeLine = formatAcmeLine(acme);
   const readOnly = !showHostControls;
-  if (summary) {
-    if (readOnly && acmeLine) {
-      summary.hidden = false;
-      summary.textContent = acmeLine;
-      summary.classList.toggle('is-acme-error', !!acme?.error);
-    } else {
-      summary.hidden = true;
-      summary.textContent = '';
-      summary.classList.remove('is-acme-error');
-    }
-  }
   if (!el) return;
   const boxOn = !!$('#local-acme')?.checked;
   if (readOnly) {
@@ -509,11 +497,6 @@ function syncLocalForm(local, acme) {
       select.value = local.local_proxy;
     }
     if (local.egress_mode === 'auto') $('#local-auto-summary').textContent = `当前候选 ${local.auto_pool_count || 0} 个；无可用出口时阻断，不直连。`;
-    if ($('#local-acme')) $('#local-acme').checked = !!acme.enabled;
-    if ($('#local-acme-email')) $('#local-acme-email').value = acme.email || '';
-    if ($('#local-acme-challenge')) {
-      $('#local-acme-challenge').value = acme.challenge || 'auto';
-    }
   }
   const localEditable = !local?.enabled || localEditing;
   $('#local-egress-mode').disabled = !localEditable;
@@ -553,18 +536,6 @@ function syncLocalForm(local, acme) {
   }
   const localFormHint = $('#local-form-hint');
   if (localFormHint) localFormHint.hidden = readOnlyView;
-  renderAcmeStatus(acme, showHostControls);
-  syncAcmeFwHint(acme, showHostControls);
-  for (const id of ['local-acme-email']) {
-    const input = $('#' + id);
-    if (!input) continue;
-    const editable = showHostControls;
-    input.readOnly = !editable;
-    input.classList.toggle('is-readonly', !editable);
-  }
-  $('#local-acme')?.toggleAttribute('disabled', !showHostControls);
-  const acmeChallenge = $('#local-acme-challenge');
-  if (acmeChallenge) acmeChallenge.disabled = !showHostControls || !$('#local-acme')?.checked;
   for (const id of ['local-name', 'local-port']) {
     const input = $('#' + id);
     input.readOnly = !localEditable;
@@ -827,6 +798,7 @@ async function refresh() {
     }
   }
   renderPublicAccessHints(data.acme || {}, publicUrls);
+  $('#acme-card-summary').textContent = data.acme?.enabled ? (formatAcmeLine(data.acme) || '已开启') : '尚未启用证书';
   $('#count').textContent = `${data.sources.length} 个订阅`;
   const addSummary = $('#add-source-summary');
   if (addSummary) {
@@ -867,10 +839,7 @@ async function refresh() {
   $('#local-protocol-detail').textContent = protocol?.detail || '';
   $('#local-node-protocol-summary').textContent = protocolLine;
   if (localSummary) {
-    const acmeHint = local.enabled ? formatAcmeLine(data.acme) : '';
-    localSummary.textContent = local.enabled
-      ? (acmeHint ? `${localLine} · ${acmeHint}` : localLine)
-      : '尚未启用 · 点击查看可启用或修改';
+    localSummary.textContent = local.enabled ? localLine : '尚未启用 · 点击查看可启用或修改';
   }
   if (seq !== refreshSeq) return;
   applyIkev2Ui(data.ikev2 || {}, { ikev2Profile: ikev2Profile });
@@ -919,6 +888,7 @@ const MODAL_IDS = {
   'add-source': 'add-source-modal',
   'local-node-notice': 'local-node-notice-modal',
   'local-node': 'local-node-modal',
+  acme: 'acme-modal',
   ikev2: 'ikev2-modal',
   'ikev2-settings': 'ikev2-settings-modal',
   manual: 'manual-modal',
@@ -1032,6 +1002,42 @@ for (const id of ['add-source-open', 'add-source-open-top']) {
 }
 $('#subscription-open')?.addEventListener('click', openSubscriptionModal);
 $('#local-node-open')?.addEventListener('click', openLocalNodeModal);
+$('#acme-open')?.addEventListener('click', async () => {
+  try {
+    const data = await call('/api/status');
+    const acme = data.acme || {};
+    const domain = data.local_node?.public_host || '';
+    $('#acme-domain').textContent = domain ? `证书使用本地网络节点的公网域名：${domain}` : '请先在本地网络节点设置公网域名。';
+    $('#local-acme').checked = !!acme.enabled;
+    $('#local-acme-email').value = acme.email || '';
+    $('#local-acme-challenge').value = acme.challenge || 'auto';
+    $('#local-acme-challenge').disabled = !acme.enabled;
+    renderAcmeStatus(acme, true);
+    syncAcmeFwHint(acme, true);
+    $('#acme-modal').hidden = false;
+    syncModalBodyScroll();
+  } catch (error) { note(error.message, {error:true}); }
+});
+$('#acme-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const button = $('#acme-save');
+  const enabled = $('#local-acme').checked;
+  button.disabled = true;
+  if (enabled) note('正在申请证书（约 1 分钟）…', {duration: 0});
+  try {
+    const result = await call('/api/acme', {enabled, email: $('#local-acme-email').value, challenge: $('#local-acme-challenge').value});
+    clearNote();
+    await refresh();
+    if (enabled && result.acme?.error) {
+      renderAcmeStatus(result.acme, true);
+      note('已保存，证书未签发', {error:true});
+    } else {
+      closeModal('acme');
+      note(enabled ? '证书设置已保存' : '证书已停用');
+    }
+  } catch (error) { clearNote(); note(error.message, {error:true}); }
+  finally { button.disabled = false; }
+});
 $('#local-node-notice-go')?.addEventListener('click', () => {
   localNodeNoticeSuppressed = true;
   closeModal('local-node-notice');
@@ -1046,7 +1052,7 @@ document.querySelectorAll('[data-modal-close]').forEach(el => {
 });
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
-  for (const key of ['ikev2-settings', 'local-node-notice', 'subscription', 'manual', 'ikev2', 'local-node', 'add-source']) {
+  for (const key of ['ikev2-settings', 'local-node-notice', 'subscription', 'manual', 'ikev2', 'local-node', 'acme', 'add-source']) {
     const m = $(`#${MODAL_IDS[key]}`);
     if (m && !m.hidden) {
       closeModal(key);
@@ -1066,9 +1072,6 @@ function localPayload(enabled){
     port: Number($('#local-port').value),
     auto_public_host: auto,
     ddns_enabled: ddns,
-    acme_enabled: !!$('#local-acme')?.checked,
-    acme_email: $('#local-acme-email')?.value || '',
-    acme_challenge: $('#local-acme-challenge')?.value || 'auto',
     public_host_prefer: $('#local-host-prefer')?.value || 'ipv4',
     egress_mode: $('#local-egress-mode').value,
     local_proxy: $('#local-proxy-choice').value,
@@ -1154,19 +1157,12 @@ $('#local-toggle').onclick=async()=>{
 };
 $('#local-save').onclick=async()=>{
   const button=$('#local-save');
-  const acmeOn=!!$('#local-acme')?.checked;
   button.disabled=true;
-  if (acmeOn) note('正在申请证书（约 1 分钟）…', { duration: 0 });
   try{
-    const result=await call('/api/local-node',localPayload(true));
+    await call('/api/local-node',localPayload(true));
     localEditing=false;
     await refresh();
-    const acmeInfo = result?.local_node?.acme || result?.acme;
-    const acmeErr = acmeInfo?.error;
-    clearNote();
-    if (acmeOn && acmeErr) note('已保存，证书未签发', { error: true });
-    else if (acmeOn && acmeInfo?.days_left != null) note(`证书已签发（约 ${acmeInfo.days_left} 天）`);
-    else note('已保存，请更新订阅');
+    note('已保存，请更新订阅');
   }catch(error){note(error.message,{error:true});}
   finally{button.disabled=false;}
 };
