@@ -463,6 +463,11 @@ input::placeholder, textarea::placeholder { color: #8da0b9; }
 .v1-dialog form { display: flex; flex-direction: column; max-height: min(80vh,720px); }
 .v1-dialog header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--v1-border); }
 .v1-dialog header h2 { font-size: 18px; }
+#first-login-dialog { width: min(460px, calc(100vw - 32px)); margin: auto; }
+#first-login-dialog .v1-core-profile-body { padding: 16px; }
+.first-login-error { margin: 0; color: #ffb4a8; }
+.first-login-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.first-login-actions button { min-height: 44px; }
 #v1-publish-core-dialog .v1-core-profile-body { display: grid; gap: 8px; }
 #v1-publish-core-list { margin: 0; }
 #v1-publish-core-list .v1-core-row > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
