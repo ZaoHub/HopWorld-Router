@@ -9,18 +9,25 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import paramiko
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec, ed25519, rsa
 
-from installer import INSTALL, WEB_ORIGIN, Installer, public_ip
+from installer import INSTALL, WEB_ORIGIN, Installer, parse_private_key, public_ip
 
 
 class TestSSHServer(paramiko.ServerInterface):
-    def __init__(self):
+    def __init__(self, authorized_key=None):
+        self.authorized_key = authorized_key
         self.command = None
         self.received = threading.Event()
         self.authenticated = False
 
     def check_auth_password(self, username, password):
         self.authenticated = username == "root" and password == "temporary-test"
+        return paramiko.AUTH_SUCCESSFUL if self.authenticated else paramiko.AUTH_FAILED
+
+    def check_auth_publickey(self, username, key):
+        self.authenticated = username == "root" and key.fingerprint == self.authorized_key
         return paramiko.AUTH_SUCCESSFUL if self.authenticated else paramiko.AUTH_FAILED
 
     def check_channel_request(self, kind, _channel_id):
@@ -33,9 +40,9 @@ class TestSSHServer(paramiko.ServerInterface):
 
 
 @contextmanager
-def test_ssh(exit_code=0):
+def test_ssh(exit_code=0, authorized_key=None):
     key = paramiko.RSAKey.generate(2048)
-    server = TestSSHServer()
+    server = TestSSHServer(authorized_key)
     with socket.create_server(("127.0.0.1", 0)) as listener:
         listener.settimeout(5)
 
@@ -73,9 +80,10 @@ class InstallerTests(unittest.TestCase):
         self.server.server_close()
         self.thread.join()
 
-    def install(self, port, fingerprint, origin=None):
+    def install(self, port, fingerprint, origin=None, **credentials):
         target = {"host": "127.0.0.1", "port": port, "username": "root", "password": "temporary-test",
                   "method": "password", "fingerprint": fingerprint}
+        target.update(credentials)
         request = Request(self.base + "/api/install", json.dumps(target).encode(),
                           {"Origin": origin or self.base, "Content-Type": "application/json"})
         with urlopen(request, timeout=12) as response:
@@ -89,6 +97,31 @@ class InstallerTests(unittest.TestCase):
                 self.assertTrue(any(event["type"] == "output" for event in events))
                 self.assertIn(INSTALL, remote.command)
                 self.assertNotIn("temporary-test", json.dumps(events))
+
+    def test_ssh_private_key_authenticates_and_streams(self):
+        client_key = ed25519.Ed25519PrivateKey.generate()
+        raw = client_key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.OpenSSH,
+                                       serialization.BestAvailableEncryption(b"test-passphrase")).decode()
+        fingerprint = parse_private_key(raw, "test-passphrase").fingerprint
+        with test_ssh(authorized_key=fingerprint) as (port, host_fingerprint, remote):
+            events = self.install(port, host_fingerprint, method="key", privateKey=raw,
+                                  passphrase="test-passphrase")
+            self.assertEqual(events[-1]["type"], "success")
+            self.assertTrue(remote.authenticated)
+            self.assertIn(INSTALL, remote.command)
+            self.assertNotIn("test-passphrase", json.dumps(events))
+
+        with self.assertRaisesRegex(ValueError, "无法读取 SSH 私钥"):
+            parse_private_key(raw, "wrong-passphrase")
+
+    def test_accepts_rsa_and_ecdsa_pem_keys(self):
+        keys = ((rsa.generate_private_key(public_exponent=65537, key_size=2048), paramiko.RSAKey),
+                (ec.generate_private_key(ec.SECP256R1()), paramiko.ECDSAKey))
+        for key, expected_type in keys:
+            with self.subTest(key=expected_type):
+                raw = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                        serialization.NoEncryption()).decode()
+                self.assertIsInstance(parse_private_key(raw, ""), expected_type)
 
     def test_rejects_wrong_fingerprint_before_password_authentication(self):
         with test_ssh() as (port, fingerprint, remote):
@@ -113,7 +146,7 @@ class InstallerTests(unittest.TestCase):
         ready = Request(self.base + "/api/ready", headers={"Origin": WEB_ORIGIN})
         with urlopen(ready, timeout=2) as response:
             self.assertEqual(response.headers["Access-Control-Allow-Origin"], WEB_ORIGIN)
-            self.assertTrue(json.load(response)["installer"])
+            self.assertEqual(json.load(response), {"installer": True, "sshKey": True})
         preflight = Request(endpoint, headers={"Origin": WEB_ORIGIN}, method="OPTIONS")
         with urlopen(preflight, timeout=2) as response:
             self.assertEqual(response.status, 204)

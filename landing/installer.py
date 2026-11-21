@@ -13,11 +13,14 @@ import threading
 import time
 from contextlib import nullcontext
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from io import BytesIO
+from io import BytesIO, StringIO
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import paramiko
+from cryptography.exceptions import UnsupportedAlgorithm
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec, ed25519, rsa
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / "dist"
@@ -27,12 +30,13 @@ FILES = {
     "/commands.html": ("commands.html", "text/html; charset=utf-8"),
     "/commands.js": ("commands.js", "application/javascript; charset=utf-8"),
     "/site.css": ("site.css", "text/css; charset=utf-8"),
-    "/install-form.js": ("install-form.js", "application/javascript; charset=utf-8"),
+    "/ssh-install.js": ("ssh-install.js", "application/javascript; charset=utf-8"),
     "/logo.png": ("logo.png", "image/png"),
 }
 INSTALL = "set -eo pipefail; curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/v1.0.2/deploy/install.sh | bash"
 INSTALL_LOCK = threading.Lock()
-BODY_LIMIT = 8192
+BODY_LIMIT = 24 * 1024
+KEY_LIMIT = 12 * 1024
 JOB_SECONDS = 25 * 60
 HOST_LABEL = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")
 USER = re.compile(r"[A-Za-z_][A-Za-z0-9_.-]{0,63}")
@@ -81,6 +85,29 @@ class VerifyHostKey(paramiko.MissingHostKeyPolicy):
             raise HostKeyMismatch(f"主机指纹不匹配。服务器提供 {key.get_name()} {key.fingerprint}。请从可信终端核对。")
 
 
+def parse_private_key(text, passphrase):
+    if not isinstance(text, str) or not 1 <= len(text) <= KEY_LIMIT or not text.isascii():
+        raise ValueError("请粘贴完整的 SSH 私钥。")
+    if not isinstance(passphrase, str) or len(passphrase) > 512:
+        raise ValueError("SSH 私钥口令过长。")
+    raw = text.strip().encode("ascii")
+    unlock = passphrase.encode() if passphrase else None
+    load = (serialization.load_ssh_private_key if raw.startswith(b"-----BEGIN OPENSSH PRIVATE KEY-----")
+            else serialization.load_pem_private_key)
+    try:
+        key = load(raw, password=unlock)
+        classes = ((rsa.RSAPrivateKey, paramiko.RSAKey), (ec.EllipticCurvePrivateKey, paramiko.ECDSAKey),
+                   (ed25519.Ed25519PrivateKey, paramiko.Ed25519Key))
+        for kind, ssh_key in classes:
+            if isinstance(key, kind):
+                normalized = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.OpenSSH,
+                                               serialization.NoEncryption())
+                return ssh_key.from_private_key(StringIO(normalized.decode("ascii")))
+    except (ValueError, TypeError, UnsupportedAlgorithm, paramiko.SSHException):
+        raise ValueError("无法读取 SSH 私钥，请检查私钥格式和口令。") from None
+    raise ValueError("请使用 RSA、ECDSA 或 Ed25519 私钥。")
+
+
 def validation(data, web=False):
     if not isinstance(data, dict):
         raise ValueError("安装资料必须是 JSON 对象。")
@@ -101,21 +128,24 @@ def validation(data, web=False):
         raise ValueError("请输入有效的 SSH 账号。")
     if not isinstance(fingerprint, str) or not FINGERPRINT.fullmatch(fingerprint):
         raise ValueError("请输入完整的 SHA256 主机指纹。")
-    if method not in ("password", "agent") or (web and method != "password"):
+    if method not in ("password", "key", "agent") or (web and method == "agent"):
         raise ValueError("请选择 SSH 验证方式。")
     password = data.pop("password", None) if method == "password" else None
     if method == "password" and (not isinstance(password, str) or not 1 <= len(password) <= 512):
         raise ValueError("请输入 SSH 密码。")
-    return host, port, username, fingerprint, method, password
+    private_key = None
+    if method == "key":
+        private_key = parse_private_key(data.pop("privateKey", None), data.pop("passphrase", ""))
+    return host, port, username, fingerprint, method, password, private_key
 
 
 def run_install(target, send, web=False):
-    host, port, username, fingerprint, method, password = target
+    host, port, username, fingerprint, method, password, private_key = target
     send("status", "正在连接服务器并核对 SSH 主机指纹…")
     connection = socket.create_connection((host, port), timeout=12) if web else nullcontext()
     with connection as sock, paramiko.SSHClient() as client:
         client.set_missing_host_key_policy(VerifyHostKey(fingerprint))
-        client.connect(host, port=port, username=username, password=password, sock=sock,
+        client.connect(host, port=port, username=username, password=password, pkey=private_key, sock=sock,
                        allow_agent=method == "agent", look_for_keys=False, timeout=12,
                        auth_timeout=15, banner_timeout=12, channel_timeout=15)
         send("status", "SSH 已连接，正在执行 HopWorld-Router V1.0.2 安装…")
@@ -199,12 +229,12 @@ class Installer(BaseHTTPRequestHandler):
             if self.headers.get("Origin") != WEB_ORIGIN:
                 return self.json(403, error="请从 GitHub 安装页面发起请求。")
             if self.path == "/api/ready":
-                return self.json(200, installer=True)
+                return self.json(200, installer=True, sshKey=True)
             return self.json(404, error="页面不存在。")
         if self.headers.get("Host") != self.local_host:
             return self.json(403, error="请通过 127.0.0.1 访问安装器。")
         if self.path == "/api/ready":
-            return self.json(200, installer=True)
+            return self.json(200, installer=True, sshKey=True)
         if self.path == DOWNLOAD:
             return self.reply(200, "application/zip", installer_archive())
         file = FILES.get(self.path)

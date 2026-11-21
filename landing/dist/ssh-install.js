@@ -8,6 +8,8 @@ const log = byId('installation-log');
 const access = byId('access');
 const submit = byId('install-submit');
 const password = form.elements.password;
+const privateKey = form.elements.privateKey;
+const passphrase = form.elements.passphrase;
 const toggle = byId('password-toggle');
 const retry = byId('installer-retry');
 const confirmation = byId('ssh-confirmation');
@@ -37,7 +39,14 @@ async function initialize() {
       apiBase = endpoint.origin + '/hopworld-installer';
     }
     const ready = await fetch(`${apiBase}/api/ready`, options);
-    if (!ready.ok || (await ready.json()).installer !== true) throw new Error();
+    if (!ready.ok) throw new Error();
+    const capabilities = await ready.json();
+    if (capabilities.installer !== true) throw new Error();
+    if (capabilities.sshKey === true) {
+      const option = form.elements.method.querySelector('[value="key"]');
+      option.hidden = false;
+      option.disabled = false;
+    }
     if (local) {
       byId('host-label').textContent = '服务器 IP 或域名';
       const agent = form.elements.method.querySelector('[value="agent"]');
@@ -65,6 +74,17 @@ form.elements.method.addEventListener('change', () => {
   password.required = usePassword;
   password.disabled = !usePassword;
   if (!usePassword) password.value = '';
+
+  const useKey = form.elements.method.value === 'key';
+  byId('private-key-field').hidden = !useKey;
+  byId('passphrase-field').hidden = !useKey;
+  privateKey.required = useKey;
+  privateKey.disabled = !useKey;
+  passphrase.disabled = !useKey;
+  if (!useKey) {
+    privateKey.value = '';
+    passphrase.value = '';
+  }
 });
 
 toggle.addEventListener('click', () => {
@@ -171,6 +191,8 @@ form.addEventListener('submit', async event => {
     ? await confirmTarget(target, needsToken, needsFingerprint)
     : {};
   password.value = '';
+  privateKey.value = '';
+  passphrase.value = '';
   password.type = 'password';
   toggle.textContent = '显示';
   toggle.setAttribute('aria-pressed', 'false');
@@ -188,6 +210,8 @@ form.addEventListener('submit', async event => {
   try {
     const body = JSON.stringify(target);
     delete target.password;
+    delete target.privateKey;
+    delete target.passphrase;
     const reply = await fetch(`${apiBase}/api/install`, {
       method: 'POST',
       headers,
@@ -202,6 +226,8 @@ form.addEventListener('submit', async event => {
     updateStatus(error.message || '无法连接安装服务。', 'error');
   } finally {
     delete target.password;
+    delete target.privateKey;
+    delete target.passphrase;
     submit.disabled = false;
     submit.textContent = '立即安装到服务器';
   }

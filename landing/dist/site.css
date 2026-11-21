@@ -136,3 +136,14 @@ pre { background: #edf2fa; color: #1c3155; border-radius: 8px; padding: 12px; wh
 .ssh-dialog .actions { justify-content: flex-end; margin-bottom: 0; }
 .ssh-dialog .quiet { font-weight: 400; overflow-wrap: anywhere; }
 #installer-retry { margin-bottom: 14px; }
+
+.ssh-private-key {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #bcc9dc;
+  border-radius: 8px;
+  color: var(--ink);
+  background: #fff;
+  font: .88rem/1.5 var(--mono);
+  resize: vertical;
+}
