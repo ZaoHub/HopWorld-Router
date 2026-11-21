@@ -1,0 +1,23 @@
+# HopWorld-Router 在线安装
+
+在运行安装器的电脑上安装 Python 3.10+，解压后执行：
+
+```sh
+bash start.sh
+```
+
+打开 http://127.0.0.1:18731/。输入服务器地址、SSH 端口、账号和从可信途径获得的 SHA256 主机指纹。SSH 密码只由本机进程用于登录。使用 SSH Agent 时，先把密钥加载到当前终端连接的 Agent。使用非 root 账号时，服务器需要允许该账号以 `sudo -n` 执行安装。目标服务器会运行 V1.0.2 官方 GitHub 安装脚本。
+
+安装完成后按页面给出的 SSH 隧道命令访问后台。已有部署建议先按项目文档备份。按 Ctrl+C 关闭本机安装器。
+
+## 终端管理
+
+解压目录包含 `manage.py`，通过已配置的回环管理入口执行下列操作：
+
+```sh
+python3 manage.py password --url http://127.0.0.1:8080
+python3 manage.py username --url http://127.0.0.1:8080
+python3 manage.py port --url http://127.0.0.1:8080 --port 18081
+```
+
+CentOS 7 若无系统 Python 3，请用 `/opt/hopworld-router-legacy/current/python/bin/python3` 代替 `python3`。修改端口须在 Router 服务器本机执行，以便直接确认新入口。修改账号或密码可通过 SSH 隧道，URL 使用隧道的本地地址。其他 systemd、Docker、清理和排障命令见落地页的「命令大全」。
