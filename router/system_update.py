@@ -147,6 +147,9 @@ def _unmanaged_status():
         if PACKAGE_HELPER.is_file():
             return None
         return {**common, 'channel': 'APT', 'current': version, 'error': PACKAGE_UPDATE_MESSAGE}
+    if os.environ.get('HOPWORLD_LEGACY_INSTALL') == '1':
+        return {**common, 'channel': 'GitHub Releases',
+                'error': '请在服务器终端执行目标 GitHub Release 的一键安装命令来更新。'}
     if APP_ROOT != REPO.resolve():
         source = (APP_ROOT / '.git').exists()
         return {**common, 'channel': '本地源码' if source else '手动部署',

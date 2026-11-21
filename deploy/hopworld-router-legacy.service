@@ -1,0 +1,20 @@
+[Unit]
+Description=HopWorld Router
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=hopworld-router
+Group=hopworld-router
+WorkingDirectory=/opt/hopworld-router-legacy/current
+ExecStart=/opt/hopworld-router-legacy/current/python/bin/python3 -m router.server
+Environment=HOPWORLD_DATA=/var/lib/hopworld-router
+Environment=HOPWORLD_LEGACY_INSTALL=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+PrivateTmp=true
+Restart=on-failure
+RestartSec=2s
+
+[Install]
+WantedBy=multi-user.target

@@ -125,17 +125,21 @@ Ubuntu／Debian 测试环境可从源码构建带 SHA-256 校验文件的 `.deb`
 
 ### 从 GitHub 一键安装 V1
 
-在使用 systemd 的全新 Ubuntu 22.04+ 或 Debian 12+ VPS 上，以 root 执行：
+在使用 systemd 的 VPS 上，以 root 执行。服务器需有 `curl` 并能访问 GitHub：
 
 ```bash
-( set -o pipefail; { command -v curl >/dev/null || { apt-get update && apt-get install -y curl ca-certificates; }; } && curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/v1.0.0/deploy/install.sh | bash )
+( set -o pipefail; curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/v1.0.1/deploy/install.sh | bash )
 ```
 
-脚本会下载并核对 GitHub Release 的 Debian 软件包，由 APT 安装并启动管理服务。按[端口与安全组](#v1-部署端口与安全组)配置入站，再按下方「打开管理页」使用 SSH 隧道。首次使用 `admin / admin` 设置新密码。已有旧版 Git 安装时，请先备份数据并按迁移流程处理。
+- **Ubuntu 22.04+、Debian 12+**：校验 Release 的 `.deb`，由 APT 安装并启动后台。
+- **Ubuntu 18.04、CentOS 7**：在 x86_64 或 ARM64 上安装后台与独立 Python 3.11 环境，保留系统 Python，由 systemd 启动后台。内核、证书和透明网关功能依赖各自的系统工具及内核能力。
+- 按[端口与安全组](#v1-部署端口与安全组)配置入站，再按下方「打开管理页」使用 SSH 隧道。首次使用 `admin / admin` 设置新密码。只有 FTP 的共享主机需要换用有 root 终端的服务器。
+
+旧系统安装的程序位于 `/opt/hopworld-router-legacy`，数据位于 `/var/lib/hopworld-router`。旧系统后续升级时，以 root 执行目标 GitHub Release 公布的一键命令。升级切换前备份数据库。已有其他方式安装时，先备份并完成迁移。版本同步流程见 [V1 版本发布与更新](docs/V1版本发布与更新.md)。
 
 ### 全新 Linux 服务器
 
-以 root 执行下面这一段，安装并启动管理服务。所需代理内核由服务器管理员安装。适用 Debian 12、Ubuntu 22.04 及更新版本，或 RHEL / Rocky / Alma 9 及更新版本。`python3` 须为 3.10 或更高。CentOS 7 的系统 Python 不够，要先单独装好 Python 3.11 并让 `python3` 指向它，再执行这一段。
+以 root 执行下面这一段，安装并启动管理服务。所需代理内核由服务器管理员安装。适用 Debian 12、Ubuntu 22.04 及更新版本，或 RHEL / Rocky / Alma 9 及更新版本。`python3` 须为 3.10 或更高。Ubuntu 18.04 和 CentOS 7 使用上面的一键安装。
 
 Linux 虚拟机、树莓派和其他 ARM 小主机可在系统版本符合上述要求时参考本节。先用 `uname -m` 核对架构。虚拟机和家庭网络的入站、端口转发及开机恢复需要各自配置；ARM 和虚拟机部署尚未完成实机验证。有公网入站的 VPS 按本节安装。没有入站的云电脑仍要自备隧道，本节不包含隧道开通。紧急修复脚本不适合作为安装程序。
 

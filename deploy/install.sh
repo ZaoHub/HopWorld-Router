@@ -2,13 +2,24 @@
 set -euo pipefail
 
 main() (
-  if [[ "$EUID" != 0 || "$(uname -s)" != Linux || ! -d /run/systemd/system ]] ||
-     ! command -v apt-get >/dev/null; then
-    echo '请在使用 systemd 的 Ubuntu 22.04+ 或 Debian 12+ 服务器上以 root 运行。' >&2
+  local version=1.0.1
+  if [[ "$EUID" != 0 || "$(uname -s)" != Linux || ! -d /run/systemd/system ]]; then
+    echo '请在使用 systemd 的 Linux 服务器上以 root 运行。' >&2
+    exit 1
+  fi
+  . /etc/os-release
+  case "$ID:$VERSION_ID" in
+    ubuntu:18.04|centos:7)
+      curl -fsSL "https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/v$version/deploy/install-legacy.sh" |
+        bash -s -- "$version"
+      exit
+      ;;
+  esac
+  if ! command -v apt-get >/dev/null; then
+    echo '请使用受支持的 Ubuntu、Debian 或 CentOS 7 系统。' >&2
     exit 1
   fi
 
-  local version=1.0.0
   local package=hopworld-router_${version}_all.deb
   local release=https://github.com/ZaoHub/HopWorld-Router/releases/download/v${version}
   local workdir
