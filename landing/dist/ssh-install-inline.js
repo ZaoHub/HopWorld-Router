@@ -4,6 +4,7 @@ const availability = byId('installer-availability');
 const mode = byId('connection-mode');
 const result = byId('installation-result');
 const status = byId('installation-status');
+const connection = byId('ssh-connection-state');
 const log = byId('installation-log');
 const access = byId('access');
 const submit = byId('install-submit');
@@ -98,6 +99,11 @@ function updateStatus(message, state = '') {
   status.dataset.state = state;
 }
 
+function updateConnection(message, state = '') {
+  connection.textContent = message;
+  connection.dataset.state = state;
+}
+
 function readFingerprint(key) {
   try {
     const value = localStorage.getItem(key);
@@ -150,12 +156,15 @@ async function consume(response, target, fingerprintKey) {
           log.textContent = (log.textContent + event.text).slice(-24000);
           log.scrollTop = log.scrollHeight;
         } else if (event.type === 'status') {
+          if (event.text.startsWith('SSH 已连接')) updateConnection('SSH 登录成功', 'success');
           updateStatus(event.text);
         } else if (event.type === 'error') {
+          if (connection.dataset.state !== 'success') updateConnection('SSH 连接失败', 'error');
           if (event.text.startsWith('主机指纹不匹配')) rememberFingerprint(fingerprintKey);
           updateStatus(event.text, 'error');
           ended = true;
         } else if (event.type === 'success') {
+          updateConnection('SSH 登录成功', 'success');
           rememberFingerprint(fingerprintKey, target.fingerprint);
           updateStatus('安装完成，后台已就绪。', 'success');
           byId('access-command').textContent =
@@ -206,7 +215,8 @@ form.addEventListener('submit', async event => {
   log.hidden = true;
   access.hidden = true;
   result.hidden = false;
-  updateStatus('正在准备 SSH 连接…');
+  updateConnection('正在检测 SSH…', 'checking');
+  updateStatus('正在连接服务器…');
   try {
     const body = JSON.stringify(target);
     delete target.password;
@@ -219,10 +229,14 @@ form.addEventListener('submit', async event => {
       body,
     });
     if (reply.status === 401) pageToken = undefined;
-    if (!reply.ok) throw new Error((await reply.json()).error);
+    if (!reply.ok) {
+      updateConnection('SSH 尚未检测');
+      throw new Error((await reply.json()).error);
+    }
     if (!local) pageToken = token;
     await consume(reply, target, fingerprintKey);
   } catch (error) {
+    if (connection.dataset.state === 'checking') updateConnection('未收到 SSH 检测结果', 'error');
     updateStatus(error.message || '无法连接安装服务。', 'error');
   } finally {
     delete target.password;

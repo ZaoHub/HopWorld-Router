@@ -77,6 +77,10 @@ select { appearance: none; padding-right: 26px; background: linear-gradient(45de
 .password-wrap input { padding-right: 65px; }
 .text-button { position: absolute; right: 4px; min-height: 42px; border: 0; background: transparent; padding-inline: 10px; color: var(--primary); }
 #installation-result { border-top: 1px solid #e1e8f4; padding-top: 17px; }
+.ssh-connection { margin-bottom: 8px; color: var(--muted); font-size: .88rem; }
+.ssh-connection span { margin-left: 6px; font-weight: 700; color: var(--ink); }
+.ssh-connection span[data-state='success'] { color: #176542; }
+.ssh-connection span[data-state='error'] { color: #a12434; }
 .run-status { font-weight: 700; margin-bottom: 9px; }
 .run-status[data-state='error'] { color: #a12434; }
 .run-status[data-state='success'] { color: #176542; }
