@@ -77,6 +77,10 @@ select { appearance: none; padding-right: 26px; background: linear-gradient(45de
 .password-wrap input { padding-right: 65px; }
 .text-button { position: absolute; right: 4px; min-height: 42px; border: 0; background: transparent; padding-inline: 10px; color: var(--primary); }
 #installation-result { border-top: 1px solid #e1e8f4; padding-top: 17px; }
+.ssh-connection { margin-bottom: 8px; color: var(--muted); font-size: .88rem; }
+.ssh-connection span { margin-left: 6px; font-weight: 700; color: var(--ink); }
+.ssh-connection span[data-state='success'] { color: #176542; }
+.ssh-connection span[data-state='error'] { color: #a12434; }
 .run-status { font-weight: 700; margin-bottom: 9px; }
 .run-status[data-state='error'] { color: #a12434; }
 .run-status[data-state='success'] { color: #176542; }
@@ -130,11 +134,13 @@ pre { background: #edf2fa; color: #1c3155; border-radius: 8px; padding: 12px; wh
 .entry-body pre { margin: 0 0 8px; }
 @media (max-width: 480px) { .catalog { padding-block: 30px; } .site-header .nav-links a[href="#install-commands"] { display: none; } }
 
-.ssh-dialog { width: min(460px, calc(100% - 32px)); color: var(--ink); }
-.ssh-dialog::backdrop { background: #13223a90; }
-.ssh-dialog h3 { margin-bottom: 8px; }
-.ssh-dialog .actions { justify-content: flex-end; margin-bottom: 0; }
-.ssh-dialog .quiet { font-weight: 400; overflow-wrap: anywhere; }
+.ssh-verification {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.ssh-verification .quiet { font-weight: 400; }
 #installer-retry { margin-bottom: 14px; }
 
 .ssh-private-key {

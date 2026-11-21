@@ -4,6 +4,7 @@ const availability = byId('installer-availability');
 const mode = byId('connection-mode');
 const result = byId('installation-result');
 const status = byId('installation-status');
+const connection = byId('ssh-connection-state');
 const log = byId('installation-log');
 const access = byId('access');
 const submit = byId('install-submit');
@@ -12,10 +13,9 @@ const privateKey = form.elements.privateKey;
 const passphrase = form.elements.passphrase;
 const toggle = byId('password-toggle');
 const retry = byId('installer-retry');
-const confirmation = byId('ssh-confirmation');
-const confirmationForm = byId('ssh-confirmation-form');
-const tokenInput = confirmationForm.elements.operatorToken;
-const fingerprintInput = confirmationForm.elements.fingerprint;
+const verification = byId('ssh-verification');
+const tokenInput = form.elements.operatorToken;
+const fingerprintInput = form.elements.fingerprint;
 
 const local = location.hostname === '127.0.0.1' && location.protocol === 'http:';
 let apiBase;
@@ -99,6 +99,11 @@ function updateStatus(message, state = '') {
   status.dataset.state = state;
 }
 
+function updateConnection(message, state = '') {
+  connection.textContent = message;
+  connection.dataset.state = state;
+}
+
 function readFingerprint(key) {
   try {
     const value = localStorage.getItem(key);
@@ -117,27 +122,22 @@ function rememberFingerprint(key, value) {
   }
 }
 
-function confirmTarget(target, needsToken, needsFingerprint) {
-  byId('confirmation-target').textContent = `${target.username} · ${target.host} · SSH ${target.port}`;
+function showVerification(needsToken, needsFingerprint) {
+  verification.hidden = !needsToken && !needsFingerprint;
   byId('operator-field').hidden = !needsToken;
   byId('fingerprint-field').hidden = !needsFingerprint;
-  tokenInput.disabled = !(tokenInput.required = needsToken);
-  fingerprintInput.disabled = !(fingerprintInput.required = needsFingerprint);
-  confirmation.returnValue = '';
-  return new Promise(resolve => {
-    confirmation.addEventListener('close', () => {
-      const values = confirmation.returnValue === 'confirm'
-        ? { token: tokenInput.value, fingerprint: fingerprintInput.value }
-        : null;
-      confirmationForm.reset();
-      resolve(values);
-    }, { once: true });
-    confirmation.showModal();
-    (needsToken ? tokenInput : fingerprintInput).focus();
-  });
+  tokenInput.disabled = !needsToken;
+  tokenInput.required = needsToken;
+  fingerprintInput.disabled = !needsFingerprint;
+  fingerprintInput.required = needsFingerprint;
 }
 
-byId('cancel-confirmation').addEventListener('click', () => confirmation.close());
+for (const field of [form.elements.host, form.elements.port]) {
+  field.addEventListener('input', () => {
+    fingerprintInput.value = '';
+    showVerification(false, false);
+  });
+}
 
 async function consume(response, target, fingerprintKey) {
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
@@ -152,15 +152,19 @@ async function consume(response, target, fingerprintKey) {
       for (const line of lines) {
         const event = JSON.parse(line);
         if (event.type === 'output') {
+          log.hidden = false;
           log.textContent = (log.textContent + event.text).slice(-24000);
           log.scrollTop = log.scrollHeight;
         } else if (event.type === 'status') {
+          if (event.text.startsWith('SSH 已连接')) updateConnection('SSH 登录成功', 'success');
           updateStatus(event.text);
         } else if (event.type === 'error') {
+          if (connection.dataset.state !== 'success') updateConnection('SSH 连接失败', 'error');
           if (event.text.startsWith('主机指纹不匹配')) rememberFingerprint(fingerprintKey);
           updateStatus(event.text, 'error');
           ended = true;
         } else if (event.type === 'success') {
+          updateConnection('SSH 登录成功', 'success');
           rememberFingerprint(fingerprintKey, target.fingerprint);
           updateStatus('安装完成，后台已就绪。', 'success');
           byId('access-command').textContent =
@@ -178,35 +182,41 @@ async function consume(response, target, fingerprintKey) {
 
 form.addEventListener('submit', async event => {
   event.preventDefault();
-  if (submit.disabled || !apiBase || confirmation.open) return;
+  if (submit.disabled || !apiBase) return;
   const target = Object.fromEntries(new FormData(form));
   target.host = target.host.trim();
   target.username = target.username.trim();
   target.port = Number(target.port);
   const fingerprintKey = `hopworld-router:ssh-host:${target.host.toLowerCase()}:${target.port}`;
-  target.fingerprint = readFingerprint(fingerprintKey);
-  const needsToken = !local && !pageToken;
+  target.fingerprint = readFingerprint(fingerprintKey) || fingerprintInput.value.trim();
+  const token = pageToken || target.operatorToken;
+  delete target.operatorToken;
+  const needsToken = !local && !token;
   const needsFingerprint = !target.fingerprint;
-  const confirmed = needsToken || needsFingerprint
-    ? await confirmTarget(target, needsToken, needsFingerprint)
-    : {};
+  if (needsToken || needsFingerprint) {
+    showVerification(needsToken, needsFingerprint);
+    (needsToken ? tokenInput : fingerprintInput).focus();
+    return;
+  }
+  showVerification(false, false);
+  tokenInput.value = '';
+  fingerprintInput.value = '';
   password.value = '';
   privateKey.value = '';
   passphrase.value = '';
   password.type = 'password';
   toggle.textContent = '显示';
   toggle.setAttribute('aria-pressed', 'false');
-  if (!confirmed) return;
-  target.fingerprint ||= confirmed.fingerprint;
-  const token = pageToken || confirmed.token;
   const headers = { 'Content-Type': 'application/json' };
   if (!local) headers.Authorization = `Bearer ${token}`;
   submit.disabled = true;
   submit.textContent = '正在安装…';
   log.textContent = '';
+  log.hidden = true;
   access.hidden = true;
   result.hidden = false;
-  updateStatus('正在准备 SSH 连接…');
+  updateConnection('正在检测 SSH…', 'checking');
+  updateStatus('正在连接服务器…');
   try {
     const body = JSON.stringify(target);
     delete target.password;
@@ -219,10 +229,14 @@ form.addEventListener('submit', async event => {
       body,
     });
     if (reply.status === 401) pageToken = undefined;
-    if (!reply.ok) throw new Error((await reply.json()).error);
+    if (!reply.ok) {
+      updateConnection('SSH 尚未检测');
+      throw new Error((await reply.json()).error);
+    }
     if (!local) pageToken = token;
     await consume(reply, target, fingerprintKey);
   } catch (error) {
+    if (connection.dataset.state === 'checking') updateConnection('未收到 SSH 检测结果', 'error');
     updateStatus(error.message || '无法连接安装服务。', 'error');
   } finally {
     delete target.password;
