@@ -12,10 +12,9 @@ const privateKey = form.elements.privateKey;
 const passphrase = form.elements.passphrase;
 const toggle = byId('password-toggle');
 const retry = byId('installer-retry');
-const confirmation = byId('ssh-confirmation');
-const confirmationForm = byId('ssh-confirmation-form');
-const tokenInput = confirmationForm.elements.operatorToken;
-const fingerprintInput = confirmationForm.elements.fingerprint;
+const verification = byId('ssh-verification');
+const tokenInput = form.elements.operatorToken;
+const fingerprintInput = form.elements.fingerprint;
 
 const local = location.hostname === '127.0.0.1' && location.protocol === 'http:';
 let apiBase;
@@ -117,27 +116,22 @@ function rememberFingerprint(key, value) {
   }
 }
 
-function confirmTarget(target, needsToken, needsFingerprint) {
-  byId('confirmation-target').textContent = `${target.username} · ${target.host} · SSH ${target.port}`;
+function showVerification(needsToken, needsFingerprint) {
+  verification.hidden = !needsToken && !needsFingerprint;
   byId('operator-field').hidden = !needsToken;
   byId('fingerprint-field').hidden = !needsFingerprint;
-  tokenInput.disabled = !(tokenInput.required = needsToken);
-  fingerprintInput.disabled = !(fingerprintInput.required = needsFingerprint);
-  confirmation.returnValue = '';
-  return new Promise(resolve => {
-    confirmation.addEventListener('close', () => {
-      const values = confirmation.returnValue === 'confirm'
-        ? { token: tokenInput.value, fingerprint: fingerprintInput.value }
-        : null;
-      confirmationForm.reset();
-      resolve(values);
-    }, { once: true });
-    confirmation.showModal();
-    (needsToken ? tokenInput : fingerprintInput).focus();
-  });
+  tokenInput.disabled = !needsToken;
+  tokenInput.required = needsToken;
+  fingerprintInput.disabled = !needsFingerprint;
+  fingerprintInput.required = needsFingerprint;
 }
 
-byId('cancel-confirmation').addEventListener('click', () => confirmation.close());
+for (const field of [form.elements.host, form.elements.port]) {
+  field.addEventListener('input', () => {
+    fingerprintInput.value = '';
+    showVerification(false, false);
+  });
+}
 
 async function consume(response, target, fingerprintKey) {
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
@@ -152,6 +146,7 @@ async function consume(response, target, fingerprintKey) {
       for (const line of lines) {
         const event = JSON.parse(line);
         if (event.type === 'output') {
+          log.hidden = false;
           log.textContent = (log.textContent + event.text).slice(-24000);
           log.scrollTop = log.scrollHeight;
         } else if (event.type === 'status') {
@@ -178,32 +173,37 @@ async function consume(response, target, fingerprintKey) {
 
 form.addEventListener('submit', async event => {
   event.preventDefault();
-  if (submit.disabled || !apiBase || confirmation.open) return;
+  if (submit.disabled || !apiBase) return;
   const target = Object.fromEntries(new FormData(form));
   target.host = target.host.trim();
   target.username = target.username.trim();
   target.port = Number(target.port);
   const fingerprintKey = `hopworld-router:ssh-host:${target.host.toLowerCase()}:${target.port}`;
-  target.fingerprint = readFingerprint(fingerprintKey);
-  const needsToken = !local && !pageToken;
+  target.fingerprint = readFingerprint(fingerprintKey) || fingerprintInput.value.trim();
+  const token = pageToken || target.operatorToken;
+  delete target.operatorToken;
+  const needsToken = !local && !token;
   const needsFingerprint = !target.fingerprint;
-  const confirmed = needsToken || needsFingerprint
-    ? await confirmTarget(target, needsToken, needsFingerprint)
-    : {};
+  if (needsToken || needsFingerprint) {
+    showVerification(needsToken, needsFingerprint);
+    (needsToken ? tokenInput : fingerprintInput).focus();
+    return;
+  }
+  showVerification(false, false);
+  tokenInput.value = '';
+  fingerprintInput.value = '';
   password.value = '';
   privateKey.value = '';
   passphrase.value = '';
   password.type = 'password';
   toggle.textContent = '显示';
   toggle.setAttribute('aria-pressed', 'false');
-  if (!confirmed) return;
-  target.fingerprint ||= confirmed.fingerprint;
-  const token = pageToken || confirmed.token;
   const headers = { 'Content-Type': 'application/json' };
   if (!local) headers.Authorization = `Bearer ${token}`;
   submit.disabled = true;
   submit.textContent = '正在安装…';
   log.textContent = '';
+  log.hidden = true;
   access.hidden = true;
   result.hidden = false;
   updateStatus('正在准备 SSH 连接…');
