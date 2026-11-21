@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="HopWorld-Router Linux 安装、管理与故障排查命令。">
+  <title>终端命令大全 · HopWorld-Router</title>
+  <link rel="icon" href="logo.png">
+  <link rel="stylesheet" href="site.css">
+  <script src="commands.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <nav class="shell nav" aria-label="主导航">
+      <a href="./" class="brand"><img src="logo.png" width="34" height="34" alt="">HopWorld<span>Router</span></a>
+      <div class="nav-links"><a href="./#install">在线安装</a><a href="#install-commands">安装命令</a><a href="#manage-commands">管理命令</a></div>
+    </nav>
+  </header>
+  <main class="shell catalog">
+    <header class="catalog-heading">
+      <h1>终端命令大全</h1>
+      <p>选择部署方式，把命令复制到对应的终端执行。</p>
+      <label for="command-search">查找命令</label>
+      <input type="search" id="command-search" placeholder="例如 Fedora、重启、端口、日志">
+      <p id="command-empty" role="status" hidden>没有匹配的命令。</p>
+    </header>
+
+    <section id="install-commands" class="catalog-section" aria-labelledby="install-command-title">
+      <h2 id="install-command-title">安装</h2>
+      <p>原生安装使用 GitHub V1.0.2。容器安装命令须在 Linux Docker 主机上执行。</p>
+      <details class="command-entry" open><summary>Ubuntu 18.04 / 22.04 及更新版本</summary><div class="entry-body"><p>需要 systemd、curl 和 sudo 权限。Ubuntu 18.04 使用独立 Python 运行环境。</p><pre>( set -o pipefail; curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/v1.0.2/deploy/install.sh | sudo bash )</pre></div></details>
+      <details class="command-entry"><summary>Debian 12 及更新版本</summary><div class="entry-body"><p>需要 systemd、curl 和 sudo 权限。</p><pre>( set -o pipefail; curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/v1.0.2/deploy/install.sh | sudo bash )</pre></div></details>
+      <details class="command-entry"><summary>CentOS 7</summary><div class="entry-body"><p>支持使用 systemd 的 CentOS 7。CentOS Stream 可参考下方 Docker 路径。</p><pre>( set -o pipefail; curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/v1.0.2/deploy/install.sh | sudo bash )</pre></div></details>
+      <details class="command-entry"><summary>Deepin 安装（Docker）</summary><div class="entry-body"><p>先在系统上准备 Docker Engine、Compose 和 Git。此容器路径尚未在 Deepin 实机验证。</p><pre>git clone --branch v1.0.2 https://github.com/ZaoHub/HopWorld-Router.git &amp;&amp;
+cd HopWorld-Router &amp;&amp;
+(umask 077; mkdir -p data; printf '%s\n' 'HOPWORLD_ADMIN_PASSWORD=admin' &gt; router.env) &amp;&amp;
+sudo docker compose up -d --build</pre></div></details>
+      <details class="command-entry"><summary>Fedora 安装（Docker）</summary><div class="entry-body"><p>先按 <a href="https://docs.docker.com/engine/install/fedora/">Docker 官方 Fedora 指南</a>安装引擎和 Compose，并确保 Git 可用。HopWorld-Router 尚未在 Fedora 实机验证。</p><pre>git clone --branch v1.0.2 https://github.com/ZaoHub/HopWorld-Router.git &amp;&amp;
+cd HopWorld-Router &amp;&amp;
+(umask 077; mkdir -p data; printf '%s\n' 'HOPWORLD_ADMIN_PASSWORD=admin' &gt; router.env) &amp;&amp;
+sudo docker compose up -d --build</pre></div></details>
+      <details class="command-entry"><summary>Docker / 绿联 NAS</summary><div class="entry-body"><p>先准备 Git 和 Docker Compose。在主机的持久存储目录运行：</p><pre>git clone --branch v1.0.2 https://github.com/ZaoHub/HopWorld-Router.git &amp;&amp;
+cd HopWorld-Router &amp;&amp;
+(umask 077; mkdir -p data; printf '%s\n' 'HOPWORLD_ADMIN_PASSWORD=admin' &gt; router.env) &amp;&amp;
+sudo docker compose up -d --build</pre><p><a href="https://github.com/ZaoHub/HopWorld-Router/blob/v1.0.2/docs/NAS容器试用指南.md">NAS 指南</a></p></div></details>
+    </section>
+
+    <section id="manage-commands" class="catalog-section" aria-labelledby="manage-command-title">
+      <h2 id="manage-command-title">管理</h2>
+      <p>systemd 命令在 Linux 服务器上运行。Docker 命令在项目目录运行。CentOS 7 若没有系统 python3，可用 /opt/hopworld-router-legacy/current/python/bin/python3 运行 manage.py。</p>
+      <details class="command-entry"><summary>启动、停止、重启与查看状态</summary><div class="entry-body"><p>启动</p><pre>sudo systemctl start hopworld-router.service</pre>
+<p>停止</p><pre>sudo systemctl stop hopworld-router.service</pre>
+<p>重启</p><pre>sudo systemctl restart hopworld-router.service</pre>
+<p>查看状态</p><pre>sudo systemctl status hopworld-router.service --no-pager -l</pre>
+<p>Docker 启动</p><pre>sudo docker compose start</pre>
+<p>Docker 停止</p><pre>sudo docker compose stop</pre>
+<p>Docker 重启</p><pre>sudo docker compose restart</pre>
+<p>Docker 查看状态</p><pre>sudo docker compose ps</pre></div></details>
+      <details class="command-entry"><summary>修改管理员密码</summary><div class="entry-body"><p>解压 <a href="hopworld-router-installer.zip" download>安装工具包</a>，进入目录运行。首次仍使用默认密码的实例需先完成网页上的改密弹窗。通过 SSH 隧道时，把 URL 改成电脑的本地转发地址。</p><pre>python3 manage.py password --url http://127.0.0.1:8080</pre></div></details>
+      <details class="command-entry"><summary>修改管理员用户名</summary><div class="entry-body"><p>在 <a href="hopworld-router-installer.zip" download>安装工具包</a>目录运行，按提示输入当前密码和新用户名。</p><pre>python3 manage.py username --url http://127.0.0.1:8080</pre></div></details>
+      <details class="command-entry"><summary>修改使用端口</summary><div class="entry-body"><p>把 <a href="hopworld-router-installer.zip" download>安装工具包</a>解压到服务器，在服务器本机执行。以下以现有 HTTP 回环端口 8080 切换到 18081 为例。HTTPS 管理入口使用后台的端口验证功能。</p><pre>python3 manage.py port --url http://127.0.0.1:8080 --port 18081</pre><p>确认新端口可用后，将 SSH 隧道的目标端口改成 18081。</p></div></details>
+      <details class="command-entry"><summary>刷新面板和清除运行时缓存</summary><div class="entry-body"><p>先在浏览器强制刷新页面（Mac 为 ⌘⇧R，Windows/Linux 为 Ctrl+Shift+R）。需要重置服务的运行时状态时重启，重启可能中断现有连接。</p><pre>sudo systemctl restart hopworld-router.service</pre></div></details>
+      <details class="command-entry"><summary>清理系统垃圾（软件包缓存）</summary><div class="entry-body"><p>按系统选择一条执行，范围为包管理器缓存。</p><p>Ubuntu / Debian / Deepin</p><pre>sudo apt-get clean</pre>
+<p>Fedora / CentOS Stream</p><pre>sudo dnf clean packages</pre>
+<p>CentOS 7</p><pre>sudo yum clean packages</pre></div></details>
+      <details class="command-entry"><summary>修复服务启动与检查健康状态</summary><div class="entry-body"><p>服务启动失败时，先查看错误日志。修正配置后可重读服务定义并重试。</p><pre>sudo systemctl daemon-reload
+sudo systemctl reset-failed hopworld-router.service
+sudo systemctl restart hopworld-router.service
+curl --noproxy '*' -fsS http://127.0.0.1:8080/health/ready</pre><p>Debian 软件包已解包但配置未完成时：</p><pre>sudo dpkg --configure hopworld-router</pre></div></details>
+      <details class="command-entry"><summary>显示错误日志</summary><div class="entry-body"><p>最近的错误</p><pre>sudo journalctl -u hopworld-router.service -p err -n 80 --no-pager</pre>
+<p>最近的服务日志</p><pre>sudo journalctl -u hopworld-router.service -n 100 --no-pager</pre>
+<p>实时跟踪</p><pre>sudo journalctl -u hopworld-router.service -f</pre><p>Docker 项目日志</p><pre>sudo docker compose logs --tail=100 hopworld-router</pre></div></details>
+      <details class="command-entry"><summary>卸载或删除运行容器</summary><div class="entry-body"><p>APT 安装可卸载程序并保留数据目录。完整卸载会要求确认，并永久删除程序和应用数据。</p><p>卸载程序并保留数据</p><pre>sudo apt-get remove hopworld-router</pre>
+<p>完整卸载并永久删除应用数据（从仍在安装的实例执行）</p><pre>sudo hopworld-router-uninstall</pre><p>Docker 从项目目录移除运行容器，保留绑定的 data 目录：</p><pre>sudo docker compose down</pre><p>旧系统兼容安装：停止服务后删除程序目录和它的服务文件，保留 /var/lib/hopworld-router。</p><pre>if grep -Fxq 'WorkingDirectory=/opt/hopworld-router-legacy/current' /etc/systemd/system/hopworld-router.service; then
+  sudo systemctl stop hopworld-router.service &amp;&amp;
+  sudo systemctl disable hopworld-router.service &amp;&amp;
+  sudo rm /etc/systemd/system/hopworld-router.service &amp;&amp;
+  sudo rm -r /opt/hopworld-router-legacy &amp;&amp;
+  sudo systemctl daemon-reload
+fi</pre></div></details>
+    </section>
+  </main>
+  <footer class="shell footer"><span>HopWorld Router</span><a href="https://github.com/ZaoHub/HopWorld-Router">源码与文档</a></footer>
+</body>
+</html>

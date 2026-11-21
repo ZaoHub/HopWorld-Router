@@ -22,3 +22,7 @@ build/
 *.sqlite
 *.sqlite3
 *.db
+
+# Track the buildless installer site and its downloadable bundle.
+!/landing/dist/
+!/landing/dist/**

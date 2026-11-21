@@ -85,6 +85,8 @@ HopWorld Router 同时做两件事：**把运行本服务的机器网络做成�
 
 ## 安装教程
 
+Linux 在线安装落地页、终端命令和本机工具见 [安装工具](landing/README.md)。可直接 [下载本机安装器 ZIP](landing/dist/hopworld-router-installer.zip)。
+
 ### V1 部署端口与安全组
 
 只用管理后台时，入站只需实际的 SSH 端口（通常为 TCP 22）。后台默认监听 `127.0.0.1:8080`，通过 SSH 隧道访问。按实际启用的功能设置云安全组、主机防火墙及 NAT 转发。
