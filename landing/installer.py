@@ -27,7 +27,7 @@ FILES = {
     "/commands.html": ("commands.html", "text/html; charset=utf-8"),
     "/commands.js": ("commands.js", "application/javascript; charset=utf-8"),
     "/site.css": ("site.css", "text/css; charset=utf-8"),
-    "/site.js": ("site.js", "application/javascript; charset=utf-8"),
+    "/install-form.js": ("install-form.js", "application/javascript; charset=utf-8"),
     "/logo.png": ("logo.png", "image/png"),
 }
 INSTALL = "set -eo pipefail; curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/v1.0.2/deploy/install.sh | bash"

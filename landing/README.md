@@ -6,7 +6,7 @@
 
 创建权限为 `0600` 的 `/etc/hopworld-page-installer.env`，写入 `INSTALL_OPERATOR_TOKEN=<令牌>`。通过 `openssl rand -hex 32` 生成令牌，并通过受信渠道分发。启动安装服务，在对应域名的 Nginx HTTPS `server` 块包含 `deploy/nginx-location.conf`。
 
-在 `dist/install-config.json` 的 `apiOrigin` 中设置网关的 HTTPS 根地址。将修改合并到 `main` 后，GitHub Pages 会发布配置。更换令牌时，更新服务环境中的 `INSTALL_OPERATOR_TOKEN` 并重启安装服务。公网网页会检查网关是否就绪，启用 SSH 密码、安装令牌和主机指纹输入。安装网关只连接公网单播 IP，先匹配指纹，再提交 SSH 密码。网页和后端均不保存 SSH 密码。网页上可以查看输出和安装退出状态。
+在 `dist/install-config.json` 的 `apiOrigin` 中设置网关的 HTTPS 根地址。将修改合并到 `main` 后，GitHub Pages 会发布配置。更换令牌时，更新服务环境中的 `INSTALL_OPERATOR_TOKEN` 并重启安装服务。网页显示 SSH 表单，点击安装后按需弹出确认框。访问令牌仅留在当前打开的页面中，成功安装后的主机指纹按 IP 和端口保存在浏览器中。安装网关只连接公网单播 IP，先匹配指纹，再提交 SSH 密码。网页和后端均不保存 SSH 密码。网页上可以查看输出和安装退出状态。
 
 ## 本机独立安装器
 

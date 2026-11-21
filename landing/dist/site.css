@@ -129,3 +129,10 @@ pre { background: #edf2fa; color: #1c3155; border-radius: 8px; padding: 12px; wh
 .entry-body p:not(:first-child) { margin-top: 13px; }
 .entry-body pre { margin: 0 0 8px; }
 @media (max-width: 480px) { .catalog { padding-block: 30px; } .site-header .nav-links a[href="#install-commands"] { display: none; } }
+
+.ssh-dialog { width: min(460px, calc(100% - 32px)); color: var(--ink); }
+.ssh-dialog::backdrop { background: #13223a90; }
+.ssh-dialog h3 { margin-bottom: 8px; }
+.ssh-dialog .actions { justify-content: flex-end; margin-bottom: 0; }
+.ssh-dialog .quiet { font-weight: 400; overflow-wrap: anywhere; }
+#installer-retry { margin-bottom: 14px; }

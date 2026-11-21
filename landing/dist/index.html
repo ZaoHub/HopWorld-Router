@@ -7,7 +7,7 @@
   <title>安装 HopWorld-Router</title>
   <link rel="icon" href="logo.png" type="image/png">
   <link rel="stylesheet" href="site.css">
-  <script src="site.js" defer></script>
+  <script src="install-form.js" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -49,24 +49,43 @@
       </div>
       <div class="install-grid">
         <div class="card install-card">
-          <div class="card-title"><h3>服务器连接</h3><span id="connection-mode" class="mode">检测安装环境</span></div>
+          <div class="card-title"><h3>服务器连接</h3><span id="connection-mode" class="mode">网页安装</span></div>
 
           <p id="installer-availability" class="quiet" role="status">正在检查在线安装服务…</p>
+          <button type="button" class="button secondary" id="installer-retry" hidden>重试连接</button>
           <noscript><p>网页安装需要启用 JavaScript。你也可以使用下方的终端安装命令。</p></noscript>
 
-          <form id="install-form" method="post" hidden>
+          <form id="install-form" method="post">
             <div class="fields">
-              <label class="grow">服务器 IP 或域名<input name="host" placeholder="例如 203.0.113.10" required maxlength="253" spellcheck="false" autocapitalize="none"></label>
-              <label class="narrow">SSH 端口<input name="port" type="number" min="1" max="65535" step="1" value="22" required></label>
+              <label class="full"><span id="host-label">服务器公网 IP</span><input name="host" placeholder="例如 203.0.113.10" required maxlength="253" spellcheck="false" autocapitalize="none"></label>
+              <label>SSH 端口<input name="port" type="number" min="1" max="65535" step="1" value="22" required></label>
               <label>SSH 账号<input name="username" value="root" required maxlength="64" spellcheck="false" autocapitalize="none" autocomplete="off"></label>
-              <label>验证方式<select name="method"><option value="password">SSH 密码</option><option value="agent">本机 SSH Agent</option></select></label>
-              <label class="full" id="operator-field" hidden>安装服务访问令牌<input name="operatorToken" type="password" autocomplete="off" pattern="[0-9a-f]{64}" maxlength="64" disabled></label>
+              <label class="full">验证方式<select name="method"><option value="password">密码验证</option><option value="agent" hidden disabled>本机 SSH Agent</option></select></label>
               <label class="full" id="password-field">SSH 密码<span class="password-wrap"><input name="password" type="password" required maxlength="512" autocomplete="off"><button type="button" class="text-button" id="password-toggle" aria-pressed="false">显示</button></span></label>
-              <label class="full">SSH 主机指纹<input name="fingerprint" placeholder="SHA256:…" required spellcheck="false" maxlength="50" autocomplete="off" aria-describedby="fingerprint-hint"></label>
             </div>
-            <p id="fingerprint-hint" class="quiet">从服务器控制台或已信任的 SSH 会话获取 SHA256 指纹。</p>
-            <div class="actions"><button type="submit" class="button primary" id="install-submit">立即安装到服务器</button></div>
+            <div class="actions"><button type="submit" class="button primary" id="install-submit" disabled>立即安装到服务器</button></div>
           </form>
+
+          <dialog id="ssh-confirmation" class="card ssh-dialog" aria-labelledby="ssh-confirmation-title">
+            <form method="dialog" id="ssh-confirmation-form">
+              <h3 id="ssh-confirmation-title">确认 SSH 安装</h3>
+              <p id="confirmation-target" class="quiet"></p>
+              <div class="fields">
+                <label class="full" id="operator-field">安装服务访问令牌
+                  <input name="operatorToken" type="password" autocomplete="off" pattern="[0-9a-f]{64}" maxlength="64" aria-describedby="token-hint">
+                  <span class="quiet" id="token-hint">当前页面打开期间只需输入一次。</span>
+                </label>
+                <label class="full" id="fingerprint-field">SSH 主机指纹
+                  <input name="fingerprint" placeholder="SHA256:…" pattern="SHA256:[A-Za-z0-9+\/]{43}" spellcheck="false" maxlength="50" autocomplete="off" aria-describedby="fingerprint-hint">
+                  <span class="quiet" id="fingerprint-hint">从服务器控制台或已信任的 SSH 会话获取，安装成功后会记住指纹。</span>
+                </label>
+              </div>
+              <div class="actions">
+                <button type="button" class="button secondary" id="cancel-confirmation">取消</button>
+                <button type="submit" class="button primary" value="confirm">确认并安装</button>
+              </div>
+            </form>
+          </dialog>
 
           <div id="installation-result" hidden>
             <p id="installation-status" role="status" class="run-status"></p>
