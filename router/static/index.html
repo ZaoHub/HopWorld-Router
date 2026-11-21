@@ -9,11 +9,34 @@
   <link rel="apple-touch-icon" href="logo.png">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="v1.css">
+  <!-- DASHBOARD SCRIPTS -->
   <script src="qrcode.js" defer></script>
   <script src="app.js" defer></script>
   <script src="v1.js" defer></script>
 </head>
 <body>
+  <dialog id="first-login-dialog" class="v1-dialog" aria-labelledby="first-login-title" aria-describedby="first-login-description">
+    <form id="first-login-form">
+      <header><h2 id="first-login-title">欢迎登录，先设置新密码</h2></header>
+      <div class="v1-core-profile-body">
+        <p id="first-login-description" class="field-hint">你已使用默认密码登录。请设置一个新密码，保护你的管理后台。</p>
+        <label class="v1-core-profile-field">
+          新密码
+          <input id="first-login-password" name="new_password" type="password" autocomplete="new-password" minlength="6" maxlength="256" required autofocus aria-describedby="first-login-hint first-login-error">
+        </label>
+        <p id="first-login-hint" class="field-hint">至少 6 个字符，字符类型不限。</p>
+        <label class="v1-core-profile-field">
+          确认新密码
+          <input id="first-login-confirm" type="password" autocomplete="new-password" minlength="6" maxlength="256" required aria-describedby="first-login-error">
+        </label>
+        <p id="first-login-error" class="first-login-error" role="alert" hidden></p>
+        <div class="first-login-actions">
+          <button type="button" class="secondary" id="first-login-logout">退出登录</button>
+          <button type="submit" id="first-login-save">保存并进入后台</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
   <header class="topbar">
     <div class="topbar-inner">
       <a class="brand" href="#overview" aria-label="HopWorld Router 首页"><img class="brand-mark" src="logo.png" width="40" height="40" alt=""><span class="brand-name">HopWorld-Router <b>V1</b><small>多协议网络接入与节点管理平台</small></span></a>

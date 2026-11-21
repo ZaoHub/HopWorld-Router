@@ -2853,12 +2853,21 @@ def make_handler(store, password, public_subscription=None, *, request_restart=N
                 page = page.replace(b'data-initial-setup="false"', b'data-initial-setup="true"', 1)
             self.reply(200, page, 'text/html; charset=utf-8', PAGE_HEADERS)
 
-        def authorized(self):
+        def authorized(self, *, allow_initial=False):
+            self.initial_session = False
             session = self.session_id()
             if session:
                 with sessions_lock:
-                    if sessions.get(session, 0) > time.monotonic():
-                        return True
+                    expires, initial = sessions.get(session, (0, False))
+                if expires > time.monotonic():
+                    if initial and not self.local_initialization():
+                        self.json(403, {'error': '请通过本机地址或 SSH 隧道完成首次登录'})
+                        return False
+                    if initial and not allow_initial:
+                        self.json(403, {'error': '请先修改默认密码'})
+                        return False
+                    self.initial_session = initial
+                    return True
             auth = self.headers.get('Authorization', '')
             try:
                 kind, encoded = auth.split(' ', 1)
@@ -2878,27 +2887,40 @@ def make_handler(store, password, public_subscription=None, *, request_restart=N
                     self.reply(401, 'Authentication required', 'text/plain; charset=utf-8', {'WWW-Authenticate': 'Basic realm="HopWorld Router", charset="UTF-8"'})
             return ok
 
+        def create_session(self, *, initial=False, replace_all=False):
+            token = secrets.token_urlsafe(32)
+            now = time.monotonic()
+            seconds = 15 * 60 if initial else SESSION_SECONDS
+            with sessions_lock:
+                if replace_all:
+                    sessions.clear()
+                else:
+                    sessions.pop(self.session_id(), None)
+                    for key in [key for key, (expires, _) in sessions.items() if expires <= now]:
+                        sessions.pop(key)
+                    if len(sessions) >= 256:
+                        sessions.pop(next(iter(sessions)))
+                sessions[token] = (now + seconds, initial)
+            return self.reply(200, '{"ok":true}', headers={'Set-Cookie': self.session_cookie(token, seconds)})
+
         def sign_in(self, data):
             with account_lock:
                 account = self.admin_account()
                 if not self.credentials_match(data.get('username'), data.get('password'), account):
                     return self.json(401, {'error': '账号或密码不正确'})
-                if self.needs_initial_password(account):
-                    if not self.local_initialization():
-                        return self.json(403, {'error': '请通过本机地址或 SSH 隧道完成首次登录'})
-                    if 'new_password' not in data:
-                        return self.json(200, {'setup_required': True})
-                    store.initialize_admin_password(data['new_password'])
-                token = secrets.token_urlsafe(32)
-                now = time.monotonic()
-                with sessions_lock:
-                    sessions.pop(self.session_id(), None)
-                    for key in [key for key, expires in sessions.items() if expires <= now]:
-                        sessions.pop(key)
-                    if len(sessions) >= 256:
-                        sessions.pop(next(iter(sessions)))
-                    sessions[token] = now + SESSION_SECONDS
-            return self.reply(200, '{"ok":true}', headers={'Set-Cookie': self.session_cookie(token, SESSION_SECONDS)})
+                initial = self.needs_initial_password(account)
+                if initial and not self.local_initialization():
+                    return self.json(403, {'error': '请通过本机地址或 SSH 隧道完成首次登录'})
+                return self.create_session(initial=initial)
+
+        def complete_initial_password(self, data):
+            with account_lock:
+                if not self.authorized(allow_initial=True):
+                    return
+                if not self.initial_session or not self.needs_initial_password(self.admin_account()):
+                    return self.json(403, {'error': '首次密码设置已结束，请重新登录或在系统设置中修改密码'})
+                store.initialize_admin_password(data.get('new_password'))
+                return self.create_session(replace_all=True)
 
         def change_admin_account(self, data):
             if not (self.secure_management_request() or self.local_initialization()):
@@ -2995,7 +3017,7 @@ def make_handler(store, password, public_subscription=None, *, request_restart=N
                 if logo.is_file():
                     return self.reply(200, logo.read_bytes(), 'image/png')
             self.browser_login = path == '/' and 'text/html' in self.headers.get('Accept', '')
-            if not self.authorized(): return
+            if not self.authorized(allow_initial=path in ('/', '/style.css', '/v1.css', '/first-login.js')): return
             if path.startswith(SECURITY_API):
                 try:
                     view = store.security.get(path.removeprefix(SECURITY_API))
@@ -3089,7 +3111,15 @@ def make_handler(store, password, public_subscription=None, *, request_restart=N
                 return self.reply(200, certificate, 'application/x-pem-file', {
                     'Content-Disposition': f'attachment; filename="{domain}.pem"',
                 })
-            if path == '/': return self.reply(200, (STATIC / 'index.html').read_bytes(), 'text/html; charset=utf-8', PAGE_HEADERS)
+            if path == '/':
+                page = (STATIC / 'index.html').read_bytes()
+                if self.initial_session:
+                    start = page.index(b'  <!-- DASHBOARD SCRIPTS -->')
+                    end = page.index(b'</head>', start)
+                    page = page[:start] + b'  <script src="/first-login.js" defer></script>\n' + page[end:]
+                return self.reply(200, page, 'text/html; charset=utf-8', PAGE_HEADERS)
+            if path == '/first-login.js':
+                return self.reply(200, (STATIC / 'first-login.js').read_bytes(), 'application/javascript; charset=utf-8')
             if path == '/v1.js': return self.reply(200, (STATIC / 'v1.js').read_bytes(), 'application/javascript; charset=utf-8')
             if path == '/v1.css': return self.reply(200, (STATIC / 'v1.css').read_bytes(), 'text/css; charset=utf-8')
             if path == '/app.js': return self.reply(200, (STATIC / 'app.js').read_bytes(), 'application/javascript; charset=utf-8')
@@ -3231,7 +3261,8 @@ def make_handler(store, password, public_subscription=None, *, request_restart=N
                 return self.reply(404, 'Not found', 'text/plain; charset=utf-8')
             if not self.management_permitted(): return
             path = urlsplit(self.path).path
-            if path != '/login' and not self.authorized(): return
+            initial_paths = ('/api/v1/management/initial-password', '/logout')
+            if path != '/login' and not self.authorized(allow_initial=path in initial_paths): return
             # Same-origin CSRF check: browser Origin must match this request's Host.
             origin = self.headers.get('Origin', '')
             host = self.headers.get('Host', '')
@@ -3250,6 +3281,8 @@ def make_handler(store, password, public_subscription=None, *, request_restart=N
                     return self.json(*result) if result is not None else self.json(404, {'error': '请求不存在'})
                 if path == '/login':
                     return self.sign_in(data)
+                if path == '/api/v1/management/initial-password':
+                    return self.complete_initial_password(data)
                 if path == '/api/v1/management/account':
                     return self.change_admin_account(data)
                 if path == '/api/v1/public-subscription' and public_subscription:

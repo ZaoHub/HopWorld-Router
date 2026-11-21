@@ -170,45 +170,64 @@ class ManagementAccessTests(unittest.TestCase):
                 self.assertTrue(json.load(response)['active']['https'])
             self.assertTrue(store.management_access_settings()['https'])
 
-    def test_default_login_initializes_password_and_supports_logout(self):
+    def test_default_login_requires_password_change_in_the_dashboard(self):
         with router('admin') as (store, _access, root):
             with request(root, '/', auth=None, headers={'Accept': 'text/html'}) as response:
-                self.assertIn(b'data-initial-setup="true"', response.read())
+                page = response.read()
+                self.assertIn(b'data-initial-setup="true"', page)
+                self.assertNotIn(b'name="new_password"', page)
             public_headers = {'Host': 'router.example.com', 'Origin': 'https://router.example.com'}
-            with request(root, '/login', auth=None, headers=public_headers) as response:
-                self.assertIn(b'data-initial-setup="false"', response.read())
+            default = {'username': 'admin', 'password': 'admin'}
             with self.assertRaises(HTTPError) as unauthorized:
                 request(root, '/api/v1/settings', auth='admin')
             self.assertEqual(unauthorized.exception.code, 401)
-            default = {'username': 'admin', 'password': 'admin'}
+            with self.assertRaises(HTTPError) as public_login:
+                request(root, '/login', default, auth=None, headers=public_headers)
+            self.assertEqual(public_login.exception.code, 403)
+
             with request(root, '/login', default, auth=None) as response:
-                self.assertTrue(json.load(response)['setup_required'])
-                self.assertIsNone(response.headers.get('Set-Cookie'))
-            with self.assertRaises(HTTPError) as cross_origin:
-                request(root, '/login', {**default, 'new_password': PASSWORD}, auth=None,
-                        headers={'Origin': 'http://invalid.local'})
-            self.assertEqual(cross_origin.exception.code, 403)
-            new_password = '密:😊 码!'
-            with self.assertRaises(HTTPError) as public_setup:
-                request(root, '/login', {**default, 'new_password': new_password}, auth=None, headers=public_headers)
-            self.assertEqual(public_setup.exception.code, 403)
-            with self.assertRaises(HTTPError) as too_short:
-                request(root, '/login', {**default, 'new_password': new_password[:-1]}, auth=None)
-            self.assertEqual(too_short.exception.code, 400)
+                cookie = SimpleCookie(response.headers['Set-Cookie'])['hopworld_session']
+                self.assertTrue(json.load(response)['ok'])
+            self.assertTrue(cookie['httponly'])
+            self.assertEqual(cookie['samesite'], 'Strict')
+            limited_headers = {'Cookie': 'hopworld_session=' + cookie.value}
+            with request(root, '/', auth=None, headers=limited_headers) as response:
+                page = response.read()
+                self.assertIn(b'first-login-dialog', page)
+                self.assertIn(b'src="/first-login.js"', page)
+                self.assertNotIn(b'src="app.js"', page)
+            for path in ('/style.css', '/v1.css', '/first-login.js'):
+                request(root, path, auth=None, headers=limited_headers).close()
+            change = '/api/v1/management/initial-password'
+            for path, data, headers in (
+                ('/api/status', None, limited_headers),
+                ('/api/sources', {}, limited_headers),
+                ('/', None, {**limited_headers, **public_headers}),
+                (change, {'new_password': PASSWORD}, {**limited_headers, 'Origin': 'http://invalid.local'}),
+            ):
+                with self.assertRaises(HTTPError) as restricted:
+                    request(root, path, data, auth=None, headers=headers)
+                self.assertEqual(restricted.exception.code, 403)
             self.assertFalse(store.admin_password_record())
-            with request(root, '/login', {**default, 'new_password': new_password}, auth=None) as response:
-                cookie = SimpleCookie(response.headers['Set-Cookie'])
-            self.assertTrue(store.admin_password_record())
-            self.assertNotIn(new_password, store.admin_password_record())
-            with request(root, '/login', auth=None) as response:
-                self.assertIn(b'data-initial-setup="false"', response.read())
+
+            new_password = '密:😊 码!'
+            with self.assertRaises(HTTPError) as too_short:
+                request(root, change, {'new_password': new_password[:-1]}, auth=None, headers=limited_headers)
+            self.assertEqual(too_short.exception.code, 400)
+            with request(root, change, {'new_password': new_password}, auth=None, headers=limited_headers) as response:
+                full_cookie = SimpleCookie(response.headers['Set-Cookie'])['hopworld_session']
+            self.assertNotEqual(full_cookie.value, cookie.value)
+            self.assertTrue(matches_record(store.admin_password_record(), new_password))
+            with self.assertRaises(HTTPError) as old_session:
+                request(root, '/api/status', auth=None, headers=limited_headers)
+            self.assertEqual(old_session.exception.code, 401)
             with request(root, '/api/v1/settings', auth=new_password) as response:
                 self.assertEqual(response.status, 200)
-            self.assertTrue(cookie['hopworld_session']['httponly'])
-            self.assertEqual(cookie['hopworld_session']['samesite'], 'Strict')
-            headers = {'Cookie': 'hopworld_session=' + cookie['hopworld_session'].value}
-            with request(root, '/api/v1/settings', auth=None, headers=headers) as response:
-                self.assertEqual(response.status, 200)
+            headers = {'Cookie': 'hopworld_session=' + full_cookie.value}
+            with request(root, '/', auth=None, headers=headers) as response:
+                page = response.read()
+                self.assertIn(b'src="app.js"', page)
+                self.assertNotIn(b'src="/first-login.js"', page)
             request(root, '/logout', {}, auth=None, headers=headers).close()
             with self.assertRaises(HTTPError) as logged_out:
                 request(root, '/api/v1/settings', auth=None, headers=headers)
