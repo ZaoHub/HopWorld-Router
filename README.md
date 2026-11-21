@@ -8,7 +8,7 @@ HopWorld Router 是独立于 [HopWorld macOS 应用](https://github.com/ZaoHub/H
 
 旧版源码归档见 [V0](V0/README.md)（V1 开发前的基线 `e9f1d7a`）。 加密 DNS 配置、隔离出口实验与验收进度见 [V1 网络安全与验收](docs/V1网络安全与验收.md)。
 
-[打开安装落地页](https://hopworld-router-setup.tastygem65536.chatgpt.site/) · [查看 V1 放行端口表](#v1-部署端口与安全组)
+[打开安装落地页](https://zaohub.github.io/HopWorld-Router/) · [查看 V1 放行端口表](#v1-部署端口与安全组)
 
 ## 当前可用
 
@@ -85,7 +85,7 @@ HopWorld Router 同时做两件事：**把运行本服务的机器网络做成�
 
 ## 安装教程
 
-- [打开 HopWorld-Router 安装落地页](https://hopworld-router-setup.tastygem65536.chatgpt.site/) · [终端命令大全](https://hopworld-router-setup.tastygem65536.chatgpt.site/commands.html)（私有站点，需要授权账号登录）
+- [打开 HopWorld-Router 安装落地页](https://zaohub.github.io/HopWorld-Router/) · [终端命令大全](https://zaohub.github.io/HopWorld-Router/commands.html)
 - [在线安装工具说明](landing/README.md) · [下载本机安装器 ZIP](landing/dist/hopworld-router-installer.zip)
 
 ### V1 部署端口与安全组
