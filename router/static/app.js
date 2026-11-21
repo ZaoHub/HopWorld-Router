@@ -10,73 +10,6 @@ let localTrafficTimer;
 let localTrafficEnabled = false;
 let localTrafficGeneration = 0;
 let localTrafficSample = null;
-const selectedGroups = new Set();
-const seenGroups = new Set();
-let groupSignature = '';
-let probeGroupsEditing = false;
-let probeGroupFilter = '';
-let cachedProbeGroups = [];
-function renderProbeGroupsList(groups) {
-  cachedProbeGroups = groups;
-  const container = $('#probe-groups');
-  if (!container) return;
-  container.replaceChildren();
-  const q = probeGroupFilter.trim().toLowerCase();
-  const filtered = groups.filter(g => !q || g.name.toLowerCase().includes(q));
-  if (!groups.length) {
-    const empty = document.createElement('p');
-    empty.className = 'group-list-empty';
-    empty.textContent = '暂无订阅组';
-    container.append(empty);
-    return;
-  }
-  if (!filtered.length) {
-    const empty = document.createElement('p');
-    empty.className = 'group-list-empty';
-    empty.textContent = '无匹配的订阅组';
-    container.append(empty);
-    return;
-  }
-  filtered.forEach((group, index) => {
-    const row = document.createElement('div');
-    row.className = 'group-list-row';
-    row.setAttribute('role', 'listitem');
-    if (!selectedGroups.has(group.id)) row.classList.add('is-excluded');
-    const num = document.createElement('span');
-    num.className = 'group-list-index';
-    num.textContent = String(index + 1);
-    const name = document.createElement('span');
-    name.className = 'group-list-name';
-    name.textContent = group.name;
-    row.append(num, name);
-    if (probeGroupsEditing) {
-      const label = document.createElement('label');
-      label.className = 'group-list-check';
-      const input = document.createElement('input');
-      input.type = 'checkbox';
-      input.checked = selectedGroups.has(group.id);
-      input.setAttribute('aria-label', `将「${group.name}」加入批量测试`);
-      input.onchange = () => {
-        if (input.checked) selectedGroups.add(group.id);
-        else selectedGroups.delete(group.id);
-        row.classList.toggle('is-excluded', !input.checked);
-      };
-      label.append(input);
-      row.append(label);
-    } else {
-      const tag = document.createElement('span');
-      tag.className = 'group-list-tag';
-      tag.textContent = selectedGroups.has(group.id) ? '参与测试' : '跳过';
-      row.append(tag);
-    }
-    container.append(row);
-  });
-}
-function syncProbeGroupsEditUi() {
-  const btn = $('#probe-groups-edit');
-  if (btn) btn.textContent = probeGroupsEditing ? '完成' : '编辑';
-  renderProbeGroupsList(cachedProbeGroups);
-}
 let ikev2Editing = false;
 let refreshSeq = 0;
 let ikev2LiveSeq = 0;
@@ -87,16 +20,15 @@ let publicUrls = {};
 function applyPublicUrls(data) {
   publicUrls = data.public_urls || {};
   const token = data.token || routerToken;
-  const subscription = publicUrls.subscription_url
-    || (token ? `${location.origin}/s/${token}` : '');
+  const subscription = publicUrls.public_subscription_url || '';
   const ikev2Profile = data.ikev2?.enabled
     ? (publicUrls.ikev2_profile_url || `${location.origin}/s/${token}/ikev2.mobileconfig`)
     : '';
   return { subscription, ikev2Profile };
 }
-let lastProbeTarget = 'google';
 const PROBE_TARGET_GROUPS = {
   general: {
+    label: '通用',
     targets: [
       { value: 'google', label: 'Google' },
       { value: 'youtube', label: 'YouTube' },
@@ -110,6 +42,7 @@ const PROBE_TARGET_GROUPS = {
     ],
   },
   ai: {
+    label: 'AI 应用',
     targets: [
       { value: 'openai', label: 'ChatGPT' },
       { value: 'claude', label: 'Claude' },
@@ -121,6 +54,7 @@ const PROBE_TARGET_GROUPS = {
     ],
   },
   social: {
+    label: '社交媒体',
     targets: [
       { value: 'tiktok', label: 'TikTok' },
       { value: 'twitter', label: 'X' },
@@ -135,34 +69,23 @@ const PROBE_TARGET_GROUPS = {
     ],
   },
 };
-function populateProbeTargets(preserve = true) {
-  const category = $('#test-target-category')?.value || 'general';
-  const select = $('#test-target');
-  if (!select) return;
-  const group = PROBE_TARGET_GROUPS[category] || PROBE_TARGET_GROUPS.general;
-  const prev = preserve ? (select.value || lastProbeTarget) : '';
-  select.replaceChildren();
-  for (const item of group.targets) {
-    const option = document.createElement('option');
-    option.value = item.value;
-    option.textContent = item.label;
-    select.append(option);
-  }
-  const pick = group.targets.some(t => t.value === prev) ? prev : group.targets[0]?.value;
-  if (pick) {
-    select.value = pick;
-    lastProbeTarget = pick;
+function populateProbeTargets(select) {
+  for (const {label, targets} of Object.values(PROBE_TARGET_GROUPS)) {
+    const group = document.createElement('optgroup');
+    group.label = label;
+    for (const item of targets) group.append(new Option(item.label, item.value));
+    select.append(group);
   }
 }
-function syncProbeTargetCategoryFromValue(value) {
-  const categoryEl = $('#test-target-category');
-  if (!categoryEl || !value) return;
-  for (const [key, group] of Object.entries(PROBE_TARGET_GROUPS)) {
-    if (group.targets.some(t => t.value === value)) {
-      categoryEl.value = key;
-      break;
-    }
-  }
+function renderDefaultProbeTarget(value) {
+  const select = $('#test-target');
+  const name = Array.from(select.options).find(option => option.value === value)?.text || 'Google';
+  const label = '系统默认 · ' + name;
+  if (select.options[0].text !== label) select.options[0].text = label;
+}
+function probeTargetPayload() {
+  const target = $('#test-target').value;
+  return target ? {target} : {};
 }
 function endIkev2Edit() { ikev2Editing = false; }
 function syncIkev2GuideFields(ike) {
@@ -289,13 +212,17 @@ function isPublicHostIp(value) {
   return v.includes(':') && /^[0-9a-f:.]+$/i.test(v);
 }
 function syncLocalHostDdnsHint() {
-  const ddnsOn = !!$('#local-ddns')?.checked;
+  const ddnsOn = $('#local-host-mode').value === 'ddns';
   const input = $('#local-host');
   const hint = $('#local-host-ddns-hint');
   if (!input || !hint) return;
   const show = ddnsOn && isPublicHostIp(input.value);
   hint.hidden = !show;
   input.classList.toggle('has-inline-hint', show);
+  const auto = $('#local-host-mode').value === 'auto';
+  const check = $('#local-check-address');
+  check.hidden = !auto && !ddnsOn && isPublicHostIp(input.value);
+  check.textContent = auto ? '检查公网 IP' : '验证域名绑定';
 }
 function renderLocalDnsVerify(verify) {
   const el = $('#local-dns-verify-status');
@@ -359,8 +286,8 @@ function renderLocalDnsHints(hints, verify) {
 async function fetchLocalDnsHintsPreview() {
   const params = new URLSearchParams({
     public_host: $('#local-host')?.value?.trim() || '',
-    auto_public_host: $('#local-auto-host')?.checked ? '1' : '0',
-    ddns_enabled: $('#local-ddns')?.checked ? '1' : '0',
+    auto_public_host: $('#local-host-mode').value === 'auto' ? '1' : '0',
+    ddns_enabled: $('#local-host-mode').value === 'ddns' ? '1' : '0',
     public_host_prefer: $('#local-host-prefer')?.value || 'ipv4',
   });
   try {
@@ -375,8 +302,8 @@ async function runLocalDnsVerify() {
   const params = new URLSearchParams({
     force: '1',
     public_host: $('#local-host')?.value?.trim() || '',
-    auto_public_host: $('#local-auto-host')?.checked ? '1' : '0',
-    ddns_enabled: $('#local-ddns')?.checked ? '1' : '0',
+    auto_public_host: $('#local-host-mode').value === 'auto' ? '1' : '0',
+    ddns_enabled: $('#local-host-mode').value === 'ddns' ? '1' : '0',
     public_host_prefer: $('#local-host-prefer')?.value || 'ipv4',
   });
   if (button) button.disabled = true;
@@ -397,7 +324,13 @@ function humanizeAcmeError(text) {
   return msg;
 }
 function formatAcmeLine(acme) {
+  if (acme?.source === 'manual') {
+    if (acme.state === 'expired') return '手动证书已过期，请重新导入';
+    return acme.certificate_valid ? `手动证书 · 剩余约 ${acme.days_left} 天` : '手动证书不可用，请重新导入';
+  }
+  if (acme?.state === 'expired') return `${LE_LABEL}：证书已过期${acme.error ? ' · ' + humanizeAcmeError(acme.error) : ''}`;
   if (!acme) return '';
+  if (acme.certificate_valid && acme.error) return `${LE_LABEL}：原证书仍有效 · 续签异常（${humanizeAcmeError(acme.error)}）`;
   if (acme.error) return `${LE_LABEL}：未签发（${humanizeAcmeError(acme.error)}）`;
   if (acme.days_left != null && acme.state === 'ok') {
     const via = acme.challenge_effective ? ` · ${acme.challenge_effective}` : '';
@@ -427,7 +360,7 @@ function renderPublicAccessHints(acme, urls) {
 function syncAcmeFwHint(acme, showHostControls) {
   const wrap = $('#local-acme-fw-wrap');
   if (!wrap) return;
-  const acmeOn = !!$('#local-acme')?.checked || !!acme?.enabled;
+  const acmeOn = !!$('#local-acme')?.checked || !!acme?.automatic;
   wrap.hidden = !acmeOn;
   if (!acmeOn) return;
   let mode = ($('#local-acme-challenge')?.value || 'auto').trim();
@@ -483,14 +416,29 @@ function showLocalProxyProtocol() {
     udp === 'unsupported' ? 'HTTP 代理不支持 UDP 转发。' : '请重新扫描并实际测试 UDP。';
   text.textContent = `TCP：${tcp} · UDP：${labels[udp] || labels.unknown}。${option?.dataset.scanned ? 'TCP 扫描验证了本机回环连接。' : ''}${detail}`;
 }
-function syncLocalForm(local, acme) {
+function syncFixedUpstream(local, nodes) {
+  const select = $('#local-upstream');
+  if (nodes) {
+    const current = localEditing ? select.value : local.upstream_id || '';
+    select.replaceChildren(new Option('请选择已启用的上游节点', ''));
+    for (const node of nodes) {
+      if (!node.local && node.enabled) select.add(new Option(node.title + ' · ' + node.protocol.toUpperCase(), node.id));
+    }
+    if (current && ![...select.options].some(option => option.value === current)) {
+      select.add(new Option('已绑定的上游当前不可用', current));
+    }
+    select.value = current;
+  }
+  $('#local-fixed-settings').hidden = $('#local-egress-mode').value !== 'fixed';
+  select.disabled = !!local?.enabled && !localEditing;
+}
+function syncLocalForm(local, acme, preserveFields = false) {
   acme = acme || {};
-  if (local && !localEditing) {
+  if (local && !localEditing && !preserveFields) {
     $('#local-name').value = local.name || '本地网络';
     if (local.public_host) $('#local-host').value = local.public_host;
     $('#local-port').value = local.port || 8443;
-    if ($('#local-auto-host')) $('#local-auto-host').checked = !!local.auto_public_host;
-    if ($('#local-ddns')) $('#local-ddns').checked = !!local.ddns_enabled;
+    $('#local-host-mode').value = local.ddns_enabled ? 'ddns' : local.auto_public_host ? 'auto' : 'manual';
     if ($('#local-host-prefer')) $('#local-host-prefer').value = local.public_host_prefer || 'ipv4';
     if (local.egress_mode) $('#local-egress-mode').value = local.egress_mode;
     if (local.auto_target) $('#local-auto-target').value = local.auto_target;
@@ -504,6 +452,7 @@ function syncLocalForm(local, acme) {
   }
   const localEditable = !local?.enabled || localEditing;
   $('#local-egress-mode').disabled = !localEditable;
+  syncFixedUpstream(local);
   $('#local-auto-target').disabled = !localEditable;
   $('#local-auto-interval').disabled = !localEditable;
   $('#local-proxy-port').disabled = !localEditable;
@@ -514,13 +463,12 @@ function syncLocalForm(local, acme) {
   $('#local-auto-settings').hidden = $('#local-egress-mode').value !== 'auto';
   const readOnlyView = !!local?.enabled && !localEditing;
   const showHostControls = !readOnlyView;
-  const autoHost = !!$('#local-auto-host')?.checked;
-  const ddnsOn = !!$('#local-ddns')?.checked;
+  const autoHost = $('#local-host-mode').value === 'auto';
+  const ddnsOn = $('#local-host-mode').value === 'ddns';
   const hostSection = $('#local-host-section');
   if (hostSection) {
     hostSection.hidden = !showHostControls;
     hostSection.classList.toggle('is-on', autoHost || ddnsOn);
-    hostSection.classList.toggle('is-off', !autoHost && !ddnsOn);
   }
   const hostSummary = $('#local-host-summary');
   const summaryMode = $('#local-host-summary-mode');
@@ -531,6 +479,7 @@ function syncLocalForm(local, acme) {
         ipv4: '优先 IPv4',
         ipv6: 'IPv6',
         ipv4_first: 'IPv4，失败再用 IPv6',
+        dual: 'IPv4 + IPv6',
       };
       const prefer = preferLabels[local.public_host_prefer] || '优先 IPv4';
       if (local.ddns_enabled) summaryMode.textContent = '固定域名 · 自动 DNS';
@@ -550,20 +499,21 @@ function syncLocalForm(local, acme) {
   hostInput.readOnly = !hostEditable;
   hostInput.classList.toggle('is-readonly', !hostEditable);
   hostInput.required = !autoHost || ddnsOn;
-  $('#local-auto-host')?.toggleAttribute('disabled', !localEditable);
-  $('#local-ddns')?.toggleAttribute('disabled', !localEditable);
+  $('#local-host-mode').disabled = !localEditable;
   const prefer = $('#local-host-prefer');
-  if (prefer) prefer.disabled = !localEditable || (!autoHost && !ddnsOn);
-  $('#local-edit').hidden = !local?.enabled || localEditing;
-  $('#local-save').hidden = !localEditing || !local?.enabled;
-  $('#local-cancel').hidden = !localEditing;
+  prefer.options[3].disabled = autoHost;
+  if (autoHost && prefer.value === 'dual') prefer.value = 'ipv4';
+  prefer.disabled = !localEditable;
   const on = !!local?.enabled;
+  $('#local-edit').hidden = !local?.enabled || localEditing;
+  $('#local-save').hidden = !localEditing;
+  $('#local-cancel').hidden = !localEditing;
   const localToggle = $('#local-toggle');
-  localToggle.hidden = localEditing;
+  localToggle.hidden = on && localEditing;
   localToggle.textContent = on ? '停用' : '启用';
   localToggle.classList.toggle('primary', !on);
   localToggle.classList.toggle('secondary', on);
-  localToggle.disabled = localEditing;
+  localToggle.disabled = on && localEditing;
   syncLocalHostDdnsHint();
   const dnsPreview = showHostControls || (readOnlyView && !!local?.enabled);
   if (dnsPreview) {
@@ -626,10 +576,16 @@ async function refreshLocalTraffic(generation) {
     localTrafficTimer = setTimeout(() => refreshLocalTraffic(generation), 2000);
   }
 }
-async function call(path, data) {
-  const options = data ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)} : {};
+async function call(path, data, method = 'POST') {
+  const headers = {'Accept':'application/json'};
+  const options = {headers};
+  if (data) {
+    headers['Content-Type'] = 'application/json';
+    Object.assign(options, {method, body:JSON.stringify(data)});
+  }
   const response = await fetch(path, options);
   if (!response.ok) {
+    if (response.status === 401) location.replace('/login' + location.hash);
     let result;
     try { result = await response.json(); } catch { result = {}; }
     const err = humanizeApiMessage(result.error) || `请求失败 (${response.status})`;
@@ -643,6 +599,10 @@ let systemUpdateStarted = 0;
 let systemUpdateTarget = '';
 let systemUpdateSawRunning = false;
 let systemUpdateFailure = '';
+let manualUpdateCheck = false;
+let managedUpdate = true;
+let updateInstallation = 'project';
+const updateWaitLimit = 12 * 60 * 1000;
 function renderSystemUpdate(status) {
   const banner = $('#system-update-banner');
   const title = $('#system-update-title');
@@ -651,7 +611,27 @@ function renderSystemUpdate(status) {
   const list = $('#system-update-files');
   const button = $('#system-update-apply');
   const files = Array.isArray(status.changed_files) ? status.changed_files : [];
-  const available = status.state === 'available' && files.length > 0;
+  if (status.state === 'failed' && status.error) systemUpdateFailure = status.error;
+  const statusText = {
+    checking: '正在检查 GitHub…', available: `发现新版本 ${status.release || status.target || ''}`,
+    no_release: '本主版本通道暂无正式发布', current: '程序已是最新版本', updating: '正在更新程序…',
+    unavailable: status.error || '暂时无法检查更新', failed: systemUpdateFailure || '更新失败',
+  }[status.state] || '等待检查';
+  $('#v1-settings-update-status').textContent = statusText;
+  $('#v1-settings-notify-update').textContent = statusText;
+  if (typeof status.managed === 'boolean') managedUpdate = status.managed;
+  if (status.installation) updateInstallation = status.installation;
+  const check = $('#v1-settings-check-update');
+  const restart = $('#v1-settings-restart');
+  $('#v1-settings-update-channel').textContent = status.channel || 'GitHub Releases';
+  for (const field of document.querySelectorAll('[data-managed-update]')) field.hidden = !managedUpdate || updateInstallation === 'package';
+  check.classList.toggle('primary', managedUpdate);
+  check.classList.toggle('secondary', !managedUpdate);
+  restart.classList.toggle('primary', !managedUpdate);
+  restart.classList.toggle('secondary', managedUpdate);
+  if (status.state !== 'checking') manualUpdateCheck = false;
+  check.disabled = !managedUpdate || manualUpdateCheck || status.state === 'updating';
+  const available = status.state === 'available';
   if (status.state === 'failed' && systemUpdateStarted) systemUpdateFailure = status.error || '请检查服务状态后重试。';
   const failed = !!systemUpdateFailure;
   if (available && !systemUpdateStarted && !failed) systemUpdateTarget = status.target || '';
@@ -660,7 +640,8 @@ function renderSystemUpdate(status) {
     if (!systemUpdateStarted) systemUpdateStarted = Date.now();
   }
   const completed = systemUpdateStarted && status.state === 'current'
-    && (systemUpdateSawRunning || (systemUpdateTarget && status.current === systemUpdateTarget));
+    && (systemUpdateSawRunning || (systemUpdateTarget && status.current === systemUpdateTarget)
+      || status.finished_at * 1000 >= systemUpdateStarted - 1000);
   const pending = !!systemUpdateStarted && !completed && !failed;
   if (!available && !pending && !failed) {
     banner.hidden = true;
@@ -669,7 +650,6 @@ function renderSystemUpdate(status) {
       systemUpdateSawRunning = false;
       note('项目文件已更新，请刷新页面查看最新界面');
     }
-    syncProjectUpdateButton();
     return;
   }
   banner.hidden = false;
@@ -687,32 +667,25 @@ function renderSystemUpdate(status) {
   title.textContent = failed ? '程序更新失败' : pending ? '正在更新程序' : '发现程序更新';
   description.textContent = failed ? systemUpdateFailure : pending
     ? '正在等待更新和服务重启，已有连接可能短暂中断。'
-    : `GitHub 有 ${files.length} 个变动文件。更新会重启服务，已有连接可能短暂中断。`;
+    : `GitHub 已发布 ${status.release || status.target || '新版本'}。更新会重启服务，已有连接可能短暂中断。`;
   if (failed) systemUpdateStarted = 0;
-  syncProjectUpdateButton();
-}
-function syncProjectUpdateButton() {
-  const button = $('#update-project');
-  if (!button) return;
-  const pending = !!systemUpdateStarted;
-  button.classList.toggle('is-busy', pending);
-  button.setAttribute('aria-label', pending ? '正在更新项目文件' : '项目更新');
 }
 let updatePrefs = {auto_check: true, auto_apply: true};
-let savingUpdatePrefs = false;
-function syncUpdatePrefInputs() {
-  const check = $('#update-auto-check');
-  const apply = $('#update-auto-apply');
-  if (check) check.checked = updatePrefs.auto_check;
-  if (apply) apply.checked = updatePrefs.auto_apply;
-}
+let updatePrefSequence = 0;
 function rememberUpdatePrefs(status) {
-  if (savingUpdatePrefs || typeof status.auto_check !== 'boolean' || typeof status.auto_apply !== 'boolean') return;
+  if (typeof status.auto_check !== 'boolean' || typeof status.auto_apply !== 'boolean') return;
   updatePrefs = {auto_check: status.auto_check, auto_apply: status.auto_apply};
-  syncUpdatePrefInputs();
 }
-async function applySystemUpdate(automatic) {
-  if (!automatic && !confirm('更新将重启服务，现有连接可能短暂中断。继续吗？')) return;
+async function persistManagementSettings(data) {
+  const saved = await call('/api/v1/settings', data);
+  updatePrefSequence++;
+  rememberUpdatePrefs(saved);
+  clearTimeout(systemUpdateTimer);
+  if (managedUpdate && (updatePrefs.auto_check || systemUpdateStarted)) void checkSystemUpdate();
+  return saved;
+}
+async function applySystemUpdate() {
+  if (!confirm('更新将重启服务，现有连接可能短暂中断。继续吗？')) return;
   systemUpdateStarted = Date.now();
   systemUpdateSawRunning = false;
   systemUpdateFailure = '';
@@ -732,38 +705,50 @@ async function checkSystemUpdate() {
   systemUpdatePolling = true;
   clearTimeout(systemUpdateTimer);
   let delay = 600000;
+  const prefSequence = updatePrefSequence;
   try {
     const status = await call('/api/system/update');
-    rememberUpdatePrefs(status);
+    if (prefSequence === updatePrefSequence) rememberUpdatePrefs(status);
     if (status.state === 'checking') delay = 3000;
-    if (systemUpdateStarted && Date.now() - systemUpdateStarted > 120000 && status.state !== 'current') {
+    if (systemUpdateStarted && Date.now() - systemUpdateStarted > updateWaitLimit && status.state !== 'current') {
       renderSystemUpdate({state: 'failed', error: '等待更新超时，请检查服务状态。'});
     } else {
       renderSystemUpdate(status);
     }
-    const canAutoApply = updatePrefs.auto_apply && status.state === 'available'
-      && Array.isArray(status.changed_files) && status.changed_files.length
-      && !systemUpdateStarted && !systemUpdateFailure;
-    if (canAutoApply) await applySystemUpdate(true);
   } catch (error) {
-    if (systemUpdateStarted && Date.now() - systemUpdateStarted > 120000) {
+    if (systemUpdateStarted && Date.now() - systemUpdateStarted > updateWaitLimit) {
       renderSystemUpdate({state: 'failed', error: '暂时无法连接服务，请检查更新状态。'});
+    } else if (manualUpdateCheck) {
+      renderSystemUpdate({state: 'unavailable', error: error.message});
     }
   } finally {
     systemUpdatePolling = false;
-    if (updatePrefs.auto_check || systemUpdateStarted) {
+    if (managedUpdate && (updatePrefs.auto_check || systemUpdateStarted || manualUpdateCheck || delay === 3000)) {
       systemUpdateTimer = setTimeout(checkSystemUpdate, systemUpdateStarted ? 5000 : delay);
     }
   }
 }
-$('#system-update-apply')?.addEventListener('click', async () => {
-  if ($('#system-update-apply').dataset.action === 'check') {
-    systemUpdateFailure = '';
-    await checkSystemUpdate();
-    return;
+async function requestSystemUpdateCheck() {
+  manualUpdateCheck = true;
+  systemUpdateFailure = '';
+  $('#v1-settings-check-update').disabled = true;
+  $('#v1-settings-update-status').textContent = '正在检查 GitHub…';
+  try {
+    const status = await call('/api/system/update', {check: true});
+    renderSystemUpdate(status);
+    if (status.state === 'checking') {
+      clearTimeout(systemUpdateTimer);
+      systemUpdateTimer = setTimeout(checkSystemUpdate, 1500);
+    }
+  } catch (error) {
+    renderSystemUpdate({state: 'unavailable', error: error.message});
   }
-  await applySystemUpdate();
+}
+$('#system-update-apply').addEventListener('click', () => {
+  if ($('#system-update-apply').dataset.action === 'check') void requestSystemUpdateCheck();
+  else void applySystemUpdate();
 });
+$('#v1-settings-check-update').addEventListener('click', requestSystemUpdateCheck);
 void checkSystemUpdate();
 let noteHideTimer = 0;
 function humanizeApiMessage(text) {
@@ -779,13 +764,23 @@ function humanizeApiMessage(text) {
   }
   return msg;
 }
+function setToastControls(on) {
+  if (!message) return;
+  message.classList.toggle('has-controls', on);
+  const stop = $('#toast-stop');
+  const pause = $('#toast-pause');
+  if (stop) stop.hidden = !on;
+  if (pause) pause.hidden = !on;
+}
 function clearNote() {
   clearTimeout(noteHideTimer);
   noteHideTimer = 0;
   if (!message) return;
-  message.textContent = '';
+  const label = $('#message-text');
+  if (label) label.textContent = '';
   message.hidden = true;
   message.classList.remove('is-visible', 'is-error');
+  setToastControls(false);
   $('#toast-host')?.setAttribute('aria-hidden', 'true');
 }
 function note(text, opts = {}) {
@@ -796,10 +791,12 @@ function note(text, opts = {}) {
     return;
   }
   clearTimeout(noteHideTimer);
-  message.textContent = text;
+  const label = $('#message-text');
+  if (label) label.textContent = text;
   message.hidden = false;
   message.classList.add('is-visible');
   message.classList.toggle('is-error', !!opts.error);
+  setToastControls(!!opts.controls);
   $('#toast-host')?.setAttribute('aria-hidden', 'false');
   const inProgress = /^正在/.test(text);
   const duration = opts.duration ?? (inProgress ? 0 : (opts.error ? 6500 : 4200));
@@ -846,9 +843,7 @@ function renderMobileConnect(url) {
       svg.setAttribute('role', 'img');
       svg.setAttribute('aria-label', '订阅二维码');
     }
-    hint.textContent = location.protocol === 'https:'
-      ? '使用手机客户端扫描导入订阅'
-      : '当前为 HTTP 订阅，若客户端拒绝扫码，请复制链接手动添加';
+    hint.textContent = '使用手机客户端扫描导入订阅';
   } catch (error) {
     panel.classList.add('is-empty');
     panel.textContent = '二维码生成失败';
@@ -953,6 +948,16 @@ async function refreshIkev2Only() {
   if (seq !== ikev2LiveSeq || !data.ikev2) return;
   applyIkev2Ui(data.ikev2);
 }
+function scheduleProbeRefresh(interval) {
+  probeTimer = setTimeout(async () => {
+    const seq = refreshSeq + 1;
+    try {
+      await refresh();
+    } catch {
+      if (seq === refreshSeq) scheduleProbeRefresh(interval);
+    }
+  }, interval);
+}
 async function refresh() {
   const seq = ++refreshSeq;
   ++ikev2LiveSeq;
@@ -965,6 +970,7 @@ async function refresh() {
   const subInput = $('#subscription');
   if (subInput) subInput.value = subscription;
   renderMobileConnect(subscription);
+  renderPublicSubscription(data);
   const subSummary = $('#subscription-summary');
   if (subSummary) {
     if (!data.token) {
@@ -990,22 +996,34 @@ async function refresh() {
   if (!data.sources.length) { const empty = document.createElement('p'); empty.className='empty'; empty.textContent='还没有订阅，添加后可在这里查看。'; list.append(empty); }
   for (const source of data.sources) {
     const row = document.createElement('div'); row.className='row';
+    row.dataset.sourceName = source.name;
+    row.dataset.sourceEnabled = source.enabled !== false;
     const info = document.createElement('div'); const name = document.createElement('strong'); name.textContent=source.name;
-    const meta = document.createElement('p'); meta.textContent = `${source.count} 个节点 · ${source.updated ? '更新于 ' + new Date(source.updated * 1000).toLocaleString() : '尚未成功更新'}${source.error ? ' · ' + source.error : ''}`;
+    const meta = document.createElement('p');
+    const schedule = source.enabled !== false && source.auto_update ? ` · 每 ${Math.round(source.update_interval / 60)} 分钟检查` : '';
+    meta.textContent = `${source.enabled === false ? '已停用' : '已启用'} · ${source.count} 个节点${schedule} · ${source.updated ? '更新于 ' + new Date(source.updated * 1000).toLocaleString() : '尚未成功更新'}${source.error ? ' · ' + source.error : ''}`;
     info.append(name,meta); const actions=document.createElement('div'); actions.className='actions';
     for (const [text,path] of [['更新','/api/refresh'],['删除','/api/delete']]) {
       const button=document.createElement('button'); button.className='secondary'; button.textContent=text;
+      button.disabled = path === '/api/refresh' && source.enabled === false;
       button.onclick=async()=>{if(path==='/api/delete' && !confirm(`删除订阅「${source.name}」？`)) return; button.disabled=true; try {await call(path,{id:source.id});note('操作完成');} catch(e){note(e.message,{error:true});} finally {await refresh();}};
       actions.append(button);
     }
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'secondary';
+    edit.textContent = '设置';
+    edit.onclick = () => openSourceSettings(source);
+    actions.prepend(edit);
     row.append(info,actions); list.append(row);
   }
   const nodes = $('#nodes'); nodes.replaceChildren();
   $('#node-count').textContent = `${data.nodes.length} 个节点`;
   const local = data.local_node || {};
   setLocalTrafficEnabled(!!local.enabled);
+  syncFixedUpstream(local, data.nodes);
   syncLocalForm(local, data.acme || {});
-  maybeShowLocalNodeNotice(local);
+
   const localStatus = $('#local-status');
   const localSummary = $('#local-node-summary');
   const localLine = local.enabled
@@ -1021,7 +1039,7 @@ async function refresh() {
   $('#local-protocol-status').textContent = protocolLine;
   $('#local-protocol-detail').textContent = [protocol?.detail || '', quicLine].filter(Boolean).join(' ');
   const singboxInstall = $('#local-singbox-install');
-  if (singboxInstall) singboxInstall.hidden = !quic.missing;
+  if (singboxInstall) singboxInstall.hidden = !!quic.available;
   $('#local-node-protocol-summary').textContent = quicLine || protocolLine;
   if (localSummary) {
     localSummary.textContent = local.enabled ? localLine : '尚未启用 · 点击查看可启用或修改';
@@ -1035,49 +1053,61 @@ async function refresh() {
       ? `已导入 ${manualCount} 个手动节点`
       : '暂无手动节点 · 点击粘贴链接导入';
   }
-  const groups = data.sources.map(source=>({id:`source:${source.id}`,name:source.name}));
-  if(data.nodes.some(node=>node.manual)) groups.push({id:'manual',name:'手动导入'});
-  if(data.nodes.some(node=>node.local)) groups.push({id:'local',name:local.name || '本地网络'});
-  const groupIDs = new Set(groups.map(group=>group.id));
-  for(const id of selectedGroups) if(!groupIDs.has(id)) selectedGroups.delete(id);
-  for(const id of seenGroups) if(!groupIDs.has(id)) seenGroups.delete(id);
-  for(const group of groups) if(!seenGroups.has(group.id)){seenGroups.add(group.id);selectedGroups.add(group.id);}
-  const signature = JSON.stringify(groups);
-  if (signature !== groupSignature) groupSignature = signature;
-  const filterInput = $('#probe-group-filter');
-  if (filterInput && filterInput.value !== probeGroupFilter) filterInput.value = probeGroupFilter;
-  renderProbeGroupsList(groups);
-  for (const kind of ['update','probe']) {
-    const job=data.jobs[kind], button=$(`#batch-${kind}`), progress=$(`#${kind}-progress`);
-    button.textContent=job.running?'停止':(kind==='update'?'批量更新':'批量测试');
-    progress.textContent=job.total ? `${job.target ? job.target+' · ' : ''}${job.running?'进行中':job.cancelled?'已停止':'已完成'} ${job.done}/${job.total}${job.failed ? ` · ${job.failed} 未通过或跳过` : ''}` : '';
+  renderDefaultProbeTarget(data.probe_target);
+  for (const kind of ['update', 'probe']) {
+    const job = data.jobs[kind];
+    const button = $(`#batch-${kind}`);
+    button.dataset.running = String(job.running);
+    if (kind === 'update') {
+      button.textContent = job.running ? '停止' : '批量更新';
+      $('#update-progress').textContent = job.total ? `${job.running ? '进行中' : job.cancelled ? '已停止' : '已完成'} ${job.done}/${job.total}${job.failed ? ` · ${job.failed} 未通过或跳过` : ''}` : '';
+    }
   }
   if (!data.nodes.length) { const empty=document.createElement('p'); empty.className='empty'; empty.textContent='暂无节点'; nodes.append(empty); }
   for (const node of data.nodes) {
     const row=document.createElement('div'); row.className='row';
+    row.dataset.nodeTitle = node.title;
+    row.dataset.nodeKind = node.local ? 'local' : node.manual ? 'manual' : 'source';
+    row.dataset.nodeEnabled = node.enabled;
     const label=document.createElement('div'); label.className='node-label';
     const title=document.createElement('span'); title.textContent=`${node.title} · ${node.protocol.toUpperCase()}`;
     if(node.probe){const state=document.createElement('small'); state.className='probe-result'; state.textContent=node.probe.status==='ok' ? `${node.probe.target||'Google'} 可用 · ${node.probe.latency_ms} ms` : node.probe.detail; title.append(document.createElement('br'),state);}
     if(!node.enabled){const excluded=document.createElement('small');excluded.className='probe-result';excluded.textContent='此前已移出订阅';title.append(document.createElement('br'),excluded);}
-    label.append(title); row.append(label);
+    const sourceLabel = node.local ? '本地发布' : node.manual ? '手动导入' : '订阅导入';
+    const source = document.createElement('span'); source.className = 'v1-row-meta'; source.textContent = sourceLabel;
+    label.append(title, source); row.append(label);
     const test=document.createElement('button'); test.className='secondary'; test.textContent=node.probe?.status==='testing'?'测试中…':'测试连接'; test.disabled=node.probe?.status==='testing';
-    test.onclick=async()=>{test.disabled=true;try{await call('/api/probe',{id:node.id,target:$('#test-target').value});await refresh();}catch(e){test.disabled=false;note(e.message);}};row.append(test);
-    if(!node.enabled){const restore=document.createElement('button');restore.className='secondary';restore.textContent='加入订阅';restore.onclick=async()=>{try{await call('/api/node',{id:node.id,enabled:true});await refresh();note('节点已重新加入订阅');}catch(e){note(e.message,{error:true});}};row.append(restore);}
+    test.onclick=async()=>{test.disabled=true;try{await call('/api/probe',{id:node.id,...probeTargetPayload()});await refresh();}catch(e){test.disabled=false;note(e.message);}};row.append(test);
+    const toggle = document.createElement('button');
+    toggle.className = 'secondary';
+    toggle.textContent = node.enabled ? '从订阅移除' : '加入订阅';
+    toggle.onclick = async () => {
+      toggle.disabled = true;
+      try {
+        await call('/api/node', {id: node.id, enabled: !node.enabled});
+        await refresh();
+        note(node.enabled ? '已从订阅移除' : '已加入订阅');
+      } catch (error) { toggle.disabled = false; note(error.message, {error: true}); }
+    };
+    row.append(toggle);
     if(node.manual){const button=document.createElement('button');button.className='secondary';button.textContent='移除手动节点';button.onclick=async()=>{if(!confirm('移除这个手动导入的节点？'))return;try{await call('/api/manual/delete',{id:node.id});await refresh();note('手动节点已移除');}catch(e){note(e.message,{error:true});}};row.append(button);}
     nodes.append(row);
   }
-  if(data.nodes.some(node=>node.probe?.status==='testing') || Object.values(data.jobs).some(job=>job.running)) probeTimer=setTimeout(()=>refresh().catch(()=>note('无法获取任务进度')), 1800);
+  window.hopworldStatus = data;
+  window.dispatchEvent(new CustomEvent('hopworld:status', {detail: data}));
+  const probing = data.jobs.probe.running || data.nodes.some(node => node.probe?.status === 'testing');
+  if (probing || data.jobs.update.running) scheduleProbeRefresh(probing ? 800 : 1800);
 }
 const MODAL_IDS = {
   subscription: 'subscription-modal',
   'add-source': 'add-source-modal',
+  'source-settings': 'source-settings-modal',
   'local-node-notice': 'local-node-notice-modal',
   'local-node': 'local-node-modal',
   acme: 'acme-modal',
   ikev2: 'ikev2-modal',
   'ikev2-settings': 'ikev2-settings-modal',
   manual: 'manual-modal',
-  'update-settings': 'update-settings-modal',
 };
 function syncModalBodyScroll() {
   const open = Object.values(MODAL_IDS).some(id => {
@@ -1127,6 +1157,34 @@ function openSubscriptionModal() {
   const url = $('#subscription')?.value;
   if (url) renderMobileConnect(url);
 }
+function openSourceSettings(source) {
+  const form = $('#v1-source-form');
+  form.dataset.sourceId = source.id;
+  $('#v1-source-name').value = source.name;
+  $('#v1-source-url').value = source.url || '';
+  $('#v1-source-enabled').checked = source.enabled !== false;
+  $('#v1-source-auto').checked = source.auto_update !== false;
+  $('#v1-source-interval').value = (source.update_interval || 3600) / 60;
+  $('#source-settings-modal').hidden = false;
+  syncModalBodyScroll();
+  $('#v1-source-name').focus();
+}
+$('#v1-source-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('[type="submit"]');
+  button.disabled = true;
+  try {
+    await call('/api/sources/settings', {
+      id: Number(form.dataset.sourceId), name: $('#v1-source-name').value, url: $('#v1-source-url').value,
+      enabled: $('#v1-source-enabled').checked, auto_update: $('#v1-source-auto').checked,
+      update_interval: Math.round(Number($('#v1-source-interval').value) * 60),
+    });
+    closeModal('source-settings');
+    note('订阅设置已保存');
+  } catch (error) { note(error.message, {error: true}); }
+  finally { button.disabled = false; }
+});
 function openAddSourceModal() {
   const modal = $('#add-source-modal');
   if (!modal) return;
@@ -1135,12 +1193,21 @@ function openAddSourceModal() {
   $('#name')?.focus();
 }
 function closeAddSourceModal() { closeModal('add-source'); }
-function openLocalNodeModal() {
+function openLocalNodeModal(egressMode) {
   localEditing = false;
   const modal = $('#local-node-modal');
   if (!modal) return;
   modal.hidden = false;
   syncModalBodyScroll();
+  const status = window.hopworldStatus;
+  if (typeof egressMode === 'string' && status?.local_node) {
+    syncLocalForm(status.local_node, status.acme);
+    localEditing = true;
+    const mode = $('#local-egress-mode');
+    mode.value = egressMode;
+    syncLocalForm(status.local_node, status.acme);
+    mode.focus();
+  }
   refresh().then(refreshAutoObservations).catch(() => {});
   clearInterval(autoObservationTimer);
   autoObservationTimer = setInterval(refreshAutoObservations, 10000);
@@ -1184,62 +1251,157 @@ function openManualModal() {
 }
 const addSourceOpen = $('#add-source-open');
 if (addSourceOpen) addSourceOpen.onclick = openAddSourceModal;
-$('#update-project')?.addEventListener('click', () => {
-  const modal = $('#update-settings-modal');
-  if (!modal) return;
-  syncUpdatePrefInputs();
-  modal.hidden = false;
-  syncModalBodyScroll();
-});
-async function saveUpdatePrefs() {
-  const previous = updatePrefs;
-  const next = {
-    auto_check: !!$('#update-auto-check')?.checked,
-    auto_apply: !!$('#update-auto-apply')?.checked,
-  };
-  updatePrefs = next;
-  savingUpdatePrefs = true;
-  try {
-    await call('/api/system/update', next);
-  } catch (error) {
-    updatePrefs = previous;
-    syncUpdatePrefInputs();
-    note(error.message, {error: true});
-    return;
-  } finally {
-    savingUpdatePrefs = false;
-  }
-  clearTimeout(systemUpdateTimer);
-  if (next.auto_check || next.auto_apply || systemUpdateStarted) void checkSystemUpdate();
-}
-$('#update-auto-check')?.addEventListener('change', saveUpdatePrefs);
-$('#update-auto-apply')?.addEventListener('change', saveUpdatePrefs);
-$('#subscription-open')?.addEventListener('click', openSubscriptionModal);
+$('#public-subscription-qr').addEventListener('click', openSubscriptionModal);
 $('#local-node-open')?.addEventListener('click', openLocalNodeModal);
+let acmeFormState;
+let acmeIpCheck = 0;
+let acmeVerified;
+let acmeBusy = false;
+
+function acmeRequest() {
+  const family = $('#acme-subject').value;
+  return {family, target: family === 'domain' ? $('#acme-domain').value : $('#acme-ip-address').value.trim(),
+    email: $('#local-acme-email').value.trim(), challenge: $('#local-acme-challenge').value};
+}
+
+function syncAcmeActions() {
+  const request = acmeRequest();
+  const enabled = $('#local-acme').checked;
+  const available = !!request.email && (request.family !== 'domain' || !!request.target);
+  const verified = acmeVerified?.request === JSON.stringify(request);
+  $('#acme-preflight').disabled = acmeBusy || !enabled || !available;
+  $('#acme-save').disabled = acmeBusy || (enabled && !verified);
+  $('#acme-save').textContent = enabled ? '申请证书' : '关闭自动续期';
+}
+
+function invalidateAcmePreflight() {
+  acmeVerified = null;
+  $('#acme-preflight-status').textContent = '';
+  syncAcmeActions();
+}
+
+function ipCertificateCheckText(result) {
+  const cert = result.certificate;
+  const reusable = cert?.address === result.address && cert?.expires > Date.now() / 1000;
+  return [
+    result.address ? `检测到 ${result.address}` : result.address_error,
+    reusable && `证书有效至 ${new Date(cert.expires * 1000).toLocaleString()}`,
+    $('#local-acme-challenge').value === 'http' && result.certbot_status,
+    $('#local-acme-challenge').value === 'http' && result.port_status,
+  ].filter(Boolean).join(' · ');
+}
+
+function syncAcmeSubject() {
+  const isIP = $('#acme-subject').value !== 'domain';
+  const enabled = $('#local-acme').checked;
+  $('#acme-domain-fields').hidden = isIP;
+  $('#acme-ip-fields').hidden = !isIP;
+  for (const option of $('#local-acme-challenge').options) {
+    option.hidden = option.disabled = isIP && ['auto', 'dns'].includes(option.value);
+  }
+  $('#acme-challenge-fields').hidden = !enabled;
+  $('#acme-domain').required = !isIP && enabled;
+  $('#local-acme-challenge').disabled = !enabled;
+  $('#local-acme-email').required = enabled;
+  $('#acme-ip-hint').hidden = !isIP;
+  $('#acme-ip-status').hidden = !isIP;
+  $('#local-acme').nextElementSibling.textContent = isIP
+    ? '申请证书并自动续期（Let’s Encrypt）' : "免费 SSL 证书（Let's Encrypt）";
+  if (isIP) {
+    $('#local-acme-fw-wrap').hidden = true;
+    $('#local-acme-status').hidden = true;
+  } else {
+    syncAcmeFwHint({enabled}, true);
+  }
+  syncAcmeActions();
+}
+
+async function selectAcmeSubject() {
+  const family = $('#acme-subject').value;
+  const request = ++acmeIpCheck;
+  const domain = acmeFormState?.domain || {};
+  const record = acmeFormState?.ip?.[family];
+  $('#local-acme').checked = family === 'domain' ? domain.source !== 'manual' : record?.enabled ?? true;
+  $('#local-acme-email').value = record?.email || domain.email || '';
+  $('#acme-ip-address').value = record?.manual ? record.address : '';
+  $('#local-acme-challenge').value = family === 'domain' ? domain.challenge || 'auto' : record?.challenge || 'http';
+  invalidateAcmePreflight();
+  syncAcmeSubject();
+  if (family === 'domain') {
+    renderAcmeStatus(domain, true);
+    return;
+  }
+  const status = $('#acme-ip-status');
+  status.textContent = '正在检测公网地址和签发环境…';
+  try {
+    const result = await call('/api/acme/ip?family=' + encodeURIComponent(family));
+    if (request === acmeIpCheck) status.textContent = ipCertificateCheckText(result);
+  } catch (error) {
+    if (request === acmeIpCheck) status.textContent = error.message;
+  }
+}
+
+$('#acme-subject').addEventListener('change', selectAcmeSubject);
+for (const id of ['acme-ip-address', 'acme-domain', 'local-acme-email', 'local-acme-challenge']) {
+  $('#' + id).addEventListener('input', invalidateAcmePreflight);
+}
+$('#local-acme').addEventListener('change', invalidateAcmePreflight);
+$('#acme-preflight').addEventListener('click', async () => {
+  const request = acmeRequest();
+  const snapshot = JSON.stringify(request);
+  const status = $('#acme-preflight-status');
+  acmeBusy = true;
+  acmeVerified = null;
+  syncAcmeActions();
+  status.textContent = '正在由 Let’s Encrypt 测试环境验证…';
+  try {
+    const result = await call('/api/acme/preflight', request);
+    if (snapshot === JSON.stringify(acmeRequest())) {
+      acmeVerified = {request: snapshot, target: result.target};
+      status.textContent = `${result.target} 已通过外部 ACME 验证，可以申请正式证书。`;
+    }
+  } catch (error) {
+    if (snapshot === JSON.stringify(acmeRequest())) status.textContent = error.message;
+  } finally {
+    acmeBusy = false;
+    syncAcmeActions();
+  }
+});
 $('#acme-open')?.addEventListener('click', async () => {
   try {
-    const data = await call('/api/status');
+    const [data, {domains}] = await Promise.all([call('/api/status'), call('/api/v1/domains')]);
     const acme = data.acme || {};
-    const domain = data.local_node?.public_host || '';
-    $('#acme-domain').textContent = domain ? `证书使用本地网络节点的公网域名：${domain}` : '请先在本地网络节点设置公网域名。';
-    $('#local-acme').checked = !!acme.enabled;
-    $('#local-acme-email').value = acme.email || '';
+    const select = $('#acme-domain');
+    select.replaceChildren(new Option(domains.length ? '请选择已绑定域名' : '请先绑定域名', ''),
+      ...domains.map(item => new Option(item.host, item.host)));
+    if (domains.some(item => item.host === acme.domain)) select.value = acme.domain;
     $('#local-acme-challenge').value = acme.challenge || 'auto';
-    $('#local-acme-challenge').disabled = !acme.enabled;
-    renderAcmeStatus(acme, true);
-    syncAcmeFwHint(acme, true);
+    acmeFormState = {domain: acme, ip: data.ip_certificates || {}};
+    $('#acme-subject').value = 'domain';
+    void selectAcmeSubject();
     $('#acme-modal').hidden = false;
     syncModalBodyScroll();
   } catch (error) { note(error.message, {error:true}); }
 });
 $('#acme-form').addEventListener('submit', async e => {
   e.preventDefault();
-  const button = $('#acme-save');
   const enabled = $('#local-acme').checked;
-  button.disabled = true;
-  if (enabled) note('正在申请证书，缺少的组件会自动安装…', {duration: 0});
+  const request = acmeRequest();
+  const {family, target, email, challenge} = request;
+  if (acmeBusy || enabled && acmeVerified?.request !== JSON.stringify(request)) return;
+  acmeBusy = true;
+  syncAcmeActions();
+  if (enabled) note('正在申请证书…', {duration: 0});
   try {
-    const result = await call('/api/acme', {enabled, email: $('#local-acme-email').value, challenge: $('#local-acme-challenge').value});
+    if (family !== 'domain') {
+      await call('/api/acme/ip', {family, enabled, email, challenge, address: target, verified_target: acmeVerified?.target});
+      clearNote();
+      await refresh();
+      closeModal('acme');
+      note(enabled ? '公网 IP 证书已签发或复用' : '此入口的公网 IP 证书续期已关闭');
+      return;
+    }
+    const result = await call('/api/acme', {enabled, email, challenge, domain: target});
     clearNote();
     await refresh();
     if (enabled && result.acme?.error) {
@@ -1247,10 +1409,13 @@ $('#acme-form').addEventListener('submit', async e => {
       note('已保存，证书未签发', {error:true});
     } else {
       closeModal('acme');
-      note(enabled ? '证书设置已保存' : '证书已停用');
+      note(enabled ? '证书设置已保存' : 'ACME 自动续签已关闭');
     }
-  } catch (error) { clearNote(); note(error.message, {error:true}); }
-  finally { button.disabled = false; }
+  } catch (error) {
+    clearNote();
+    $('#acme-preflight-status').textContent = error.message;
+  }
+  finally { acmeBusy = false; syncAcmeActions(); }
 });
 $('#local-node-notice-go')?.addEventListener('click', () => {
   localNodeNoticeSuppressed = true;
@@ -1260,13 +1425,25 @@ $('#local-node-notice-go')?.addEventListener('click', () => {
 $('#ikev2-open')?.addEventListener('click', openIkev2Modal);
 $('#ikev2-settings-open')?.addEventListener('click', openIkev2SettingsModal);
 $('#manual-open')?.addEventListener('click', openManualModal);
+$('#v1-node-file').addEventListener('change', async event => {
+  const input = event.currentTarget;
+  const file = input.files[0];
+  if (!file) return;
+  try {
+    if (file.size > 16384) throw new Error('文件内容超过 16 KB 请求限制');
+    const content = await file.text();
+    if (new TextEncoder().encode(JSON.stringify({content})).length > 16384) throw new Error('文件内容超过 16 KB 请求限制');
+    $('#links').value = content;
+  } catch (error) { note(error.message, {error: true}); }
+  finally { input.value = ''; }
+});
 document.querySelectorAll('[data-modal-close]').forEach(el => {
   const target = el.getAttribute('data-modal-close');
   if (target && MODAL_IDS[target]) el.onclick = () => closeModal(target);
 });
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
-  for (const key of ['update-settings', 'ikev2-settings', 'local-node-notice', 'subscription', 'manual', 'ikev2', 'local-node', 'acme', 'add-source']) {
+  for (const key of ['source-settings', 'update-settings', 'ikev2-settings', 'local-node-notice', 'subscription', 'manual', 'ikev2', 'local-node', 'acme', 'add-source']) {
     const m = $(`#${MODAL_IDS[key]}`);
     if (m && !m.hidden) {
       closeModal(key);
@@ -1277,8 +1454,8 @@ document.addEventListener('keydown', e => {
 $('#add').onsubmit=async e=>{e.preventDefault(); const button=e.submitter; button.disabled=true; note('正在更新订阅…'); try {await call('/api/sources',{name:$('#name').value,url:$('#url').value}); e.target.reset(); closeAddSourceModal(); await refresh(); note('订阅已添加，请查看更新状态');} catch(error){note(error.message,{error:true});} finally {button.disabled=false;}};
 $('#manual').onsubmit=async e=>{e.preventDefault();const button=e.submitter;button.disabled=true;try{await call('/api/manual',{content:$('#links').value});e.target.reset();closeModal('manual');await refresh();note('节点已导入');}catch(error){note(error.message,{error:true});}finally{button.disabled=false;}};
 function localPayload(enabled){
-  const auto = !!$('#local-auto-host')?.checked;
-  const ddns = !!$('#local-ddns')?.checked;
+  const auto = $('#local-host-mode').value === 'auto';
+  const ddns = $('#local-host-mode').value === 'ddns';
   return {
     enabled,
     name: $('#local-name').value,
@@ -1288,12 +1465,14 @@ function localPayload(enabled){
     ddns_enabled: ddns,
     public_host_prefer: $('#local-host-prefer')?.value || 'ipv4',
     egress_mode: $('#local-egress-mode').value,
+    upstream_id: $('#local-upstream').value,
     local_proxy: $('#local-proxy-choice').value,
     auto_target: $('#local-auto-target').value,
     auto_interval: Number($('#local-auto-interval').value),
   };
 }
 $('#local-egress-mode').addEventListener('change', () => {
+  syncFixedUpstream(window.hopworldStatus?.local_node);
   $('#local-proxy-settings').hidden = $('#local-egress-mode').value !== 'local_proxy';
   $('#local-auto-settings').hidden = $('#local-egress-mode').value !== 'auto';
   showLocalProxyProtocol();
@@ -1321,49 +1500,64 @@ $('#local-proxy-scan').addEventListener('click', async () => {
   } catch (error) { note(error.message, {error: true}); }
   finally { button.disabled = false; }
 });
-function syncLocalHostModeToggles(ev) {
-  const autoEl = $('#local-auto-host');
-  const ddnsEl = $('#local-ddns');
-  if (autoEl && ddnsEl && autoEl.checked && ddnsEl.checked) {
-    if (ev?.target === ddnsEl) autoEl.checked = false;
-    else if (ev?.target === autoEl) ddnsEl.checked = false;
-    else ddnsEl.checked = false;
+$('#local-host-mode').addEventListener('change', () => {
+  $('#local-check-address-result').textContent = '';
+  syncLocalForm(window.hopworldStatus?.local_node, window.hopworldStatus?.acme, true);
+});
+$('#local-check-address').addEventListener('click', async event => {
+  const button = event.currentTarget;
+  const result = $('#local-check-address-result');
+  const family = $('#local-host-prefer').value;
+  const auto = $('#local-host-mode').value === 'auto';
+  const host = $('#local-host').value.trim();
+  if (!auto && !host) {
+    result.textContent = '请先填写已设置 DNS 解析的域名。';
+    $('#local-host').focus();
+    return;
   }
-  syncLocalForm({
-    enabled: true,
-    name: $('#local-name').value,
-    public_host: $('#local-host').value,
-    port: Number($('#local-port').value),
-    auto_public_host: $('#local-auto-host')?.checked,
-    ddns_enabled: $('#local-ddns')?.checked,
-  }, { enabled: $('#local-acme')?.checked, email: $('#local-acme-email')?.value });
-}
-$('#local-auto-host')?.addEventListener('change', syncLocalHostModeToggles);
-$('#local-ddns')?.addEventListener('change', syncLocalHostModeToggles);
+  button.disabled = true;
+  result.textContent = auto ? '正在检测公网地址…' : '正在验证域名指向…';
+  const check = family => call('/api/v1/cores/address-check', {mode: 'auto_ip', family});
+  try {
+    const response = auto
+      ? await (family === 'ipv4_first' ? check('ipv4').catch(() => check('ipv6')) : check(family))
+      : await call('/api/v1/cores/address-check', {mode: 'domain', family, host});
+    if (($('#local-host-mode').value === 'auto') === auto &&
+        $('#local-host-prefer').value === family && $('#local-host').value.trim() === host) {
+      result.textContent = auto ? `已检测到 ${response.address} · 公网入站待验证` : response.detail;
+    }
+  } catch (error) {
+    result.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
 $('#local-acme')?.addEventListener('change', () => {
-  const acmeChallenge = $('#local-acme-challenge');
-  if (acmeChallenge) acmeChallenge.disabled = !$('#local-acme')?.checked;
-  renderAcmeStatus({ enabled: $('#local-acme')?.checked });
-  syncAcmeFwHint({ enabled: $('#local-acme')?.checked }, true);
+  syncAcmeSubject();
+  if ($('#acme-subject').value === 'domain') renderAcmeStatus({enabled: $('#local-acme').checked}, true);
 });
 $('#local-acme-challenge')?.addEventListener('change', () => syncAcmeFwHint({}, true));
 $('#local-host')?.addEventListener('input', () => {
+  $('#local-check-address-result').textContent = '';
   syncLocalHostDdnsHint();
   scheduleLocalDnsHintsPreview();
 });
-$('#local-host-prefer')?.addEventListener('change', scheduleLocalDnsHintsPreview);
+$('#local-host-prefer')?.addEventListener('change', () => {
+  $('#local-check-address-result').textContent = '';
+  scheduleLocalDnsHintsPreview();
+});
 $('#local-dns-verify')?.addEventListener('click', () => { void runLocalDnsVerify(); });
-$('#local-edit').onclick=()=>{localEditing=true;syncLocalForm({enabled:true,name:$('#local-name').value,public_host:$('#local-host').value,port:Number($('#local-port').value),auto_public_host:$('#local-auto-host')?.checked});$('#local-name').focus();};
+$('#local-edit').onclick=()=>{localEditing=true;syncLocalForm({enabled:true,name:$('#local-name').value,public_host:$('#local-host').value,port:Number($('#local-port').value),auto_public_host:$('#local-host-mode').value === 'auto'});$('#local-name').focus();};
 $('#local-cancel').onclick=async()=>{localEditing=false;await refresh();note('已取消编辑');};
 $('#local-form').onsubmit=e=>e.preventDefault();
 $('#local-singbox-install')?.addEventListener('click', async () => {
   const button = $('#local-singbox-install');
   button.disabled = true;
-  note('正在在线安装 sing-box…');
+  note('正在检测 sing-box…');
   try {
     await call('/api/local/singbox', {});
     await refresh();
-    note('sing-box 已安装');
+    note('已检测到 sing-box');
   } catch (error) {
     note(error.message, {error: true});
   } finally {
@@ -1375,7 +1569,7 @@ $('#local-toggle').onclick=async()=>{
   const on=button.textContent==='停用';
   if(on&&!confirm('停用后订阅中将移除本地网络节点，继续吗？'))return;
   button.disabled=true;
-  note(on?'正在停用…':'正在启用本地网络节点，缺少的组件会自动安装…');
+  note(on?'正在停用…':'正在启用本地网络节点…');
   try{
     await call('/api/local-node',localPayload(!on));
     localEditing=false;
@@ -1385,20 +1579,21 @@ $('#local-toggle').onclick=async()=>{
 };
 $('#local-save').onclick=async()=>{
   const button=$('#local-save');
+  const enabled=!!window.hopworldStatus?.local_node?.enabled;
   button.disabled=true;
-  note('正在保存，缺少的组件会自动安装…');
+  note('正在保存…');
   try{
-    await call('/api/local-node',localPayload(true));
+    await call('/api/local-node',localPayload(enabled));
     localEditing=false;
     await refresh();
-    note('已保存，请更新订阅');
+    note(enabled ? '已保存，请更新订阅' : '本地节点配置已保存');
   }catch(error){note(error.message,{error:true});}
   finally{button.disabled=false;}
 };
 function ikev2Payload(extra={}){const body={enabled:true,public_host:$('#ikev2-host').value,remote_id:$('#ikev2-remote-id').value,...extra};const psk=$('#ikev2-psk').value.trim();if(psk)body.psk=psk;return body;}
 $('#ikev2-edit').onclick=()=>{ikev2Editing=true;syncIkev2Form({enabled:true, psk:$('#ikev2-psk').value});$('#ikev2-host').focus();};
 $('#ikev2-cancel').onclick=async()=>{endIkev2Edit();await refresh();note('已取消编辑');};
-$('#ikev2-save').onclick=async()=>{const psk=$('#ikev2-psk').value.trim();if(psk&&!/^[\dA-Za-z]{8,32}$/.test(psk)){note('共享密钥须为 8–32 位字母或数字');return;}if(!confirm('保存后需在 iPhone 重装描述文件或同步 VPN 配置，继续吗？'))return;const button=$('#ikev2-save');button.disabled=true;note('正在保存，缺少的组件会自动安装…');try{const result=await call('/api/ikev2',ikev2Payload());endIkev2Edit();if(result.ikev2)applyIkev2Ui(result.ikev2);await refresh();note('IKEv2 配置已保存');}catch(error){note(error.message,{error:true});}finally{button.disabled=false;}};
+$('#ikev2-save').onclick=async()=>{const psk=$('#ikev2-psk').value.trim();if(psk&&!/^[\dA-Za-z]{8,32}$/.test(psk)){note('共享密钥须为 8–32 位字母或数字');return;}if(!confirm('保存后需在 iPhone 重装描述文件或同步 VPN 配置，继续吗？'))return;const button=$('#ikev2-save');button.disabled=true;note('正在保存…');try{const result=await call('/api/ikev2',ikev2Payload());endIkev2Edit();if(result.ikev2)applyIkev2Ui(result.ikev2);await refresh();note('IKEv2 配置已保存');}catch(error){note(error.message,{error:true});}finally{button.disabled=false;}};
 $('#ikev2-form').onsubmit=e=>e.preventDefault();
 $('#ikev2-toggle').onclick=async()=>{
   const button=$('#ikev2-toggle');
@@ -1409,7 +1604,7 @@ $('#ikev2-toggle').onclick=async()=>{
     if(psk&&!/^[\dA-Za-z]{8,32}$/.test(psk)){note('共享密钥须为 8–32 位字母或数字');return;}
   }
   button.disabled=true;
-  note(on?'正在停用…':'正在启用系统 VPN，缺少的组件会自动安装…');
+  note(on?'正在停用…':'正在启用系统 VPN…');
   try{
     if(on){
       const result=await call('/api/ikev2',{enabled:false,public_host:$('#ikev2-host').value,remote_id:$('#ikev2-remote-id').value});
@@ -1439,37 +1634,246 @@ $('#ikev2-mobileconfig-copy').onclick=async()=>{
   try { await navigator.clipboard.writeText(url); note('已复制，请在手机 Safari 粘贴打开'); }
   catch { $('#ikev2-mobileconfig-url').select(); note('请手动复制上方链接'); }
 };
-$('#test-target-category')?.addEventListener('change', () => populateProbeTargets(false));
-$('#test-target')?.addEventListener('change', () => {
-  lastProbeTarget = $('#test-target')?.value || lastProbeTarget;
-});
-syncProbeTargetCategoryFromValue(lastProbeTarget);
-populateProbeTargets(true);
-$('#probe-group-filter')?.addEventListener('input', e => {
-  probeGroupFilter = e.target.value;
-  renderProbeGroupsList(cachedProbeGroups);
-});
-$('#probe-groups-edit')?.addEventListener('click', () => {
-  probeGroupsEditing = !probeGroupsEditing;
-  syncProbeGroupsEditUi();
-  if (!probeGroupsEditing) note('批量测试范围已更新');
-});
-for(const kind of ['update','probe']) $(`#batch-${kind}`).onclick=async e=>{const button=e.currentTarget;button.disabled=true;try{const active=button.textContent==='停止';if(kind==='probe'&&!active&&!selectedGroups.size){note('请先在编辑中勾选至少一个订阅组');return;}await call(`/api/batch/${kind}${active?'/stop':''}`,{target:$('#test-target').value,groups:[...selectedGroups]});await refresh();note(active?'停止请求已发送，正在结束当前任务':'批量任务已启动');}catch(error){note(error.message,{error:true});}finally{button.disabled=false;}};
-async function copySubscriptionLink() {
-  const val = $('#subscription')?.value;
+populateProbeTargets($('#test-target'));
+populateProbeTargets($('#v1-settings-probe-target'));
+for (const kind of ['update', 'probe']) {
+  $(`#batch-${kind}`).onclick = async event => {
+    const button = event.currentTarget;
+    const active = button.dataset.running === 'true';
+    button.disabled = true;
+    try {
+      await call(`/api/batch/${kind}${active ? '/stop' : ''}`, kind === 'probe' && !active ? probeTargetPayload() : {});
+      await refresh();
+      note(active ? '停止请求已发送，正在结束当前任务' : '批量任务已启动');
+    } catch (error) {
+      note(error.message, {error: true});
+    } finally {
+      button.disabled = false;
+    }
+  };
+}
+async function copySubscriptionLink(input) {
+  const val = input.value;
   if (!val) { note('尚无订阅地址'); return; }
   try {
     await navigator.clipboard.writeText(val);
     note('订阅地址已复制');
   } catch {
-    $('#subscription')?.select();
+    input.select();
     note('请手动复制订阅地址');
   }
 }
-$('#copy')?.addEventListener('click', copySubscriptionLink);
-$('#copy-modal')?.addEventListener('click', copySubscriptionLink);
+for (const id of ['copy', 'copy-modal']) {
+  $('#' + id)?.addEventListener('click', () => copySubscriptionLink($('#subscription')));
+}
+const publicSubscriptionDialog = $('#public-subscription-dialog');
+const publicSubscriptionForm = $('#public-subscription-form');
+const publicSubscriptionEnable = $('#public-subscription-enable');
+const publicSubscriptionDisable = $('#public-subscription-disable');
+const publicSubscriptionFeedback = $('#public-subscription-feedback');
+const publicSubscriptionHost = $('#public-subscription-host');
+let publicSubscriptionBusy = false;
+
+function renderPublicSubscriptionPortHint() {
+  const port = publicSubscriptionForm.elements.port;
+  const rule = port.validity.valid ? `TCP ${port.value}` : '所填 TCP 端口';
+  $('#public-subscription-port-hint').textContent =
+    `在云安全组（如 RAKsmart）和主机防火墙放行入站 ${rule}。有 NAT 时，将该端口转发到 Router 主机。`;
+}
+
+function renderPublicSubscription(data) {
+  const publication = data?.public_subscription;
+  const url = data?.public_urls?.public_subscription_url || '';
+  $('#public-subscription-address').hidden = !url;
+  $('#public-subscription-url').value = url;
+  $('#public-subscription-status').textContent = publication?.base
+    ? `正在监听 TCP ${publication.port} · 外网可达性待验证`
+    : url ? '已配置 HTTPS 反代 · 外网可达性待验证'
+    : publication?.error || '尚未发布。启用后可在外网更新订阅。';
+  if (!publicSubscriptionDialog.open) return;
+  renderPublicSubscriptionPortHint();
+  const tls = data?.public_subscription_tls;
+  const legacy = data?.acme;
+  const choices = tls?.certificates || (legacy?.certificate_valid ? [{host: legacy.domain, type: 'domain'}] : []);
+  const options = choices.map(({host, type}) => new Option(`${type === 'ip' ? '公网 IP 证书' : '域名证书'} · ${host}`, host));
+  const previous = publicSubscriptionHost.value || publication?.domain;
+  if (choices.length !== publicSubscriptionHost.options.length || options.some((option, i) =>
+    option.text !== publicSubscriptionHost.options[i]?.text || option.value !== publicSubscriptionHost.options[i]?.value)) {
+    publicSubscriptionHost.replaceChildren(...options);
+  }
+  publicSubscriptionHost.value = choices.some(choice => choice.host === previous) ? previous : choices[0]?.host || '';
+  $('#public-subscription-certificate').textContent = choices.length > 1 ? '订阅地址使用所选证书覆盖的地址。'
+    : choices.length ? `将复用${options[0].text}`
+    : tls?.hysteria_local
+      ? '已生成 Hysteria 2 专用自签证书，节点客户端可用指纹验证。公网订阅需要与访问地址匹配的受信任证书。'
+      : '请为订阅域名或公网 IP 配置受信任的 HTTPS 证书。';
+  $('#public-subscription-cert-options').hidden = choices.length < 2;
+  $('#public-subscription-cert-link').hidden = !!choices.length;
+  publicSubscriptionEnable.textContent = publication?.base ? '保存发布设置' : '启用公网订阅';
+  publicSubscriptionEnable.disabled = publicSubscriptionBusy || !publication || !choices.length;
+  publicSubscriptionDisable.hidden = !publication?.enabled;
+  publicSubscriptionDisable.disabled = publicSubscriptionBusy;
+}
+
+async function setPublicSubscription(enabled) {
+  if (publicSubscriptionBusy) return;
+  publicSubscriptionBusy = true;
+  renderPublicSubscription(window.hopworldStatus);
+  publicSubscriptionFeedback.textContent = enabled ? '正在启动 HTTPS 监听…' : '正在停用 HTTPS 监听…';
+  try {
+    const {port} = publicSubscriptionForm.elements;
+    await call('/api/v1/public-subscription', {enabled, port: Number(port.value), host: publicSubscriptionHost.value});
+    publicSubscriptionDialog.close();
+    note(enabled ? '公网订阅监听已启动' : '公网订阅监听已停用');
+    void refresh().catch(() => {});
+  } catch (error) {
+    publicSubscriptionFeedback.textContent = error.message;
+  } finally {
+    publicSubscriptionBusy = false;
+    renderPublicSubscription(window.hopworldStatus);
+  }
+}
+
+$('#public-subscription-open').addEventListener('click', () => {
+  const status = window.hopworldStatus;
+  publicSubscriptionForm.elements.port.value = status?.public_subscription?.port || 9443;
+  publicSubscriptionHost.value = '';
+  publicSubscriptionFeedback.textContent = status?.public_subscription
+    ? status.public_subscription.error
+    : '请重启 Router 以加载公网订阅功能。';
+  publicSubscriptionDialog.showModal();
+  renderPublicSubscription(status);
+});
+for (const id of ['public-subscription-close', 'public-subscription-cert-link']) {
+  $('#' + id).addEventListener('click', () => publicSubscriptionDialog.close());
+}
+publicSubscriptionForm.addEventListener('submit', event => {
+  event.preventDefault();
+  void setPublicSubscription(true);
+});
+publicSubscriptionForm.elements.port.addEventListener('input', renderPublicSubscriptionPortHint);
+publicSubscriptionDisable.addEventListener('click', () => setPublicSubscription(false));
+$('#public-subscription-copy').addEventListener('click', () => copySubscriptionLink($('#public-subscription-url')));
 $('#rotate').onclick=async()=>{if(!confirm('更换后旧订阅地址立即失效，继续吗？'))return;try{await call('/api/rotate',{});await refresh();note('订阅地址已更新');}catch(e){note(e.message,{error:true});}};
 refresh().catch(() => {
   setConnectionLive(false);
   note('当前未连接管理服务。请启动服务后通过本机地址访问。', { error: true, duration: 8000 });
 });
+
+const updateNotices = $('#v1-update-notices');
+const updateBell = $('#v1-updates-open');
+const updateBadge = $('#v1-updates-count');
+const updateHistory = $('#v1-updates-history');
+const updateFeedback = $('#v1-updates-feedback');
+const markUpdateRead = $('#v1-updates-read');
+const updateSettings = $('#v1-updates-settings');
+const updatePolicies = $('#v1-updates-policies');
+let updateSnapshot;
+let updateRequest;
+let updatePreferencesRendered = false;
+
+function renderUpdateHistory() {
+  if (!updateSnapshot) return;
+  const {events, unread, read_through: readThrough, components} = updateSnapshot;
+  const names = {project: 'Router 程序', package: 'Router Debian 软件包', ...Object.fromEntries(components)};
+  updateBadge.hidden = !unread;
+  updateBadge.textContent = unread > 99 ? '99+' : String(unread);
+  updateBell.setAttribute('aria-label', unread ? `更新提醒，${unread} 条未读` : '更新提醒');
+  if (!updateNotices.open) return;
+  const states = {available: '发现更新', started: '已启动', completed: '已完成', failed: '失败', unavailable: '检查异常'};
+  updateHistory.replaceChildren(...events.map(event => {
+    const item = document.createElement('li');
+    const title = document.createElement('strong');
+    const when = document.createElement('time');
+    const message = document.createElement('p');
+    item.dataset.unread = String(event.id > readThrough);
+    title.textContent = [names[event.target] || event.target, states[event.state] || event.state,
+      event.target_version].filter(Boolean).join(' · ');
+    when.dateTime = new Date(event.timestamp * 1000).toISOString();
+    when.textContent = new Date(event.timestamp * 1000).toLocaleString();
+    message.textContent = [event.detail, event.current_version && '开始前版本 ' + event.current_version].filter(Boolean).join(' · ');
+    item.append(title, when, message);
+    return item;
+  }));
+  updateHistory.hidden = !events.length;
+  if (!unread && document.activeElement === markUpdateRead) updateSettings.focus();
+  markUpdateRead.hidden = !unread;
+  markUpdateRead.disabled = !unread;
+  updateFeedback.textContent = events.length ? '' : '暂无更新记录';
+}
+
+function renderUpdatePreferences() {
+  if (!updateSnapshot || updatePreferencesRendered) return;
+  updatePreferencesRendered = true;
+  const {components, installation, preferences} = updateSnapshot;
+  const rows = installation === 'package' ? [['package', 'Router Debian 软件包'], ...components] : components;
+  updatePolicies.replaceChildren();
+  for (const [target, name] of rows) {
+    const label = document.createElement('label');
+    const select = document.createElement('select');
+    select.id = 'update-policy-' + target;
+    label.htmlFor = select.id;
+    label.textContent = name;
+    select.replaceChildren(new Option('手动更新', 'manual'), new Option('自动更新', 'automatic'));
+    select.value = preferences[target] ? 'automatic' : 'manual';
+    select.addEventListener('change', async () => {
+      const feedback = $('#v1-update-policy-feedback');
+      select.disabled = true;
+      try {
+        const saved = await call('/api/v1/updates/preferences', {target, automatic: select.value === 'automatic'});
+        updateSnapshot.preferences[target] = saved.automatic;
+        feedback.textContent = name + '的更新设置已保存。';
+        if (target === 'package') void checkSystemUpdate();
+      } catch (error) {
+        select.value = updateSnapshot.preferences[target] ? 'automatic' : 'manual';
+        feedback.textContent = error.message;
+      } finally {
+        select.disabled = false;
+      }
+    });
+    updatePolicies.append(label, select);
+  }
+}
+
+function loadUpdateNotices() {
+  if (updateRequest) return updateRequest;
+  updateRequest = (async () => {
+    try {
+      updateSnapshot = await call('/api/v1/updates');
+      renderUpdateHistory();
+      renderUpdatePreferences();
+    } catch (error) {
+      if (updateNotices.open) {
+        updateFeedback.textContent = error.message;
+        if (!markUpdateRead.hidden) markUpdateRead.disabled = false;
+      }
+      if (!updatePreferencesRendered) $('#v1-update-policy-feedback').textContent = error.message;
+    } finally {
+      updateRequest = null;
+    }
+  })();
+  return updateRequest;
+}
+
+updateBell.addEventListener('click', () => {
+  updateFeedback.textContent = '正在读取更新记录…';
+  updateHistory.hidden = markUpdateRead.hidden = true;
+  updateNotices.showModal();
+  void loadUpdateNotices();
+});
+markUpdateRead.addEventListener('click', async () => {
+  const seen = updateSnapshot?.events[0]?.id;
+  if (!seen) return;
+  markUpdateRead.disabled = true;
+  try {
+    await call('/api/v1/updates/read', {seen});
+    if (updateRequest) await updateRequest;
+    await loadUpdateNotices();
+  } catch (error) {
+    updateFeedback.textContent = error.message;
+    markUpdateRead.disabled = false;
+  }
+});
+updateSettings.addEventListener('click', () => updateNotices.close());
+void loadUpdateNotices();
+setInterval(loadUpdateNotices, 45000);

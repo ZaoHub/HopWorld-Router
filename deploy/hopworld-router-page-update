@@ -6,11 +6,18 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 export HOME=/root GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0
 state=/var/lib/hopworld-router-updates
 install -d -m 755 "$state" "$state/venvs" "$state/previous"
-write_state() { printf '{"state":"%s"}\n' "$1" > "$state/page-status.tmp"; chmod 644 "$state/page-status.tmp"; mv -f "$state/page-status.tmp" "$state/page-status.json"; }
+job=$(cat /proc/sys/kernel/random/uuid)
+old=
+release_tag=
+write_state() {
+  printf '{"state":"%s","id":"%s","current":"%s","target":"%s","timestamp":%s}\n' "$1" "$job" "${old:0:12}" "$release_tag" "$(date +%s)" > "$state/page-status.tmp"
+  chmod 644 "$state/page-status.tmp"
+  mv -f "$state/page-status.tmp" "$state/page-status.json"
+}
 trap 'write_state failed' ERR
-write_state running
 exec 9>/var/lock/hopworld-router-update.lock
-flock -n 9 || { echo 'Another update is running' >&2; false; }
+flock -n 9 || { echo 'Another update is running' >&2; exit 1; }
+write_state running
 cd /opt/hopworld-router
 test -d .git && test ! -L .git && test -x .venv/bin/python
 service_uid=$(id -u hopworld-router)
@@ -22,14 +29,30 @@ test $((8#$(stat -c %a .git) & 022)) = 0
 test "$(stat -c %u .git/config)" = 0
 test $((8#$(stat -c %a .git/config) & 022)) = 0
 test -z "$(find .git \( -user "$service_uid" -o -perm /022 -o -type l \) -print -quit)"
-test -z "$(find .git/hooks -type f -perm /111 -print -quit 2>/dev/null)"
+test -z "$(find .git/hooks -type f ! -name '*.sample' -perm /111 -print -quit 2>/dev/null)"
+git() { command git -c core.hooksPath=/dev/null "$@"; }
 test "$(git symbolic-ref --short HEAD)" = main
 test -z "$(git status --porcelain)"
 old=$(git rev-parse HEAD)
-git fetch https://github.com/ZaoHub/HopWorld-Router.git refs/heads/main
-target=$(git rev-parse FETCH_HEAD)
+test -z "$(find router \( ! -user root -o -perm /022 -o -type l \) -print -quit)"
+python=$(readlink -f .venv/bin/python)
+test "$(stat -c %u "$python")" = 0
+release_tag=$("$python" -I -S -c '
+import sys
+sys.path.insert(0, "/opt/hopworld-router")
+from router.system_update import _json
+from router.release_channel import stable_release
+release = stable_release(_json)
+print(release["tag_name"] if release else "")
+')
+if test -z "$release_tag"; then write_state complete; exit 0; fi
+[[ "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+git fetch --no-tags https://github.com/ZaoHub/HopWorld-Router.git "refs/tags/$release_tag"
+target=$(git rev-parse 'FETCH_HEAD^{commit}')
+declared=$(git show "$target:router/version.py" | sed -n "s/^VERSION = '\([0-9.]\+\)'$/\1/p")
+test "v$declared" = "$release_tag"
+if git merge-base --is-ancestor "$target" "$old"; then write_state complete; exit 0; fi
 test "$(git merge-base "$old" "$target")" = "$old"
-if test "$old" = "$target"; then write_state complete; exit 0; fi
 
 backup=$(mktemp -d "$state/backup.XXXXXXXX")
 chmod 700 "$backup"
@@ -59,7 +82,19 @@ if test -n "$new_venv"; then
   mv .venv "$previous"
   ln -s "$new_venv" .venv
 fi
-systemctl restart hopworld-router
-sleep 5
-systemctl is-active --quiet hopworld-router
+if ! systemctl restart hopworld-router || ! "$python" -I -S -c '
+import sys
+sys.path.insert(0, "/opt/hopworld-router")
+from router.system_update import require_service_ready
+require_service_ready()
+'; then
+  git reset --keep "$old"
+  if test -n "$new_venv"; then
+    rm .venv
+    mv "$previous" .venv
+  fi
+  systemctl restart hopworld-router || true
+  write_state failed
+  exit 1
+fi
 write_state complete

@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+
+if [ "$1" = configure ]; then
+    trap '/usr/bin/hopworld-router-check --instructions || true' EXIT
+    if ! getent passwd hopworld-router >/dev/null; then
+        adduser --system --group --home /var/lib/hopworld-router --no-create-home hopworld-router
+    fi
+    deb-systemd-helper unmask hopworld-router.service >/dev/null
+    if deb-systemd-helper --quiet was-enabled hopworld-router.service; then
+        deb-systemd-helper enable hopworld-router.service >/dev/null
+    else
+        deb-systemd-helper update-state hopworld-router.service >/dev/null
+    fi
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload
+        if [ -n "${2:-}" ]; then
+            deb-systemd-invoke restart hopworld-router.service
+        else
+            deb-systemd-invoke start hopworld-router.service
+        fi
+    fi
+fi

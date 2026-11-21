@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+cd /usr/lib/hopworld-router
+exec /usr/bin/python3 -m router.uninstall "$@"

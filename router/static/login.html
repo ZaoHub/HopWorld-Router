@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>管理员登录 · HopWorld-Router</title>
+  <link rel="icon" href="/logo.png">
+  <link rel="stylesheet" href="/login.css">
+  <script src="/login.js" defer></script>
+</head>
+<body>
+  <main class="login-shell">
+    <section class="login-brand" aria-label="HopWorld-Router">
+      <div class="login-brand-copy">
+        <h1>HopWorld-Router</h1>
+        <p>多协议网络接入与节点管理平台</p>
+      </div>
+      <div class="login-visual" aria-hidden="true">
+        <div class="sphere-glow"></div>
+        <div class="orbit orbit-horizontal"><i></i><i></i></div>
+        <div class="orbit orbit-slanted"><i></i></div>
+        <div class="orbit orbit-vertical"><i></i><i></i></div>
+        <div class="brand-core"><img src="/logo.png" width="104" height="104" alt=""></div>
+      </div>
+    </section>
+    <section class="login-entry" aria-labelledby="login-title">
+      <div class="login-panel">
+        <img class="login-mark" src="/logo.png" width="44" height="44" alt="">
+        <h2 id="login-title">登录管理后台</h2>
+        <p id="login-caption">使用管理员账号登录 HopWorld-Router。</p>
+        <form id="login-form" data-initial-setup="false" autocomplete="on" method="post" action="/login">
+          <label for="login-user">管理员账号</label>
+          <input id="login-user" name="username" autocomplete="username" required spellcheck="false" autocapitalize="none">
+          <label for="login-password">管理员密码</label>
+          <div class="password-field">
+            <input id="login-password" type="password" name="password" autocomplete="current-password" required>
+            <button id="show-password" type="button" aria-controls="login-password" aria-pressed="false">显示</button>
+          </div>
+          <div id="initial-password-fields" hidden>
+            <label for="new-password">新密码</label>
+            <input id="new-password" type="password" name="new_password" autocomplete="new-password" disabled aria-describedby="password-requirements">
+            <p id="password-requirements">至少使用 6 个字符，字符类型不限。</p>
+            <label for="repeat-password">确认新密码</label>
+            <input id="repeat-password" type="password" autocomplete="new-password" disabled>
+          </div>
+          <p id="login-feedback" role="status"></p>
+          <button type="submit" id="login-submit">登录</button>
+        </form>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

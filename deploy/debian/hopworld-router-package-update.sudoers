@@ -1,0 +1,1 @@
+hopworld-router ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block hopworld-router-package-update.service

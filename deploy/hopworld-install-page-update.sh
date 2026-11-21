@@ -13,4 +13,6 @@ printf '%s\n' 'hopworld-router ALL=(root) NOPASSWD: /usr/bin/systemctl start --n
 visudo -cf "$tmp"
 install -o root -g root -m 440 "$tmp" /etc/sudoers.d/hopworld-router-update
 systemctl daemon-reload
+install -d -o root -g root -m 755 /etc/hopworld-router
+install -o root -g root -m 644 /dev/null /etc/hopworld-router/stable-release-updater
 echo '页面更新服务已安装'

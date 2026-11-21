@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+if [ "$1" = install ]; then
+    for path in /opt/hopworld-router /etc/systemd/system/hopworld-router.service /run/systemd/system/hopworld-router.service; do
+        if [ -e "$path" ] || [ -L "$path" ]; then
+            printf 'Existing HopWorld Router installation at %s. Migrate it before installing this package.\n' "$path" >&2
+            exit 1
+        fi
+    done
+fi

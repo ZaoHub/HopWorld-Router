@@ -1,37 +1,17 @@
 """Run sing-box so the local network egress is also reachable as Hysteria 2 and TUIC."""
 
-import ipaddress
 import json
 import os
-import shutil
-import signal
-import subprocess
-import threading
 from pathlib import Path
 
+from router.core_process import CoreProcess
 from router.local_node import build_quic_links, build_singbox_config
 
 
-class SingboxService:
+class SingboxService(CoreProcess):
     def __init__(self, data_dir, binary=None):
-        self.data_dir = Path(data_dir)
-        self.data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-        self.config_path = self.data_dir / 'singbox-local.json'
-        self.meta_path = self.data_dir / 'singbox-local.meta.json'
-        self.pid_path = self.data_dir / 'singbox-local.pid'
-        self.binary = binary if binary is not None else (os.environ.get('HOPWORLD_SINGBOX') or shutil.which('sing-box'))
-        self._lock = threading.Lock()
-        self._process = None
-
-    def locate(self):
-        found = os.environ.get('HOPWORLD_SINGBOX') or shutil.which('sing-box')
-        if not found and os.access('/usr/local/bin/sing-box', os.X_OK):
-            found = '/usr/local/bin/sing-box'
-        if not found and os.access('/usr/bin/sing-box', os.X_OK):
-            found = '/usr/bin/sing-box'
-        if found:
-            self.binary = found
-        return self.binary
+        super().__init__(data_dir, binary, program='sing-box', stem='singbox-local',
+                         env='HOPWORLD_SINGBOX', command=('run',))
 
     def public_view(self, settings):
         from router.local_node import quic_ports, DEFAULT_LOCAL_PORT
@@ -40,13 +20,16 @@ class SingboxService:
             hy2_port, tuic_port = quic_ports(port)
         except ValueError:
             hy2_port = tuic_port = 0
+        protocols = settings.get('legacy_quic_protocols', ('hysteria2', 'tuic'))
+        hy2_port = hy2_port if 'hysteria2' in protocols else 0
+        tuic_port = tuic_port if 'tuic' in protocols else 0
         missing = not self.binary
         if not settings.get('enabled'):
             return {'available': False, 'error': '', 'missing': missing, 'hy2_port': hy2_port, 'tuic_port': tuic_port}
         if missing:
             return {'available': False, 'error': '未找到 sing-box，Hysteria 2 和 TUIC 未加入订阅', 'missing': True, 'hy2_port': hy2_port, 'tuic_port': tuic_port}
-        if not self.running():
-            return {'available': False, 'error': 'Hysteria 2 / TUIC 未在运行', 'missing': False, 'hy2_port': hy2_port, 'tuic_port': tuic_port}
+        if not self.links(settings):
+            return {'available': False, 'error': self._error or 'Hysteria 2 / TUIC 未在运行', 'missing': False, 'hy2_port': hy2_port, 'tuic_port': tuic_port}
         return {'available': True, 'error': '', 'missing': False, 'hy2_port': hy2_port, 'tuic_port': tuic_port}
 
     def links(self, settings):
@@ -58,167 +41,49 @@ class SingboxService:
             return []
         try:
             meta = json.loads(self.meta_path.read_text(encoding='utf-8'))
+            if meta.get('host') != settings['public_host'] or meta.get('port') != int(settings['port']):
+                return []
             hy2, tuic = build_quic_links(
                 settings['public_host'], int(settings['port']), settings['uuid'],
                 settings['hy2_password'], settings['tuic_password'],
-                settings.get('name') or '本地网络', insecure=bool(meta['insecure']),
+                settings.get('name') or '本地网络',
             )
-        except (OSError, ValueError, KeyError, TypeError):
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
             return []
-        return [hy2, tuic]
+        protocols = settings.get('legacy_quic_protocols', ('hysteria2', 'tuic'))
+        return [link for protocol, link in (('hysteria2', hy2), ('tuic', tuic)) if protocol in protocols]
 
     def apply(self, settings, certificate=None):
         with self._lock:
-            if os.name == 'nt' or not settings.get('enabled') or not self.binary:
+            self._error = ''
+            protocols = settings.get('legacy_quic_protocols', ('hysteria2', 'tuic'))
+            if os.name == 'nt' or not settings.get('enabled') or not self.binary or not protocols:
                 self._stop_locked()
                 return []
-            cert_path, key_path, insecure = self._certificate(settings, certificate)
-            config = build_singbox_config(
-                settings['public_host'], int(settings['port']), settings['uuid'],
-                settings['hy2_password'], settings['tuic_password'], cert_path, key_path,
-            )
-            payload = json.dumps(config, ensure_ascii=False, indent=2).encode('utf-8')
-            meta = json.dumps({'insecure': insecure}, ensure_ascii=False).encode('utf-8')
-            if self._matches(payload, meta) and self._alive_locked():
-                return self._links_locked(settings)
-            self._write(self.config_path, payload)
-            self._write(self.meta_path, meta)
-            self._restart_locked()
-            return self._links_locked(settings)
-
-    def stop(self):
-        if os.name == 'nt':
-            return
-        with self._lock:
-            self._stop_locked()
-
-    def running(self):
-        if os.name == 'nt':
-            return False
-        with self._lock:
-            return self._alive_locked()
-
-    def _certificate(self, settings, certificate):
-        if certificate:
-            cert_path, key_path = certificate
-            if not Path(cert_path).is_file() or not Path(key_path).is_file():
-                raise ValueError('Hysteria 2 / TUIC 证书不存在')
-            return cert_path, key_path, False
-        return (*self._self_signed(settings['public_host']), True)
-
-    def _self_signed(self, host):
-        directory = self.data_dir / 'quic'
-        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-        cert = directory / 'cert.pem'
-        key = directory / 'key.pem'
-        marker = directory / 'host'
-        if cert.is_file() and key.is_file() and marker.is_file() and marker.read_text(encoding='utf-8').strip() == host:
-            return str(cert), str(key)
-        openssl = shutil.which('openssl')
-        if not openssl:
-            raise ValueError('无法生成 Hysteria 2 / TUIC 证书，请安装 openssl 或先签发域名证书')
-        try:
-            san = f'IP:{host}' if _is_ip(host) else f'DNS:{host}'
-            config = directory / 'openssl.cnf'
-            config.write_text(
-                '[req]\nprompt = no\ndistinguished_name = req_distinguished_name\nx509_extensions = v3_req\n'
-                '[req_distinguished_name]\nCN = hopworld\n'
-                f'[v3_req]\nsubjectAltName = {san}\n',
-                encoding='utf-8',
-            )
-            os.chmod(config, 0o600)
-            subprocess.run(
-                [openssl, 'req', '-x509', '-newkey', 'rsa:2048', '-keyout', str(key), '-out', str(cert),
-                 '-days', '825', '-nodes', '-config', str(config)],
-                check=True, capture_output=True, timeout=20,
-            )
-        except (OSError, subprocess.SubprocessError) as exc:
-            raise ValueError('无法生成 Hysteria 2 / TUIC 证书') from exc
-        os.chmod(cert, 0o600)
-        os.chmod(key, 0o600)
-        marker.write_text(host, encoding='utf-8')
-        os.chmod(marker, 0o600)
-        return str(cert), str(key)
-
-    def _matches(self, payload, meta):
-        try:
-            return self.config_path.read_bytes() == payload and self.meta_path.read_bytes() == meta
-        except OSError:
-            return False
-
-    def _write(self, path, payload):
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        try:
-            os.write(fd, payload)
-        finally:
-            os.close(fd)
-
-    def _alive_locked(self):
-        if self._process is not None and self._process.poll() is None:
-            return True
-        pid = self._read_pid()
-        if pid is None:
-            return False
-        try:
-            os.kill(pid, 0)
-        except OSError:
-            return False
-        return True
-
-    def _restart_locked(self):
-        self._stop_locked()
-        try:
-            process = subprocess.Popen(
-                [self.binary, 'run', '-c', str(self.config_path)],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
-            )
-        except OSError as exc:
-            raise ValueError('无法启动 sing-box，请检查安装和执行权限') from exc
-        try:
-            process.wait(timeout=0.5)
-        except subprocess.TimeoutExpired:
-            pass
-        else:
-            raise ValueError('sing-box 启动后立即退出，请检查配置、证书和 UDP 端口占用')
-        self._process = process
-        self.pid_path.write_text(str(process.pid), encoding='utf-8')
-        os.chmod(self.pid_path, 0o600)
-
-    def _stop_locked(self):
-        if self._process is not None and self._process.poll() is None:
-            _signal(self._process.pid, signal.SIGTERM)
+            if not certificate or not all(Path(path).is_file() for path in certificate):
+                self._error = 'Hysteria 2 / TUIC 需要与公网域名匹配的有效证书'
+                self._stop_locked()
+                return []
             try:
-                self._process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                _signal(self._process.pid, signal.SIGKILL)
-                self._process.wait(timeout=5)
-        else:
-            pid = self._read_pid()
-            if pid is not None:
-                _signal(pid, signal.SIGTERM)
-        self._process = None
-        try:
-            self.pid_path.unlink()
-        except OSError:
-            pass
-
-    def _read_pid(self):
-        try:
-            return int(self.pid_path.read_text(encoding='utf-8').strip())
-        except (OSError, ValueError):
-            return None
-
-
-def _is_ip(host):
-    try:
-        ipaddress.ip_address(host)
-    except ValueError:
-        return False
-    return True
-
-
-def _signal(pid, sig):
-    try:
-        os.kill(pid, sig)
-    except OSError:
-        pass
+                config = build_singbox_config(
+                    settings['public_host'], int(settings['port']), settings['uuid'],
+                    settings['hy2_password'], settings['tuic_password'], *certificate,
+                )
+                config['inbounds'] = [inbound for inbound in config['inbounds'] if inbound['type'] in protocols]
+                if settings.get('public_host_prefer') in ('ipv6', 'dual', 'ipv4_first'):
+                    for inbound in config['inbounds']:
+                        inbound['listen'] = '::'
+                payload = json.dumps(config, ensure_ascii=False, indent=2).encode('utf-8')
+                meta = json.dumps({
+                    'host': settings['public_host'], 'port': int(settings['port']),
+                    'certificate_revision': [Path(path).stat().st_mtime_ns for path in certificate],
+                }).encode('utf-8')
+                if not self._matches(payload, meta) or not self._alive_locked():
+                    self._write(self.config_path, payload)
+                    self._write(self.meta_path, meta)
+                    self._restart_locked()
+                return self._links_locked(settings)
+            except (OSError, ValueError, KeyError):
+                self._error = '无法启动 Hysteria 2 / TUIC，请检查 sing-box、证书和 UDP 端口'
+                self._stop_locked()
+                return []

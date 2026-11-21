@@ -15,10 +15,10 @@ docker compose version
 
 ## 2. 设置密码和数据目录
 
-在项目目录创建名为 `router.env` 的纯文本文件，使用 UTF-8 编码，写入以下一行，并把示例文字替换成至少 16 个随机英文字母和数字组成的密码：
+Docker Desktop 的容器桥接部署需要预设密码。在项目目录创建名为 `router.env` 的纯文本文件，使用 UTF-8 编码，写入以下一行，并把示例文字替换成至少 6 个字符的密码：
 
 ```text
-HOPWORLD_ADMIN_PASSWORD=请替换为至少16字符的随机密码
+HOPWORLD_ADMIN_PASSWORD=请替换为至少6字符的密码
 ```
 
 文件内容不要加引号或空格。限制其他账号访问这个文件；它不会随项目提交，但密码、`data/` 和订阅链接都应妥善保管。配置文件会在首次启动时挂载项目目录下的 `data/`，请确认 Docker Desktop 允许共享该目录。
@@ -57,7 +57,7 @@ docker compose -f compose.desktop.yaml logs --tail=100 hopworld-router
 
 ## 功能范围
 
-镜像包含 Xray 和 curl，可供订阅管理与节点测试使用，但在 Docker Desktop 上尚未完成实际验证。这是镜像自带的，不是管理页自动安装。不要在容器里执行 `deploy/hopworld-install-root.sh`；那条授权只用于 Linux systemd 安装，不会改 Docker Desktop 的端口映射，也不会改 macOS 或 Windows 的防火墙。默认配置只映射管理端口，本地网络节点端口没有映射。
+镜像包含 Xray 和 curl，可供订阅管理与节点测试使用，但在 Docker Desktop 上尚未完成实际验证。默认配置只映射管理端口，本地网络节点端口没有映射。
 
 ### 可选：映射本地节点端口
 

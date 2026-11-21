@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+
+case "$1" in
+    remove|purge)
+        if command -v deb-systemd-helper >/dev/null; then
+            deb-systemd-helper purge hopworld-router.service >/dev/null
+        fi
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload
+        fi
+        ;;
+esac

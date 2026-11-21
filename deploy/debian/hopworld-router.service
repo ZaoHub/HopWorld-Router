@@ -1,0 +1,25 @@
+[Unit]
+Description=HopWorld Router
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=exec
+User=hopworld-router
+Group=hopworld-router
+WorkingDirectory=/usr/lib/hopworld-router
+StateDirectory=hopworld-router
+StateDirectoryMode=0750
+Environment=HOPWORLD_DATA=/var/lib/hopworld-router
+Environment=HOPWORLD_PACKAGE_VERSION=@VERSION@
+Environment=PYTHONDONTWRITEBYTECODE=1
+EnvironmentFile=-/etc/hopworld-router.env
+ExecStart=/usr/bin/python3 -m router.server
+Restart=on-failure
+RestartSec=2s
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
