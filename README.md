@@ -8,6 +8,8 @@ HopWorld Router 是独立于 [HopWorld macOS 应用](https://github.com/ZaoHub/H
 
 旧版源码归档见 [V0](V0/README.md)（V1 开发前的基线 `e9f1d7a`）。 加密 DNS 配置、隔离出口实验与验收进度见 [V1 网络安全与验收](docs/V1网络安全与验收.md)。
 
+[查看 V1 放行端口表](#v1-部署端口与安全组)
+
 ## 当前可用
 
 HopWorld Router 同时做两件事：**把运行本服务的机器网络做成可订阅的节点**，以及**汇总多条订阅与手动节点**。
@@ -82,6 +84,46 @@ HopWorld Router 同时做两件事：**把运行本服务的机器网络做成�
 - OpenWrt、Windows 与透明网关等场景的完整部署与验证
 
 ## 安装教程
+
+### V1 部署端口与安全组
+
+只用管理后台时，入站只需实际的 SSH 端口（通常为 TCP 22）。后台默认监听 `127.0.0.1:8080`，通过 SSH 隧道访问。按实际启用的功能设置云安全组、主机防火墙及 NAT 转发。
+
+#### 入站端口
+
+| 功能或软件 | 协议 | 默认或示例端口 | 放行位置与条件 |
+| --- | --- | --- | --- |
+| SSH 管理 | TCP | 22 或服务器实际端口 | VPS 入站，可将来源限制为管理员 IP |
+| Router 后台 | TCP | 8080 | 服务器回环地址，通过 SSH 隧道访问 |
+| Router 独立 HTTPS 订阅 | TCP | 9443 | 直接发布时对外放行。通过反代发布时按后端地址限制访问 |
+| Nginx 或其他 HTTPS 反代 | TCP | 443 | 在 HTTPS 公网入口放行 |
+| Certbot / lego，HTTP-01 | TCP | 80 | 在 ACME 公网入口放行，首签和续期都需要 |
+| lego，TLS-ALPN-01 | TCP | 443 | 在 ACME 公网入口放行。DNS-01 通过 DNS 记录验证，无额外入站要求 |
+| Xray-core / VLESS Reality | TCP | 8443 | 节点直连时，用实际监听端口放行 |
+| Hysteria 2 独立内核 | UDP | 8442 | 节点直连时，用实际监听端口放行 |
+| sing-box / Hysteria 2、TUIC | UDP | 分别为 8444、8445 | 只放行已启用的节点协议对应端口 |
+| TUIC Server 独立内核 | UDP | 8446 | 节点直连时，用实际监听端口放行 |
+| Mihomo / Shadowsocks | TCP、UDP | 8388 | 节点直连时，用实际监听端口放行 |
+| shadowsocks-rust / Shadowsocks | TCP、UDP | 8389 | 节点直连时，用实际监听端口放行 |
+| FRP 服务端 `frps` 控制连接 | TCP | 7000（示例） | 在中转 VPS 放行，供 `frpc` 连入 |
+| FRP 节点映射 | TCP 或 UDP | 以 VPS 映射配置为准 | 客户端连中转 VPS 的对外映射端口 |
+| strongSwan / IKEv2 | UDP | 500、4500 | 启用系统 VPN 后，在接入主机放行 |
+| DNS Webhook、TLS-ALPN 分流后端 | TCP | 分别为 9876、10443（后者为配置示例） | 保持回环或内部访问 |
+| 旧版组合节点内部 SOCKS | TCP、UDP | 37891 | Router 同机内核使用，保持回环访问 |
+
+独立节点直连需在对应节点设置中勾选「允许其他设备连接」。旧版组合节点默认通过 TCP 8443 提供 Reality，启用旧版 QUIC 后通常使用 UDP 8444、8445。更改端口后，以管理页显示的监听或 FRP 映射为准。IPv4 在 NAT 后时，同步转发对应端口和协议。启用 IPv6 时，同时配置 IPv6 入站规则。
+
+#### 出站端口
+
+| 功能或软件 | 协议 | 目的端口 | 目标 |
+| --- | --- | --- | --- |
+| 安装和更新 Router、内核、独立 Python 及依赖 | TCP | 443；使用 HTTP 镜像时为 80 | GitHub、PyPI、APT/YUM 软件源或配置的镜像 |
+| 系统 DNS | UDP、TCP | 53 | 服务器配置的递归解析器 |
+| 加密 DNS | TCP | DoH 443、DoT 853，或所配置的端口 | 已选解析器。经固定 SOCKS5 出口时，主机外层按实际 SOCKS5 端点放行 |
+| 公网证书、DDNS / DNS-01 API | TCP | 通常为 443 | ACME 服务及所选 DNS 服务商的 HTTPS API |
+| 上游订阅、节点测速、Reality 目标站 | TCP | 通常为 443，按 URL 或目标配置 | 上游订阅站、测速站和配置的目标站 |
+| FRP 客户端 `frpc` | TCP | 7000（示例）或实际控制端口 | 中转 VPS 的 `frps` |
+| 本地节点直出或固定上游 | TCP、UDP | 按目标或上游的实际端口 | 业务目的地址或已选代理。使用 QUIC 上游时按其配置开放 UDP |
 
 根据运行环境展开对应教程：
 
@@ -196,34 +238,6 @@ rsync -a --exclude .venv --exclude data --exclude __pycache__ ./ root@服务器:
 ```
 
 公网地址已知时，可在 `/etc/hopworld-router.env` 加一行 `HOPWORLD_PUBLIC_HOST=你的域名或公网IP`，然后重启服务。管理页里仍可修改。
-
-### V1 部署端口与安全组
-
-**只安装后台时**，服务器入站只需要实际的 SSH 端口（通常为 TCP 22），可将来源限制为管理员 IP。后台默认监听服务器的 `127.0.0.1:8080`，通过 SSH 隧道访问。安装时服务器还需能出站访问 GitHub 和系统软件源。
-
-| 功能 | 默认或示例端口 | 入站放行位置与条件 |
-| --- | --- | --- |
-| SSH 管理 | TCP 22 或服务器实际 SSH 端口 | 在 VPS 云安全组和主机防火墙按需放行 |
-| 后台 HTTP | TCP 8080 | 保持回环监听，公网入站规则留空 |
-| 独立 HTTPS 公网订阅 | TCP 9443 | 启用公网订阅后，在接入主机放行。若外部由反代统一接入，开放反代入口，后端监听保持内部可达 |
-| Nginx 等 HTTPS 公网入口 | TCP 443 | 发放 HTTPS 订阅或使用 TLS-ALPN-01 时，在实际接入主机放行 |
-| Let’s Encrypt HTTP-01 | TCP 80 | HTTP-01 首次签发及续期时可从公网到达。DNS-01 校验无需为证书签发开放 80 或 443 |
-| FRP 控制连接 | TCP 7000（配置示例） | 在运行 `frps` 的 VPS 放行，供 `frpc` 连入。客户端业务另在同一 VPS 放行配置的映射端口及协议 |
-| IKEv2 | UDP 500、UDP 4500 | 启用 strongSwan 后，在 VPN 接入主机放行 |
-| 本机辅助接口 | DNS Webhook TCP 9876、TLS-ALPN 分流后端示例 TCP 10443 | 保持本机回环或内部网络访问，公网入站规则留空 |
-
-**独立节点直连**时，在对应节点设置勾选「允许其他设备连接」，按下表只放行实际启用的协议与端口。使用 FRP 时，客户端访问 VPS 的**映射端口**，以映射配置为准。
-
-| 独立节点 | 默认入站 |
-| --- | --- |
-| Xray-core / VLESS Reality | TCP 8443 |
-| Hysteria 2 | UDP 8442 |
-| TUIC Server | UDP 8446 |
-| sing-box / Hysteria 2、TUIC | 分别为 UDP 8444、UDP 8445 |
-| Mihomo / Shadowsocks | TCP 和 UDP 8388 |
-| shadowsocks-rust | TCP 和 UDP 8389 |
-
-旧的组合式本地节点默认使用 TCP 8443，启用旧版 QUIC 后通常使用 UDP 8444、8445，以后台显示为准。自定义端口后，按实际监听或映射同步设置云安全组和主机防火墙。IPv4 在 NAT 后时，将相应端口和协议转发到接入主机。启用 IPv6 时，同时核对 IPv6 入站规则。
 
 ### 打开管理页
 
