@@ -1,15 +1,17 @@
-"""Loopback-only Linux installer for HopWorld-Router."""
+"""SSH installer for HopWorld-Router, with an optional HTTPS gateway."""
 
 import argparse
 import codecs
 import hmac
 import ipaddress
 import json
+import os
 import re
 import shlex
 import socket
 import threading
 import time
+from contextlib import nullcontext
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
 from pathlib import Path
@@ -35,6 +37,25 @@ JOB_SECONDS = 25 * 60
 HOST_LABEL = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")
 USER = re.compile(r"[A-Za-z_][A-Za-z0-9_.-]{0,63}")
 FINGERPRINT = re.compile(r"SHA256:[A-Za-z0-9+/]{43}")
+WEB_ORIGIN = "https://zaohub.github.io"
+OPERATOR_TOKEN = re.compile(r"[0-9a-f]{64}")
+PUBLIC_IPV6 = ipaddress.ip_network("2000::/3")
+SIX_TO_FOUR = ipaddress.ip_network("2002::/16")
+NON_ROUTABLE_IPV4 = (ipaddress.ip_network("192.0.0.0/24"), ipaddress.ip_network("192.88.99.0/24"))
+
+
+def public_ip(host):
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        raise ValueError("网页安装需要填写服务器的公网 IP。") from None
+    if not address.is_global or address.is_multicast or address.is_reserved:
+        raise ValueError("网页安装只连接公网单播 IP。")
+    if address.version == 6 and (address not in PUBLIC_IPV6 or address in SIX_TO_FOUR):
+        raise ValueError("网页安装只连接公网单播 IP。")
+    if address.version == 4 and any(address in subnet for subnet in NON_ROUTABLE_IPV4):
+        raise ValueError("网页安装只连接公网单播 IP。")
+    return str(address)
 
 
 def installer_archive():
@@ -60,7 +81,7 @@ class VerifyHostKey(paramiko.MissingHostKeyPolicy):
             raise HostKeyMismatch(f"主机指纹不匹配。服务器提供 {key.get_name()} {key.fingerprint}。请从可信终端核对。")
 
 
-def validation(data):
+def validation(data, web=False):
     if not isinstance(data, dict):
         raise ValueError("安装资料必须是 JSON 对象。")
     host, port, username = (data.get(field) for field in ("host", "port", "username"))
@@ -72,13 +93,15 @@ def validation(data):
     except ValueError:
         if not all(HOST_LABEL.fullmatch(label) for label in host.removesuffix(".").split(".")):
             raise ValueError("服务器地址格式有误，请填写 IP 或域名。") from None
+    if web:
+        host = public_ip(host)
     if type(port) is not int or not 1 <= port <= 65535:
         raise ValueError("SSH 端口须为 1 至 65535。")
     if not isinstance(username, str) or not USER.fullmatch(username):
         raise ValueError("请输入有效的 SSH 账号。")
     if not isinstance(fingerprint, str) or not FINGERPRINT.fullmatch(fingerprint):
         raise ValueError("请输入完整的 SHA256 主机指纹。")
-    if method not in ("password", "agent"):
+    if method not in ("password", "agent") or (web and method != "password"):
         raise ValueError("请选择 SSH 验证方式。")
     password = data.pop("password", None) if method == "password" else None
     if method == "password" and (not isinstance(password, str) or not 1 <= len(password) <= 512):
@@ -86,12 +109,13 @@ def validation(data):
     return host, port, username, fingerprint, method, password
 
 
-def run_install(target, send):
+def run_install(target, send, web=False):
     host, port, username, fingerprint, method, password = target
     send("status", "正在连接服务器并核对 SSH 主机指纹…")
-    with paramiko.SSHClient() as client:
+    connection = socket.create_connection((host, port), timeout=12) if web else nullcontext()
+    with connection as sock, paramiko.SSHClient() as client:
         client.set_missing_host_key_policy(VerifyHostKey(fingerprint))
-        client.connect(host, port=port, username=username, password=password,
+        client.connect(host, port=port, username=username, password=password, sock=sock,
                        allow_agent=method == "agent", look_for_keys=False, timeout=12,
                        auth_timeout=15, banner_timeout=12, channel_timeout=15)
         send("status", "SSH 已连接，正在执行 HopWorld-Router V1.0.2 安装…")
@@ -103,10 +127,15 @@ def run_install(target, send):
             channel.exec_command(f"{shell} -c {shlex.quote(INSTALL)}")
             channel.shutdown_write()
             deadline = time.monotonic() + JOB_SECONDS
+            heartbeat = time.monotonic() + 15
             decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
             while not channel.exit_status_ready() or channel.recv_ready():
-                if time.monotonic() >= deadline:
+                now = time.monotonic()
+                if now >= deadline:
                     raise TimeoutError("安装等待超时，请检查服务器上的 HopWorld-Router 服务状态。")
+                if web and now >= heartbeat:
+                    send("heartbeat", "")
+                    heartbeat = now + 15
                 if channel.recv_ready():
                     fragment = decoder.decode(channel.recv(8192))
                     if fragment:
@@ -127,6 +156,10 @@ class Installer(BaseHTTPRequestHandler):
         pass
 
     @property
+    def operator_token(self):
+        return getattr(self.server, "operator_token", None)
+
+    @property
     def local_host(self):
         return f"127.0.0.1:{self.server.server_port}"
 
@@ -137,6 +170,12 @@ class Installer(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Content-Security-Policy", "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
         self.send_header("Referrer-Policy", "no-referrer")
+        if self.operator_token and self.headers.get("Origin") == WEB_ORIGIN:
+            self.send_header("Access-Control-Allow-Origin", WEB_ORIGIN)
+            self.send_header("Vary", "Origin")
+            if self.command == "OPTIONS":
+                self.send_header("Access-Control-Allow-Methods", "POST")
+                self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
         if size is not None:
             self.send_header("Content-Length", str(size))
         self.end_headers()
@@ -148,7 +187,20 @@ class Installer(BaseHTTPRequestHandler):
     def json(self, status, **data):
         self.reply(status, "application/json; charset=utf-8", json.dumps(data, ensure_ascii=False).encode())
 
+    def do_OPTIONS(self):
+        if not self.operator_token or self.headers.get("Origin") != WEB_ORIGIN:
+            return self.json(403, error="请从 GitHub 安装页面发起请求。")
+        if self.path != "/api/install":
+            return self.json(404, error="页面不存在。")
+        self.headers_for(204, "text/plain", 0)
+
     def do_GET(self):
+        if self.operator_token:
+            if self.headers.get("Origin") != WEB_ORIGIN:
+                return self.json(403, error="请从 GitHub 安装页面发起请求。")
+            if self.path == "/api/ready":
+                return self.json(200, installer=True)
+            return self.json(404, error="页面不存在。")
         if self.headers.get("Host") != self.local_host:
             return self.json(403, error="请通过 127.0.0.1 访问安装器。")
         if self.path == "/api/ready":
@@ -162,8 +214,16 @@ class Installer(BaseHTTPRequestHandler):
         return self.reply(200, mime, (STATIC / name).read_bytes())
 
     def do_POST(self):
-        if (self.headers.get("Host") != self.local_host or
-                self.headers.get("Origin") != f"http://{self.local_host}"):
+        web = bool(self.operator_token)
+        if web:
+            if self.headers.get("Origin") != WEB_ORIGIN:
+                return self.json(403, error="请从 GitHub 安装页面发起请求。")
+            authorization = self.headers.get("Authorization", "").encode("latin-1")
+            expected = f"Bearer {self.operator_token}".encode("ascii")
+            if not hmac.compare_digest(authorization, expected):
+                return self.json(401, error="安装服务访问令牌无效。")
+        elif (self.headers.get("Host") != self.local_host or
+              self.headers.get("Origin") != f"http://{self.local_host}"):
             return self.json(403, error="请通过本机安装页面发起请求。")
         if self.path != "/api/install":
             return self.json(404, error="页面不存在。")
@@ -174,7 +234,7 @@ class Installer(BaseHTTPRequestHandler):
             if not 1 <= size <= BODY_LIMIT:
                 return self.json(413, error="安装资料大小不受支持。")
             self.connection.settimeout(10)
-            target = validation(json.loads(self.rfile.read(size)))
+            target = validation(json.loads(self.rfile.read(size)), web=web)
         except (ValueError, UnicodeError, TimeoutError) as error:
             message = str(error) if type(error) is ValueError else "无法读取安装资料。"
             return self.json(400, error=message)
@@ -189,7 +249,7 @@ class Installer(BaseHTTPRequestHandler):
                 self.wfile.flush()
 
             try:
-                run_install(target, send)
+                run_install(target, send, web=web)
             except HostKeyMismatch as error:
                 send("error", str(error))
             except paramiko.AuthenticationException:
@@ -209,8 +269,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=18731)
     options = parser.parse_args()
+    token = os.environ.get("INSTALL_OPERATOR_TOKEN")
+    if token is not None and not OPERATOR_TOKEN.fullmatch(token):
+        parser.error("INSTALL_OPERATOR_TOKEN must contain 64 lowercase hexadecimal characters")
     with ThreadingHTTPServer(("127.0.0.1", options.port), Installer) as server:
-        print(f"HopWorld-Router 安装器：http://127.0.0.1:{server.server_port}/", flush=True)
+        server.operator_token = token
+        print(f"HopWorld-Router 安装器监听 127.0.0.1:{server.server_port}", flush=True)
         try:
             server.serve_forever()
         except KeyboardInterrupt:

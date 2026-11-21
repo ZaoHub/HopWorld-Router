@@ -1,5 +1,15 @@
 # HopWorld-Router 在线安装
 
+## GitHub Pages 网页安装
+
+服务运行需要 Python 3.10+。使用 `deploy/hopworld-page-installer.service` 时，将 `installer.py` 和 `requirements.txt` 放在 `/opt/hopworld-page-installer`，在该目录创建 `.venv` 并安装依赖。为服务创建 `hopworld-installer` 系统账号。
+
+创建权限为 `0600` 的 `/etc/hopworld-page-installer.env`，写入 `INSTALL_OPERATOR_TOKEN=<令牌>`。通过 `openssl rand -hex 32` 生成令牌，并通过受信渠道分发。启动安装服务，在对应域名的 Nginx HTTPS `server` 块包含 `deploy/nginx-location.conf`。
+
+在 `dist/install-config.json` 的 `apiOrigin` 中设置网关的 HTTPS 根地址。将修改合并到 `main` 后，GitHub Pages 会发布配置。更换令牌时，更新服务环境中的 `INSTALL_OPERATOR_TOKEN` 并重启安装服务。公网网页会检查网关是否就绪，启用 SSH 密码、安装令牌和主机指纹输入。安装网关只连接公网单播 IP，先匹配指纹，再提交 SSH 密码。网页和后端均不保存 SSH 密码。网页上可以查看输出和安装退出状态。
+
+## 本机独立安装器
+
 在运行安装器的电脑上安装 Python 3.10+，解压后执行：
 
 ```sh

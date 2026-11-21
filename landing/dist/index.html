@@ -51,23 +51,21 @@
         <div class="card install-card">
           <div class="card-title"><h3>服务器连接</h3><span id="connection-mode" class="mode">检测安装环境</span></div>
 
-          <div id="launcher" hidden>
-            <p>在线安装由本机的安装器执行。下载并解压后，在终端运行 <code>bash start.sh</code>，然后打开安装器。</p>
-            <div class="actions"><a href="hopworld-router-installer.zip" download class="button primary">下载本机安装器</a><a href="http://127.0.0.1:18731/" class="button secondary">打开本机安装器</a></div>
-            <p class="quiet">需要 Python 3.10+。SSH 凭据通过本机页面输入。</p>
-          </div>
+          <p id="installer-availability" class="quiet" role="status">正在检查在线安装服务…</p>
+          <noscript><p>网页安装需要启用 JavaScript。你也可以使用下方的终端安装命令。</p></noscript>
 
-          <form id="install-form" method="post" action="/api/install" hidden>
+          <form id="install-form" method="post" hidden>
             <div class="fields">
-              <label class="grow">服务器 IP 或域名<input name="host" placeholder="例如 192.168.1.20" required maxlength="253" spellcheck="false" autocapitalize="none"></label>
+              <label class="grow">服务器 IP 或域名<input name="host" placeholder="例如 203.0.113.10" required maxlength="253" spellcheck="false" autocapitalize="none"></label>
               <label class="narrow">SSH 端口<input name="port" type="number" min="1" max="65535" step="1" value="22" required></label>
               <label>SSH 账号<input name="username" value="root" required maxlength="64" spellcheck="false" autocapitalize="none" autocomplete="off"></label>
               <label>验证方式<select name="method"><option value="password">SSH 密码</option><option value="agent">本机 SSH Agent</option></select></label>
+              <label class="full" id="operator-field" hidden>安装服务访问令牌<input name="operatorToken" type="password" autocomplete="off" pattern="[0-9a-f]{64}" maxlength="64" disabled></label>
               <label class="full" id="password-field">SSH 密码<span class="password-wrap"><input name="password" type="password" required maxlength="512" autocomplete="off"><button type="button" class="text-button" id="password-toggle" aria-pressed="false">显示</button></span></label>
               <label class="full">SSH 主机指纹<input name="fingerprint" placeholder="SHA256:…" required spellcheck="false" maxlength="50" autocomplete="off" aria-describedby="fingerprint-hint"></label>
             </div>
             <p id="fingerprint-hint" class="quiet">从服务器控制台或已信任的 SSH 会话获取 SHA256 指纹。</p>
-            <div class="actions"><button type="submit" class="button primary" id="install-submit">安装到服务器</button></div>
+            <div class="actions"><button type="submit" class="button primary" id="install-submit">立即安装到服务器</button></div>
           </form>
 
           <div id="installation-result" hidden>
