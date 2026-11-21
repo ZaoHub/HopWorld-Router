@@ -61,6 +61,7 @@
 .v1-user-avatar svg { width: 18px; height: 18px; fill: currentColor; }
 .v1-sidebar-user .v1-admin { color: #e8f1ff; font-size: 13px; font-weight: 650; }
 .v1-sidebar-version small { display: block; color: var(--v1-muted); }
+.v1-sidebar-version small:empty { display: none; }
 .v1-sidebar-user #v1-logout { width: auto; min-height: 0; margin: 0 0 0 auto; padding: 0; border: 0; border-radius: 0; background: transparent; color: #8fb4de; font-size: 13px; font-weight: 600; line-height: 1.2; }
 .v1-sidebar a { display: flex; align-items: center; gap: 13px; border-radius: 8px; min-height: 44px; padding: 8px 14px; color: #d4e2f5; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; }
 .v1-sidebar a span { color: #a8c8eb; font-size: 18px; width: 21px; text-align: center; }

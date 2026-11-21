@@ -2959,6 +2959,15 @@
       renderSettingsLogCores();
     }
   });
+  function formatAppVersion(version) {
+    const value = typeof version === 'string' ? version.trim() : '';
+    if (!value) return '';
+    return /^\d/.test(value) ? 'v' + value : value;
+  }
+  function renderAppVersion(version) {
+    const label = byId('v1-sidebar-version-label');
+    if (label) label.textContent = formatAppVersion(version);
+  }
   function renderSystem(value) {
     system = value;
     const cores = value.cores || [];
@@ -3020,6 +3029,7 @@
       ['连接及带宽限额', '由部署与内核配置管理'],
     ]);
     byId('v1-settings-version').textContent = value.version || dash;
+    renderAppVersion(value.version);
     renderOverview();
   }
   const trafficSeries = [
