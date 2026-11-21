@@ -131,7 +131,7 @@ Ubuntu／Debian 测试环境可从源码构建带 SHA-256 校验文件的 `.deb`
 ( set -o pipefail; { command -v curl >/dev/null || { apt-get update && apt-get install -y curl ca-certificates; }; } && curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/v1.0.0/deploy/install.sh | bash )
 ```
 
-脚本会下载并核对 GitHub Release 的 Debian 软件包，由 APT 安装并启动管理服务。按下方「打开管理页」使用 SSH 隧道，首次使用 `admin / admin` 设置新密码。已有旧版 Git 安装时，请先备份数据并按迁移流程处理。
+脚本会下载并核对 GitHub Release 的 Debian 软件包，由 APT 安装并启动管理服务。按[端口与安全组](#v1-部署端口与安全组)配置入站，再按下方「打开管理页」使用 SSH 隧道。首次使用 `admin / admin` 设置新密码。已有旧版 Git 安装时，请先备份数据并按迁移流程处理。
 
 ### 全新 Linux 服务器
 
@@ -193,6 +193,34 @@ rsync -a --exclude .venv --exclude data --exclude __pycache__ ./ root@服务器:
 
 公网地址已知时，可在 `/etc/hopworld-router.env` 加一行 `HOPWORLD_PUBLIC_HOST=你的域名或公网IP`，然后重启服务。管理页里仍可修改。
 
+### V1 部署端口与安全组
+
+**只安装后台时**，服务器入站只需要实际的 SSH 端口（通常为 TCP 22），可将来源限制为管理员 IP。后台默认监听服务器的 `127.0.0.1:8080`，通过 SSH 隧道访问。安装时服务器还需能出站访问 GitHub 和系统软件源。
+
+| 功能 | 默认或示例端口 | 入站放行位置与条件 |
+| --- | --- | --- |
+| SSH 管理 | TCP 22 或服务器实际 SSH 端口 | 在 VPS 云安全组和主机防火墙按需放行 |
+| 后台 HTTP | TCP 8080 | 保持回环监听，公网入站规则留空 |
+| 独立 HTTPS 公网订阅 | TCP 9443 | 启用公网订阅后，在接入主机放行。若外部由反代统一接入，开放反代入口，后端监听保持内部可达 |
+| Nginx 等 HTTPS 公网入口 | TCP 443 | 发放 HTTPS 订阅或使用 TLS-ALPN-01 时，在实际接入主机放行 |
+| Let’s Encrypt HTTP-01 | TCP 80 | HTTP-01 首次签发及续期时可从公网到达。DNS-01 校验无需为证书签发开放 80 或 443 |
+| FRP 控制连接 | TCP 7000（配置示例） | 在运行 `frps` 的 VPS 放行，供 `frpc` 连入。客户端业务另在同一 VPS 放行配置的映射端口及协议 |
+| IKEv2 | UDP 500、UDP 4500 | 启用 strongSwan 后，在 VPN 接入主机放行 |
+| 本机辅助接口 | DNS Webhook TCP 9876、TLS-ALPN 分流后端示例 TCP 10443 | 保持本机回环或内部网络访问，公网入站规则留空 |
+
+**独立节点直连**时，在对应节点设置勾选「允许其他设备连接」，按下表只放行实际启用的协议与端口。使用 FRP 时，客户端访问 VPS 的**映射端口**，以映射配置为准。
+
+| 独立节点 | 默认入站 |
+| --- | --- |
+| Xray-core / VLESS Reality | TCP 8443 |
+| Hysteria 2 | UDP 8442 |
+| TUIC Server | UDP 8446 |
+| sing-box / Hysteria 2、TUIC | 分别为 UDP 8444、UDP 8445 |
+| Mihomo / Shadowsocks | TCP 和 UDP 8388 |
+| shadowsocks-rust | TCP 和 UDP 8389 |
+
+旧的组合式本地节点默认使用 TCP 8443，启用旧版 QUIC 后通常使用 UDP 8444、8445，以后台显示为准。自定义端口后，按实际监听或映射同步设置云安全组和主机防火墙。IPv4 在 NAT 后时，将相应端口和协议转发到接入主机。启用 IPv6 时，同时核对 IPv6 入站规则。
+
 ### 打开管理页
 
 管理端口不要写入云厂商安全组，也不要在本机防火墙放行。在你自己的电脑上：
@@ -207,7 +235,7 @@ ssh -L 8080:127.0.0.1:8080 root@服务器
 
 ### 本地网络节点
 
-在管理页启用「本地网络节点」。默认 VLESS Reality 入站是 TCP **8443**。机器已安装 sing-box 且有与公网域名匹配的有效证书时，Hysteria 2 和 TUIC 可通过 UDP **8444** 和 **8445** 启动，默认端口按节点端口计算。管理员按需配置实际使用的入站防火墙和云安全组。QUIC 依赖本机 Xray 回环 SOCKS 转发，该接口仅供同机服务使用，部署在受信任的主机账户环境中。启用后在服务器上确认：
+使用旧版组合式节点时，在管理页启用「本地网络节点」。默认 VLESS Reality 入站是 TCP **8443**。机器已安装 sing-box 且有与公网域名匹配的有效证书时，Hysteria 2 和 TUIC 可通过 UDP **8444** 和 **8445** 启动，默认端口按节点端口计算。管理员按需配置实际使用的入站防火墙和云安全组。QUIC 依赖本机 Xray 回环 SOCKS 转发，该接口仅供同机服务使用，部署在受信任的主机账户环境中。启用后在服务器上确认：
 
 ```sh
 ss -lntp | grep 8443
