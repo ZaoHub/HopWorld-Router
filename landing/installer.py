@@ -30,6 +30,7 @@ FILES = {
     "/commands.html": ("commands.html", "text/html; charset=utf-8"),
     "/commands.js": ("commands.js", "application/javascript; charset=utf-8"),
     "/site.css": ("site.css", "text/css; charset=utf-8"),
+    "/install-layout.css": ("install-layout.css", "text/css; charset=utf-8"),
     "/ssh-install-inline.js": ("ssh-install-inline.js", "application/javascript; charset=utf-8"),
     "/logo.png": ("logo.png", "image/png"),
 }
