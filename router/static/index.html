@@ -3,31 +3,974 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light">
-  <title>订阅管理 · HopWorld Router</title>
+  <meta name="color-scheme" content="dark">
+  <title>HopWorld Router · V1</title>
   <link rel="icon" href="logo.png" type="image/png">
   <link rel="apple-touch-icon" href="logo.png">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="v1.css">
   <script src="qrcode.js" defer></script>
   <script src="app.js" defer></script>
+  <script src="v1.js" defer></script>
 </head>
 <body>
   <header class="topbar">
     <div class="topbar-inner">
-      <a class="brand" href="#overview" aria-label="HopWorld Router 首页"><img class="brand-mark" src="logo.png" width="40" height="40" alt=""><span class="brand-name">HopWorld <b>Router</b><small>网络管理控制台</small></span></a>
-      <div class="topbar-right"><span class="environment"><span></span>本机管理</span><img class="avatar" src="logo.png" width="34" height="34" alt="" aria-hidden="true"></div>
+      <a class="brand" href="#overview" aria-label="HopWorld Router 首页"><img class="brand-mark" src="logo.png" width="40" height="40" alt=""><span class="brand-name">HopWorld-Router <b>V1</b><small>多协议网络接入与节点管理平台</small></span></a>
+      <details id="v1-global-probe" hidden>
+        <summary aria-labelledby="v1-global-probe-title v1-global-probe-count" aria-describedby="v1-global-probe-state v1-global-probe-preview">
+          <span class="v1-global-probe-head">
+            <strong id="v1-global-probe-title">连通性测试</strong>
+            <span id="v1-global-probe-state"></span>
+            <span id="v1-global-probe-count" role="status"></span>
+          </span>
+          <span id="v1-global-probe-preview"></span>
+          <progress id="v1-global-probe-meter" aria-label="节点测试完成进度" max="1" value="0"></progress>
+        </summary>
+        <ul id="v1-global-probe-nodes" aria-label="正在测试的节点"></ul>
+      </details>
+      <div class="topbar-right">
+        <span class="environment"><span></span><span id="v1-health">连接中</span></span>
+        <span id="v1-subscription-health" role="status" data-icon-only="true">
+          <span id="v1-subscription-health-label" aria-hidden="true" hidden></span>
+          <span id="v1-subscription-health-a11y" class="sr-only">正在读取公网订阅状态</span>
+        </span>
+        <time id="v1-clock"></time>
+        <button type="button" id="v1-updates-open" class="v1-update-bell" aria-label="更新提醒" aria-haspopup="dialog" aria-controls="v1-update-notices">
+          <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+            <path d="M18 8a6 6 0 0 0-12 0c0 7-2.5 7-2.5 9h17C20.5 15 18 15 18 8Z" stroke-linejoin="round"></path><path d="M10 20a2 2 0 0 0 4 0" stroke-linecap="round"></path>
+          </svg><span id="v1-updates-count" hidden aria-hidden="true"></span>
+        </button>
+        <img class="avatar" src="logo.png" width="34" height="34" alt="" aria-hidden="true">
+      </div>
     </div>
   </header>
-  <main id="overview" class="page">
-    <div class="page-heading page-heading-compact"><div><div class="breadcrumb">工作台 <span>/</span> 订阅管理</div><h1>订阅管理</h1></div><button type="button" class="heading-link heading-icon" id="update-project" aria-label="项目更新" title="项目更新"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button></div>
+  <dialog id="v1-update-notices" class="v1-dialog v1-update-notices" aria-labelledby="v1-update-notices-title">
+    <header>
+      <h2 id="v1-update-notices-title">更新提醒</h2>
+      <form method="dialog">
+        <button class="v1-update-close" type="submit" aria-label="关闭更新提醒" autofocus>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18"></path>
+          </svg>
+        </button>
+      </form>
+    </header>
+    <div class="v1-update-content">
+      <p id="v1-updates-feedback" role="status"></p>
+      <ul id="v1-updates-history" class="v1-update-history" hidden></ul>
+    </div>
+    <div class="v1-actions v1-update-actions">
+      <button type="button" id="v1-updates-read" class="secondary" hidden>全部标为已读</button>
+      <a href="#settings" id="v1-updates-settings" class="primary">更新与维护</a>
+    </div>
+  </dialog>
+  <aside class="v1-sidebar">
+    <button id="v1-menu-toggle" class="secondary" type="button" aria-controls="v1-navigation" aria-expanded="false" hidden><span aria-hidden="true">☰</span> <span id="v1-menu-label">首页</span></button>
+    <nav id="v1-navigation" aria-label="管理导航">
+      <a href="#overview" data-v1-link="overview"><span aria-hidden="true">⌂</span>首页</a>
+      <a href="#cores" data-v1-link="cores"><span aria-hidden="true">▤</span>内核管理<em id="v1-core-nav-count" hidden aria-label="已安装 0 个">0</em></a>
+      <a href="#nodes" data-v1-link="nodes"><span aria-hidden="true">☷</span>节点管理</a>
+      <a href="#subscriptions" data-v1-link="subscriptions"><span aria-hidden="true">↗</span>订阅管理</a>
+      <a href="#certificates" data-v1-link="certificates"><span aria-hidden="true">◇</span>域名与证书</a>
+      <a href="#public" data-v1-link="public"><span aria-hidden="true">⌁</span>公网接入</a>
+      <a href="#traffic" data-v1-link="traffic"><span aria-hidden="true">▥</span>流量监控</a>
+      <a href="#settings" data-v1-link="settings"><span aria-hidden="true">⚙</span>系统设置</a>
+      <div class="v1-sidebar-version"><div class="v1-sidebar-user"><span class="v1-user-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"/><path d="M5.2 19.4c.9-3.3 3.4-5 6.8-5s5.9 1.7 6.8 5"/></svg></span><span class="v1-admin">管理员</span><button type="button" id="v1-logout">退出</button></div>HopWorld-Router <small>V1 开发版</small></div>
+    </nav>
+  </aside>
+  <main class="page v1-page">
+    <div class="v1-heading">
+      <div><h1 id="v1-title">首页</h1><p id="v1-subtitle">运行概览</p></div>
+      <div class="v1-actions" id="v1-heading-actions"></div>
+      <div class="v1-traffic-ranges" id="v1-traffic-ranges" role="group" aria-label="流量时间范围" hidden>
+        <button type="button" data-traffic-range="live" aria-pressed="true">实时</button>
+        <button type="button" data-traffic-range="recent" aria-pressed="false">近1小时</button>
+        <button type="button" data-traffic-range="hourly" aria-pressed="false">近24小时</button>
+        <button type="button" data-traffic-range="daily" aria-pressed="false">近7天</button>
+        <button type="button" data-traffic-range="last_30_daily" aria-pressed="false">近30天</button>
+        <button type="button" data-traffic-range="custom" aria-pressed="false" aria-haspopup="dialog">自定义 <span aria-hidden="true">▦</span></button>
+      </div>
+    </div>
     <section id="system-update-banner" class="system-update-banner" aria-label="程序更新" role="status" hidden>
       <div><strong id="system-update-title">发现程序更新</strong><p id="system-update-description"></p><details id="system-update-details"><summary>查看变动文件</summary><ul id="system-update-files"></ul></details></div>
       <button id="system-update-apply" type="button" class="primary">更新程序</button>
     </section>
-    <div class="layout">
-      <div class="main-column">
-        <section class="card card-compact address-card" id="subscription-section"><div class="card-head card-head-tight"><div class="card-title"><span class="icon-box blue" aria-hidden="true">↗</span><div><h2>统一订阅</h2><p>客户端直连节点，流量不经本服务</p></div></div><span class="pill">密钥保护</span></div><p id="subscription-summary" class="field-hint">连接服务后生成</p><p id="subscription-tls-status" class="field-hint subscription-tls-status" hidden></p><div class="side-actions side-actions-split"><button type="button" id="subscription-open" class="primary full">订阅与扫码</button><button type="button" id="copy" class="secondary full">复制</button></div></section>
-        <section class="card list-card" id="local-traffic-monitor" hidden>
+    <section class="v1-view" data-v1-view="overview">
+      <div id="v1-overview-metrics" class="v1-metrics"></div>
+      <div class="v1-dashboard">
+        <div class="v1-stack v1-overview-left">
+        <section class="card v1-overview-cores"><div class="v1-panel-head"><h2>六内核运行状态</h2><a href="#cores">内核管理 →</a></div><ul id="v1-cores-overview" class="v1-core-list"></ul></section>
+        <section class="card v1-overview-resources"><div class="v1-panel-head"><h2>系统资源</h2><a href="#settings">系统设置 →</a></div><div id="v1-overview-system" class="v1-resource-grid"></div></section>
+        </div>
+        <div class="v1-stack v1-overview-center">
+          <section class="card v1-overview-chart"><div class="v1-panel-head"><h2>流量监控</h2><a href="#traffic">查看详情 →</a></div>
+            <div class="v1-range" aria-label="流量时间范围"><button class="secondary" data-home-range="live" aria-pressed="true">实时</button><button class="secondary" data-home-range="today" aria-pressed="false">今日</button><button class="secondary" data-home-range="week" aria-pressed="false">近 7 日</button><button class="secondary" data-home-range="month" aria-pressed="false">本月</button></div>
+            <canvas id="v1-home-chart" aria-label="上传下载流量" role="img"></canvas><p class="v1-chart-caption" id="v1-home-chart-caption">正在读取样本…</p>
+          </section>
+          <section class="card"><div class="v1-panel-head"><h2>节点概览</h2><a href="#nodes">节点管理 →</a></div><div id="v1-overview-nodes" class="v1-mini-metrics"></div></section>
+        <section class="card v1-overview-events"><div class="v1-panel-head"><h2>最近订阅更新</h2><a href="#subscriptions">订阅管理 →</a></div><ul id="v1-overview-events" class="v1-core-list"></ul></section>
+        </div>
+        <div class="v1-stack v1-overview-right">
+          <section class="card"><div class="v1-panel-head"><h2>域名与证书</h2><a href="#certificates">管理 →</a></div><dl id="v1-overview-cert" class="v1-definitions"></dl></section>
+          <section class="card"><div class="v1-panel-head"><h2>公网接入</h2><a href="#public">查看 →</a></div><dl id="v1-overview-access" class="v1-definitions"></dl></section>
+        <section class="card v1-shortcuts"><h2>快捷操作</h2><div class="v1-shortcut-grid">
+          <button class="secondary" data-v1-action="add-source-open"><span aria-hidden="true">↗</span>添加订阅</button>
+          <button class="secondary" data-v1-action="manual-open"><span aria-hidden="true">⇩</span>导入节点</button>
+          <button class="secondary" data-v1-action="publish-core-open" aria-haspopup="dialog"><span aria-hidden="true">⊕</span>配置发布节点</button>
+          <a href="#certificates"><span aria-hidden="true">◇</span>域名与证书</a>
+          <a href="#public"><span aria-hidden="true">⌁</span>公网接入</a>
+          <a href="#settings"><span aria-hidden="true">⚙</span>系统维护</a>
+        </div></section>
+        </div>
+
+      </div>
+    </section>
+    <section class="v1-view" data-v1-view="cores" hidden>
+      <div class="v1-cores-layout">
+        <div class="v1-cores-main">
+        <div id="v1-core-metrics" class="v1-metrics"></div>
+        <section class="card v1-cores-board">
+          <div class="v1-core-toolbar">
+            <div class="v1-core-filters" role="group" aria-label="按状态筛选内核">
+              <button type="button" data-core-filter="all" aria-pressed="true">全部</button>
+              <button type="button" data-core-filter="running" aria-pressed="false">运行中</button>
+              <button type="button" data-core-filter="stopped" aria-pressed="false">已停止</button>
+              <button type="button" data-core-filter="not_installed" aria-pressed="false">未安装</button>
+            </div>
+            <div class="v1-core-toolbar-actions">
+              <button class="secondary" type="button" id="v1-system-refresh">刷新</button>
+              <div class="v1-menu">
+                <button class="secondary" type="button" id="v1-core-batch" data-menu-toggle aria-controls="v1-core-batch-menu" aria-haspopup="menu" aria-expanded="false">批量操作</button>
+                <div id="v1-core-batch-menu" class="v1-menu-panel" role="menu" hidden>
+                  <button type="button" role="menuitem" data-core-batch="refresh">刷新状态</button>
+                  <button type="button" role="menuitem" data-core-batch="copy">复制所选程序路径</button>
+                  <button type="button" role="menuitem" data-core-batch="clear">清除选择</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="v1-table-wrap">
+            <table class="v1-table v1-core-table">
+              <thead>
+                <tr>
+                  <th scope="col"><label class="v1-check"><input type="checkbox" id="v1-core-check-all" aria-label="选择当前列表中的内核"></label></th>
+                  <th scope="col">内核名称</th>
+                  <th scope="col">版本</th>
+                  <th scope="col">运行状态</th>
+                  <th scope="col">节点数</th>
+                  <th scope="col">今日流量</th>
+                  <th scope="col">监听端口（TCP / UDP）</th>
+                  <th scope="col">自动启动</th>
+                  <th scope="col">操作</th>
+                </tr>
+              </thead>
+              <tbody id="v1-core-rows"></tbody>
+            </table>
+          </div>
+          <p class="field-hint">已安装但未由本后台托管的程序只出现在「全部」。流量仅包含有可用计数器的独立发布实例。</p>
+        </section>
+        </div>
+        <div class="v1-cores-side">
+          <div id="v1-core-traffic" class="v1-metrics"></div>
+          <aside class="card v1-core-detail" id="v1-core-detail" aria-label="内核详情"></aside>
+        </div>
+      </div>
+      <p class="v1-core-tip"><strong>提示</strong>独立发布的内核分别使用自己的进程、端口和出口。Router 重启后会恢复已启用的内核。</p>
+    </section>
+    <dialog id="v1-core-wizard" class="v1-dialog" aria-labelledby="v1-core-wizard-title">
+      <form method="dialog">
+        <header>
+          <h2 id="v1-core-wizard-title">内核安装向导</h2>
+          <button value="cancel" class="text-button" type="submit">关闭</button>
+        </header>
+        <div id="v1-core-wizard-body"></div>
+      </form>
+    </dialog>
+    <dialog id="v1-core-confirm" class="v1-dialog" aria-labelledby="v1-core-confirm-title" aria-describedby="v1-core-confirm-body">
+      <form method="dialog">
+        <header>
+          <h2 id="v1-core-confirm-title">请确认</h2>
+          <button value="cancel" class="text-button" type="submit">关闭</button>
+        </header>
+        <div id="v1-core-confirm-body"></div>
+      </form>
+    </dialog>
+    <dialog id="v1-core-settings" class="v1-dialog" aria-labelledby="v1-core-settings-title">
+      <form method="dialog">
+        <header>
+          <h2 id="v1-core-settings-title">内核设置</h2>
+          <button value="cancel" class="text-button" type="submit">关闭</button>
+        </header>
+        <div id="v1-core-settings-body"></div>
+      </form>
+    </dialog>
+    <dialog id="v1-core-protocol-dialog" class="v1-dialog" aria-labelledby="v1-core-protocol-title">
+      <form method="dialog">
+        <header>
+          <h2 id="v1-core-protocol-title">协议内核对比</h2>
+          <button class="text-button" type="submit">关闭</button>
+        </header>
+        <div id="v1-core-protocol-body" class="v1-core-profile-body"></div>
+      </form>
+    </dialog>
+    <dialog id="v1-publish-core-dialog" class="v1-dialog" aria-labelledby="v1-publish-core-title">
+      <form method="dialog">
+        <header>
+          <h2 id="v1-publish-core-title">配置本地网络节点</h2>
+          <button type="submit" class="text-button">关闭</button>
+        </header>
+        <div class="v1-core-profile-body">
+          <p id="v1-publish-core-status" class="field-hint" role="status"></p>
+          <ul id="v1-publish-core-list" class="v1-core-list" aria-label="已安装的内核" hidden></ul>
+        </div>
+        <footer class="v1-core-profile-footer">
+          <button id="v1-publish-core-manage" type="button" class="secondary">打开内核管理</button>
+        </footer>
+      </form>
+    </dialog>
+    <dialog id="v1-core-profile" class="v1-dialog" aria-labelledby="v1-core-profile-title">
+      <form id="v1-core-profile-form">
+        <header>
+          <h2 id="v1-core-profile-title">内核独立配置</h2>
+          <button id="v1-core-profile-close" class="text-button" type="button">关闭</button>
+        </header>
+        <div class="v1-core-profile-body">
+          <div id="v1-core-profile-switch" hidden>
+            <button id="v1-core-profile-switch-open" class="secondary" type="button">切换内核</button>
+          </div>
+          <p id="v1-core-profile-legacy" class="field-hint" hidden></p>
+          <div class="v1-core-profile-field">
+            <label for="v1-core-address-mode">订阅地址类型</label>
+            <select id="v1-core-address-mode" name="address_mode">
+              <option value="domain">域名</option><option value="auto_ip">自动获取公网 IP</option><option value="fixed_ip">手动 IP（旧配置）</option>
+            </select>
+            <div id="v1-core-address-host">
+              <label for="v1-core-profile-host">订阅 IP</label>
+              <input id="v1-core-profile-host" name="public_host" maxlength="253" placeholder="请输入 IP 地址">
+            </div>
+            <div id="v1-core-bound-domain">
+              <label for="v1-core-domain-choice">已绑定域名</label>
+              <select id="v1-core-domain-choice" name="bound_domain"></select>
+              <a id="v1-core-bind-link" href="#certificates">前往域名与证书绑定</a>
+            </div>
+            <label for="v1-core-address-family">地址族</label>
+            <select id="v1-core-address-family" name="address_family">
+              <option value="ipv4">IPv4</option><option value="ipv6">IPv6</option><option value="dual">IPv4 + IPv6</option>
+            </select>
+            <label class="v1-core-profile-check" id="v1-core-address-ddns">
+              <input name="ddns" type="checkbox"><span>动态 IP 自动更新 DNS（DDNS）</span>
+            </label>
+            <p class="field-hint" id="v1-core-address-hint"></p>
+            <div><button type="button" class="secondary" id="v1-core-address-check">检查地址</button></div>
+            <p class="field-hint" id="v1-core-address-result" role="status"></p>
+            <div id="v1-core-ip-tls" class="v1-core-profile-field" hidden>
+              <label for="v1-core-ip-tls-mode">TLS 证书</label>
+              <select id="v1-core-ip-tls-mode" name="tls_mode">
+                <option value="automatic">自动选择可用证书</option>
+                <option value="ip_acme">申请公网 IP 证书（Let's Encrypt）</option>
+              </select>
+              <div id="v1-core-ip-tls-email" class="v1-core-profile-field" hidden>
+                <label for="v1-core-ip-tls-email-input">ACME 邮箱</label>
+                <input id="v1-core-ip-tls-email-input" name="ip_certificate_email" type="email" maxlength="254" autocomplete="email">
+              </div>
+              <p id="v1-core-ip-tls-status" class="field-hint" role="status" hidden></p>
+            </div>
+            <p id="v1-core-profile-certificate" class="field-hint" hidden><span id="v1-core-profile-cert-note"></span> <a id="v1-core-profile-cert-link" href="#certificates">配置 TLS 证书</a></p>
+          </div>
+          <div class="v1-core-profile-field">
+            <label for="v1-core-profile-port">监听端口</label>
+            <input id="v1-core-profile-port" name="port" type="number" min="1" max="65535" required>
+            <p id="v1-core-profile-port-hint" class="field-hint" hidden>此端口用于 Hysteria 2，TUIC 使用相邻端口。</p>
+          </div>
+          <div class="v1-core-profile-field">
+            <label for="v1-core-profile-egress">出口方式</label>
+            <select id="v1-core-profile-egress" name="egress" required><option value="">请选择出口方式</option></select>
+            <p id="v1-core-profile-direct" class="field-hint" hidden>流量使用运行 Router 的主机网络出口。</p>
+          </div>
+          <div id="v1-core-profile-upstream" class="v1-core-profile-field" hidden>
+            <label for="v1-core-profile-upstream-id">上游节点</label>
+            <select id="v1-core-profile-upstream-id" name="upstream_id"></select>
+            <p class="field-hint" id="v1-core-profile-security"></p>
+          </div>
+          <div>
+            <label class="v1-core-profile-check">
+              <input name="public_listener" type="checkbox" aria-describedby="v1-core-profile-listener-hint">
+              <span>允许其他设备连接</span>
+            </label>
+            <p id="v1-core-profile-listener-hint" class="field-hint">默认仅监听本机，适合 VPS 中转。直接对外发布时需启用，并放行所选地址族的入站端口。</p>
+          </div>
+        </div>
+        <footer class="v1-core-profile-footer">
+          <p id="v1-core-profile-status" role="status"></p>
+          <div class="form-actions"><button id="v1-core-profile-submit" class="primary span-2" type="submit" disabled>保存并启动</button></div>
+        </footer>
+      </form>
+    </dialog>
+    <dialog id="v1-core-switch" class="v1-dialog" aria-labelledby="v1-core-switch-title">
+      <form id="v1-core-switch-form">
+        <header>
+          <h2 id="v1-core-switch-title">切换内核</h2>
+          <button id="v1-core-switch-close" type="button" class="text-button">关闭</button>
+        </header>
+        <div class="v1-core-profile-body">
+          <p id="v1-core-switch-node"></p>
+          <label class="v1-core-profile-field">
+            <span>目标内核</span>
+            <select name="target" required></select>
+          </label>
+          <label class="v1-core-profile-field">
+            <span>出口方式</span>
+            <select name="egress" required></select>
+          </label>
+          <p id="v1-core-switch-hint" class="field-hint"></p>
+          <a id="v1-core-switch-manage" href="#cores" hidden>前往内核管理</a>
+        </div>
+        <footer class="v1-core-profile-footer">
+          <p id="v1-core-switch-status" role="status"></p>
+          <div class="form-actions"><button id="v1-core-switch-submit" type="submit" class="primary" disabled>切换内核</button></div>
+        </footer>
+      </form>
+    </dialog>
+    <dialog id="v1-node-probe-settings" class="v1-dialog" aria-labelledby="v1-node-probe-settings-title">
+      <form method="dialog">
+        <header>
+          <h2 id="v1-node-probe-settings-title">测试设置</h2>
+          <button type="submit" class="text-button">关闭</button>
+        </header>
+        <div class="v1-core-profile-body">
+          <div class="v1-core-profile-field">
+            <label for="v1-node-probe-mode">测试方式</label>
+            <select id="v1-node-probe-mode" aria-describedby="v1-node-probe-hint">
+              <option value="light">轻量转发测试</option>
+              <option value="full">完整测试</option>
+            </select>
+          </div>
+          <div class="v1-core-profile-field">
+            <label for="test-target">测试应用</label>
+            <select id="test-target"><option value="">系统默认 · Google</option></select>
+          </div>
+          <p id="v1-node-probe-hint" class="field-hint"></p>
+        </div>
+      </form>
+    </dialog>
+    <section class="v1-view" data-v1-view="nodes" hidden>
+      <dialog id="v1-node-export" class="v1-dialog" aria-labelledby="v1-node-export-title">
+        <form id="v1-node-export-form">
+          <header>
+            <h2 id="v1-node-export-title">导出节点</h2>
+            <button type="button" class="text-button" id="v1-node-export-close">关闭</button>
+          </header>
+          <div class="v1-core-profile-body">
+            <div class="v1-core-profile-field">
+              <label for="v1-node-export-format">文件格式</label>
+              <select id="v1-node-export-format" name="format">
+                <option value="uri">节点链接（TXT）</option>
+                <option value="mihomo">Mihomo（YAML）</option>
+                <option value="sing-box">sing-box（JSON）</option>
+                <option value="xray">Xray（JSON）</option>
+              </select>
+              <p class="field-hint">导出文件和二维码包含节点连接凭据。</p>
+            </div>
+            <canvas id="v1-node-export-qr" role="img" aria-label="节点链接二维码" hidden></canvas>
+            <p id="v1-node-export-status" role="status"></p>
+          </div>
+          <footer class="v1-core-profile-footer">
+            <div class="form-actions">
+              <button type="button" class="secondary" id="v1-node-show-qr">显示二维码</button>
+              <button type="submit" class="primary">下载</button>
+            </div>
+          </footer>
+        </form>
+      </dialog>
+      <dialog id="v1-upstream-name" class="v1-dialog" aria-labelledby="v1-upstream-name-title">
+        <form id="v1-upstream-name-form">
+          <header>
+            <h2 id="v1-upstream-name-title">编辑上游节点</h2>
+            <button type="button" class="text-button" id="v1-upstream-name-close">关闭</button>
+          </header>
+          <div class="v1-core-profile-body">
+            <div class="v1-core-profile-field">
+              <label for="v1-upstream-name-input">管理台显示名称</label>
+              <input id="v1-upstream-name-input" name="alias" maxlength="40" aria-describedby="v1-upstream-name-hint" autofocus>
+              <p class="field-hint" id="v1-upstream-name-hint">留空时显示原始节点名称。</p>
+            </div>
+            <p id="v1-upstream-name-status" role="status" hidden></p>
+          </div>
+          <footer class="v1-core-profile-footer">
+            <div class="form-actions">
+              <button type="button" class="secondary" id="v1-upstream-remove" hidden>移除节点</button>
+              <button type="submit" class="primary">保存名称</button>
+            </div>
+          </footer>
+        </form>
+      </dialog>
+      <div class="v1-nodes-layout">
+        <div class="v1-nodes-main">
+          <div id="v1-node-metrics" class="v1-metrics"></div>
+          <section class="card v1-nodes-board">
+            <div class="v1-core-toolbar">
+              <div class="v1-core-filters" role="group" aria-label="节点快捷分类">
+                <button type="button" data-node-filter="all" aria-pressed="true">全部节点</button>
+                <button type="button" data-node-filter="local" aria-pressed="false">本地发布</button>
+                <button type="button" data-node-filter="source" aria-pressed="false">订阅导入</button>
+                <button type="button" data-node-filter="tcp" aria-pressed="false">TCP 节点</button>
+                <button type="button" data-node-filter="udp" aria-pressed="false">UDP/QUIC 节点</button>
+                <button type="button" data-node-filter="disabled" aria-pressed="false">已停用</button>
+              </div>
+              <div class="v1-node-probe-status">
+                <span id="v1-node-probe-progress" role="status"></span>
+              </div>
+            </div>
+            <div class="v1-node-tools">
+              <div class="v1-node-filters">
+                <label class="sr-only" for="v1-node-query">搜索节点</label>
+                <input type="search" id="v1-node-query" placeholder="搜索节点名称、域名或上游…">
+                <label class="sr-only" for="v1-node-protocol">协议</label>
+                <select id="v1-node-protocol">
+                  <option value="all">协议：全部</option>
+                  <option value="vless">VLESS</option><option value="vmess">VMess</option><option value="trojan">Trojan</option><option value="hysteria2">Hysteria2</option><option value="tuic">TUIC</option><option value="shadowsocks">Shadowsocks</option>
+                </select>
+                <label class="sr-only" for="v1-node-source">来源</label>
+                <select id="v1-node-source"><option value="all">来源：全部</option><option value="local">本地发布</option><option value="source">订阅导入</option><option value="manual">手动导入</option></select>
+                <label class="sr-only" for="v1-node-connectivity">连通性</label>
+                <select id="v1-node-connectivity">
+                  <option value="all">连通性：全部</option>
+                  <option value="ok">可用</option>
+                  <option value="unavailable">不可用</option>
+                  <option value="failed">失败</option>
+                  <option value="untested">未测试</option>
+                </select>
+                <label class="sr-only" for="v1-node-sub-options">订阅选项</label>
+                <select id="v1-node-sub-options">
+                  <option value="all">订阅：全部</option>
+                </select>
+              </div>
+              <div class="v1-node-actions">
+                <button type="button" class="secondary" id="v1-node-probe-settings-open" aria-haspopup="dialog" aria-controls="v1-node-probe-settings">测试设置</button>
+                <div class="v1-menu">
+                  <button class="secondary" type="button" data-menu-toggle aria-controls="v1-node-batch-menu" aria-haspopup="menu" aria-expanded="false">批量操作</button>
+                  <div id="v1-node-batch-menu" class="v1-menu-panel" role="menu" hidden>
+                    <button type="button" role="menuitem" data-node-batch="probe-all">全部测试</button>
+                    <button type="button" role="menuitem" data-node-batch="probe" disabled>测试所选节点</button>
+                    <button type="button" role="menuitem" data-node-batch="probe-filtered" disabled>测试筛选结果</button>
+                    <button type="button" role="menuitem" data-node-batch="copy">复制所选名称</button>
+                  </div>
+                </div>
+                <button class="secondary" type="button" id="v1-node-probe-stop" hidden>停止测试</button>
+              </div>
+            </div>
+            <div class="v1-table-wrap">
+              <table class="v1-table v1-node-table">
+                <thead>
+                  <tr>
+                    <th scope="col"><label class="v1-check"><input type="checkbox" id="v1-node-check-all" aria-label="选择当前页节点"></label></th>
+                    <th scope="col">节点名称</th>
+                    <th scope="col">类型</th>
+                    <th scope="col">来源</th>
+                    <th scope="col">协议</th>
+                    <th scope="col">传输</th>
+                    <th scope="col">统一域名</th>
+                    <th scope="col">映射端口</th>
+                    <th scope="col">上游出口</th>
+                    <th scope="col">连通性 / 延迟</th>
+                    <th scope="col">启用</th>
+                    <th scope="col">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="v1-node-rows"></tbody>
+              </table>
+            </div>
+            <div class="v1-pager">
+              <span id="v1-node-count-label">共 0 条记录</span>
+              <span>每页 7 条</span>
+              <div id="v1-node-pager"></div>
+            </div>
+          </section>
+        </div>
+        <div class="v1-nodes-side">
+          <div id="v1-node-current" class="v1-metric"></div>
+          <aside class="card v1-core-detail v1-node-detail" id="v1-node-detail" aria-label="节点详情"></aside>
+        </div>
+      </div>
+      <p class="v1-core-tip"><strong>提示</strong>UDP/QUIC 需要公网 UDP 入口。导入的节点作为上游使用。固定上游不可用时，发布流量会被阻断。</p>
+      <div hidden>
+        <span id="node-count"></span>
+        <button id="batch-probe" type="button">批量测试</button>
+        <input id="v1-node-search" type="search">
+        <select id="v1-node-type"><option value="all">全部节点</option><option value="local">本地发布</option><option value="source">订阅导入</option><option value="manual">手动导入</option><option value="disabled">已停用</option></select>
+        <div id="nodes"></div>
+        <p id="local-node-summary"></p>
+        <p id="local-node-protocol-summary"></p>
+        <button id="local-node-open" type="button">查看与配置</button>
+        <p id="manual-summary"></p>
+        <button id="manual-open" type="button">导入节点</button>
+      </div>
+    </section>
+    <section class="v1-view" data-v1-view="subscriptions" hidden>
+      <div id="v1-sub-metrics" class="v1-metrics"></div>
+      <div class="v1-subs-layout">
+        <div class="v1-subs-main">
+          <section class="card v1-subs-board">
+            <div class="v1-core-toolbar">
+              <div class="v1-core-filters" role="group" aria-label="按状态筛选订阅">
+                <button type="button" data-sub-filter="all" aria-pressed="true">全部订阅</button>
+                <button type="button" data-sub-filter="enabled" aria-pressed="false">已启用</button>
+                <button type="button" data-sub-filter="disabled" aria-pressed="false">已停用</button>
+              </div>
+              <label class="sr-only" for="v1-sub-query">搜索订阅</label>
+              <input type="search" id="v1-sub-query" placeholder="搜索订阅名称或地址…">
+            </div>
+            <div class="v1-table-wrap">
+              <table class="v1-table v1-sub-table">
+                <thead>
+                  <tr>
+                    <th scope="col">订阅名称</th>
+                    <th scope="col">节点数</th>
+                    <th scope="col">可用率</th>
+                    <th scope="col">更新周期</th>
+                    <th scope="col">最后更新</th>
+                    <th scope="col">状态</th>
+                    <th scope="col">自动更新</th>
+                    <th scope="col">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="v1-sub-rows"></tbody>
+              </table>
+            </div>
+          </section>
+          <div class="v1-sub-tools">
+            <button type="button" class="secondary" data-v1-action="add-source-open"><span aria-hidden="true">＋</span>添加订阅<small>URL / 客户端链接</small></button>
+            <button type="button" class="secondary" data-v1-action="batch-update"><span aria-hidden="true">⟳</span>批量更新<small>更新多个订阅源</small></button>
+            <button type="button" class="secondary" data-v1-action="batch-probe"><span aria-hidden="true">⌁</span>批量测试<small>延迟 / 可用性检测</small></button>
+            <button type="button" class="secondary" disabled><span aria-hidden="true">⧉</span>去重合并<small>尚未接入</small></button>
+            <button type="button" class="secondary" disabled><span aria-hidden="true">▽</span>筛选规则<small>尚未接入</small></button>
+            <button type="button" class="secondary" disabled><span aria-hidden="true">⚙</span>导入设置<small>尚未接入</small></button>
+          </div>
+        </div>
+        <div class="v1-subs-side">
+          <aside class="card v1-core-detail v1-sub-detail" id="v1-sub-detail" aria-label="订阅详情"></aside>
+          <section class="card" id="v1-sub-preview" aria-label="节点预览"></section>
+        </div>
+      </div>
+      <div hidden>
+        <span id="count"></span>
+        <button id="batch-update" type="button">批量更新</button>
+        <span id="update-progress" role="status"></span>
+        <input id="v1-source-search" type="search">
+        <select id="v1-source-state"><option value="all">全部订阅</option><option value="enabled">已启用</option><option value="disabled">已停用</option></select>
+        <div id="sources"></div>
+        <p id="subscription-summary"></p>
+        <p id="subscription-tls-status" hidden></p>
+        <button id="copy" type="button">复制</button>
+        <p id="add-source-summary"></p>
+        <button id="add-source-open" type="button">添加上游订阅</button>
+      </div>
+    </section>
+    <section class="v1-view" data-v1-view="certificates" hidden>
+      <dialog id="v1-bind-domain" class="v1-dialog" aria-labelledby="v1-bind-domain-title">
+        <form id="v1-bind-domain-form">
+          <header>
+            <h2 id="v1-bind-domain-title">绑定域名</h2>
+            <button type="button" id="v1-bind-domain-close" class="text-button">关闭</button>
+          </header>
+          <div class="v1-core-profile-body">
+            <div class="v1-core-profile-field">
+              <label for="v1-bind-domain-ingress">客户端公网入口</label>
+              <select id="v1-bind-domain-ingress" name="ingress">
+                <option value="vps">VPS 中转（FRP）</option>
+                <option value="direct">本机直入（已确认公网可入站）</option>
+              </select>
+              <a id="v1-bind-vps-link" href="#public">前往 VPS 管理</a>
+              <p id="v1-bind-direct-hint" class="field-hint" hidden>下方地址是探测到的公网出口。请先从异地网络确认该地址及节点端口可以入站。</p>
+              <label for="v1-bind-domain-host">域名</label>
+              <input id="v1-bind-domain-host" name="host" placeholder="proxy.example.com" maxlength="253" required>
+              <label for="v1-bind-domain-family">地址族</label>
+              <select id="v1-bind-domain-family" name="family"><option value="ipv4">IPv4（A）</option><option value="ipv6">IPv6（AAAA）</option><option value="dual">双栈（A + AAAA）</option></select>
+            </div>
+            <section aria-labelledby="v1-bind-records-title">
+              <h3 id="v1-bind-records-title">当前解析与绑定目标</h3>
+              <p id="v1-bind-records-status" class="field-hint" role="status"></p>
+              <div id="v1-bind-records" class="v1-bind-records"></div>
+              <p class="field-hint">上面显示完整域名。如果服务商要求填写主机记录，请填相对于托管域名的前缀，根域名填 @。</p>
+              <button type="button" class="text-button" id="v1-bind-records-refresh">刷新记录值</button>
+            </section>
+            <div><h3>已绑定域名</h3><ul id="v1-bound-domain-list"></ul></div>
+          </div>
+          <footer class="v1-core-profile-footer">
+            <p id="v1-bind-domain-status" role="status" tabindex="-1"></p>
+            <div class="form-actions"><button type="submit" class="primary span-2">验证并绑定</button></div>
+          </footer>
+        </form>
+      </dialog>
+      <dialog id="v1-import-cert" class="v1-dialog" aria-labelledby="v1-import-cert-title">
+        <form id="v1-import-cert-form">
+          <header>
+            <h2 id="v1-import-cert-title">导入证书</h2>
+            <button type="button" id="v1-import-cert-close" class="text-button">关闭</button>
+          </header>
+          <div class="v1-core-profile-body">
+            <div class="v1-core-profile-field">
+              <label for="v1-import-cert-domain">已绑定域名</label>
+              <select id="v1-import-cert-domain" name="domain" required></select>
+              <label for="v1-import-cert-chain">证书链（PEM）</label>
+              <input id="v1-import-cert-chain" name="certificate" type="file" accept=".pem,.crt,.cer" required>
+              <label for="v1-import-cert-key">未加密的私钥（PEM）</label>
+              <input id="v1-import-cert-key" name="private_key" type="file" accept=".pem,.key" required>
+              <p class="field-hint">证书链以域名证书开头，随后放置中间证书。导入成功后切换当前生效的证书，到期前需重新导入。</p>
+            </div>
+            <p id="v1-import-cert-status" role="status"></p>
+          </div>
+          <footer class="v1-core-profile-footer">
+            <div class="form-actions"><button type="submit" class="primary span-2" disabled>验证并导入</button></div>
+          </footer>
+        </form>
+      </dialog>
+      <div class="v1-certificate-layout">
+        <div class="v1-stack">
+          <div id="v1-cert-metrics" class="v1-metrics"></div>
+          <div class="v1-cert-toolbar">
+            <div class="v1-cert-pills" role="group" aria-label="筛选域名">
+              <button type="button" data-cert-filter="all" aria-pressed="true">全部域名</button>
+              <button type="button" data-cert-filter="valid" aria-pressed="false">有效证书</button>
+              <button type="button" data-cert-filter="expiring" aria-pressed="false">即将到期</button>
+              <button type="button" data-cert-filter="renew" aria-pressed="false">自动续签</button>
+            </div>
+            <div class="v1-cert-toolbar-actions">
+              <label class="sr-only" for="v1-cert-search">搜索域名</label><input id="v1-cert-search" type="search" placeholder="搜索域名…">
+              <button type="button" class="primary" id="v1-bind-domain-open">＋ 绑定域名</button>
+              <button type="button" class="primary" id="acme-open">◇ 申请证书</button>
+              <button type="button" class="secondary" id="v1-import-cert-open">导入证书</button>
+              <details class="v1-cert-batch" id="v1-cert-batch">
+                <summary class="secondary"><span aria-hidden="true">⇧</span> 所选域名操作 <span aria-hidden="true">⌄</span></summary>
+                <div class="v1-cert-batch-actions">
+                  <small id="v1-cert-selection" aria-live="polite">已选 0 个域名</small>
+                  <button type="button" data-cert-batch="renew" disabled>续签证书</button>
+                  <button type="button" data-cert-batch="verify" disabled>检查解析</button>
+                  <button type="button" data-cert-batch="download" disabled>下载所选证书</button>
+                </div>
+              </details>
+            </div>
+          </div>
+          <section class="card v1-cert-list" aria-label="域名列表">
+            <div class="v1-table-wrap"><table class="v1-table"><thead><tr><th scope="col">选择</th><th scope="col">域名</th><th scope="col">记录类型</th><th scope="col">解析状态</th><th scope="col">验证方式</th><th scope="col">证书状态</th><th scope="col">剩余有效期</th><th scope="col">域名关联服务</th><th scope="col">自动续签</th></tr></thead><tbody id="v1-cert-rows"></tbody></table></div>
+            <div class="v1-cert-list-footer" id="v1-cert-count" role="status"></div>
+          </section>
+          <section class="card" id="v1-ip-certificates" hidden aria-labelledby="v1-ip-certificates-title">
+            <div class="v1-panel-head"><h2 id="v1-ip-certificates-title">公网 IP 证书</h2></div>
+            <dl id="v1-ip-certificate-records" class="v1-definitions"></dl>
+          </section>
+          <div class="v1-cert-lower">
+            <section class="card" id="v1-cert-diagnostics" tabindex="-1"><div class="v1-panel-head"><h2><span aria-hidden="true">▤</span> 证书与续签日志</h2></div><p id="v1-cert-diagnostic" role="status">正在读取…</p><ol id="v1-cert-history"></ol></section>
+            <section class="card"><div class="v1-panel-head"><h2><span aria-hidden="true">▰</span> DNS 与 ACME 集成</h2></div><dl id="v1-cert-integrations" class="v1-definitions"></dl></section>
+          </div>
+        </div>
+        <aside class="v1-stack">
+          <section class="card v1-cert-inspector">
+            <div class="v1-panel-head"><div class="side-heading"><span class="icon-box blue" aria-hidden="true">◎</span><div><h2 id="v1-cert-domain">域名详情</h2><p>域名证书详情与绑定配置</p></div></div><span class="v1-status" id="v1-cert-badge">正在读取</span></div>
+            <div class="v1-cert-pills v1-cert-detail-nav" role="group" aria-label="域名详情分组"><button type="button" data-cert-panel="basic" aria-pressed="true">基本信息</button><button type="button" data-cert-panel="dns" aria-pressed="false">DNS 解析</button><button type="button" data-cert-panel="acme" aria-pressed="false">ACME 验证</button><button type="button" data-cert-panel="certificate" aria-pressed="false">证书详情</button></div>
+            <dl id="v1-cert-details" class="v1-definitions"></dl>
+          </section>
+          <section class="card" id="acme-card">
+            <div class="v1-panel-head"><h2><span aria-hidden="true">ϟ</span> 快捷操作</h2></div>
+            <div class="v1-cert-quick">
+              <button type="button" id="v1-cert-renew" class="secondary" disabled><span aria-hidden="true">⟳</span>立即续签</button>
+              <button type="button" id="v1-cert-verify" class="secondary" disabled><span aria-hidden="true">◎</span>检查解析</button>
+              <button type="button" id="v1-cert-show-diagnostics" class="secondary" aria-controls="v1-cert-diagnostics"><span aria-hidden="true">▤</span>查看日志</button>
+              <button type="button" id="v1-cert-download" class="secondary" disabled><span aria-hidden="true">⇩</span>下载证书</button>
+            </div>
+            <p id="acme-card-summary" class="field-hint">正在读取…</p>
+          </section>
+        </aside>
+      </div>
+      <p class="card v1-cert-tip"><strong>ⓘ&ensp;提示</strong> DNS-01 通过 DNS 记录校验，无需开放证书校验入站端口。节点转发端口在公网接入页面查看。</p>
+    </section>
+    <section class="v1-view" data-v1-view="public" hidden>
+      <div id="v1-public-metrics" class="v1-metrics"></div>
+      <div class="v1-public-summary">
+        <section class="card v1-public-chain">
+          <div class="v1-panel-head"><h2><span aria-hidden="true">⌁</span> 网络拓扑与链路状态</h2></div>
+          <ol class="v1-public-topology" aria-label="当前节点访问路径">
+            <li><span aria-hidden="true">▣</span><strong>外部客户端</strong><small>异地网络</small></li>
+            <li><span aria-hidden="true">◎</span><strong>公网入口</strong><small id="v1-public-entry">—</small></li>
+            <li><span aria-hidden="true">⇄</span><strong>入站链路</strong><small id="v1-public-path">待配置</small></li>
+            <li><span aria-hidden="true">⌁</span><strong>HopWorld-Router</strong><small id="v1-public-host-state">等待读取</small></li>
+          </ol>
+          <ul class="v1-public-steps" id="v1-public-steps" aria-label="链路状态"></ul>
+        </section>
+        <section class="card">
+          <div class="v1-panel-head"><h2><span aria-hidden="true">◎</span> 接入概览</h2></div>
+          <dl id="v1-public-details" class="v1-definitions" tabindex="-1"></dl>
+        </section>
+        <section class="card">
+          <div class="v1-panel-head">
+            <h2><span aria-hidden="true">⌂</span> 家庭网络环境检测</h2>
+            <button type="button" class="text-button" id="v1-public-recheck">⟳ 重新检测</button>
+          </div>
+          <dl id="v1-public-network" class="v1-definitions"></dl>
+          <p id="v1-public-check-note" class="field-hint" role="status"></p>
+        </section>
+      </div>
+      <section class="card v1-public-management">
+        <div class="v1-public-toolbar">
+          <div class="v1-public-tabs" role="group" aria-label="公网接入分组">
+            <button type="button" data-public-tab="ports" aria-pressed="true">端口映射管理（<span id="v1-public-ports-label">0</span>）</button>
+            <button type="button" data-public-tab="tunnel" aria-pressed="false">隧道配置</button>
+            <button type="button" data-public-tab="vps" aria-pressed="false">VPS 管理</button>
+            <button type="button" data-public-tab="subscription" aria-pressed="false">公网订阅</button>
+            <button type="button" data-public-tab="logs" aria-pressed="false">接入日志</button>
+            <button type="button" data-public-tab="diagnostics" aria-pressed="false">故障诊断</button>
+          </div>
+          <div class="v1-actions" id="v1-public-port-actions">
+            <div class="v1-menu-anchor">
+              <button type="button" class="secondary" id="v1-public-batch" data-menu-toggle aria-controls="v1-public-batch-menu" aria-expanded="false">批量操作 ⌄</button>
+              <div id="v1-public-batch-menu" class="v1-menu-panel" hidden>
+                <button type="button" id="v1-public-copy-selected" disabled>复制所选入口</button>
+                <button type="button" id="v1-public-export-selected" disabled>导出所选端口</button>
+              </div>
+            </div>
+            <button type="button" class="primary" id="v1-configure-port">＋ 配置端口</button>
+          </div>
+        </div>
+        <section data-public-panel="ports" aria-label="端口映射管理">
+          <div class="v1-table-wrap"><table class="v1-table" aria-label="本机发布端口"><thead><tr>
+            <th scope="col"><input type="checkbox" id="v1-public-check-all" aria-label="全选端口" disabled></th>
+            <th scope="col">映射名称</th><th scope="col">协议</th><th scope="col">公网入口</th>
+            <th scope="col">本地服务 / 内核</th><th scope="col">状态</th><th scope="col">流量（今日）</th><th scope="col">操作</th>
+          </tr></thead><tbody id="v1-public-rows"></tbody></table></div>
+          <p class="v1-public-table-note" id="v1-public-port-note" role="status">正在读取本机端口…</p>
+        </section>
+        <section class="v1-public-tab-content" data-public-panel="tunnel" hidden>
+          <h3>反向隧道</h3>
+          <p id="v1-relay-summary" role="status">正在读取隧道状态…</p>
+          <dl id="v1-relay-mappings" class="v1-definitions"></dl>
+          <div class="v1-actions">
+            <button type="button" class="secondary" id="v1-relay-configure">配置 VPS 中转</button>
+            <button type="button" class="secondary" id="v1-relay-stop" disabled>停止隧道</button>
+          </div>
+          <section id="ikev2">
+            <h3>系统 VPN（IKEv2）</h3><p id="ikev2-summary" class="field-hint">尚未启用</p>
+            <div class="v1-actions"><button type="button" id="ikev2-open" class="secondary">配置 IKEv2</button><button type="button" id="ikev2-settings-open" class="secondary">客户端设置</button></div>
+          </section>
+        </section>
+        <section class="v1-public-tab-content" data-public-panel="vps" hidden>
+          <h3>自有 VPS 中转</h3>
+          <p id="v1-relay-install" class="field-hint">正在检测家庭端 frpc…</p>
+          <form id="v1-relay-form" class="v1-relay-form">
+            <label>节点统一域名<input name="domain" placeholder="proxy.example.com" maxlength="253" required></label>
+            <label>VPS 控制地址（匹配证书）<input name="server" placeholder="relay.example.com" maxlength="253" required></label>
+            <label>VPS 控制端口<input name="port" type="number" min="1" max="65535" value="7000" required></label>
+            <label>FRP 令牌<input name="token" type="password" autocomplete="new-password" pattern="[A-Za-z0-9_\-]{32,128}" maxlength="128" required></label>
+            <label class="v1-relay-wide">VPS CA 证书（PEM）
+              <textarea name="ca" rows="3" maxlength="12000" spellcheck="false" required></textarea>
+            </label>
+            <fieldset class="v1-relay-wide">
+              <legend>要发布的内核</legend>
+              <p class="field-hint">首次可先登记 VPS 入口。待域名指向 VPS、独立节点启动后，再勾选节点并连接隧道。</p>
+              <div id="v1-relay-cores"></div>
+            </fieldset>
+            <fieldset class="v1-relay-wide" id="v1-relay-ports" hidden>
+              <legend>VPS 公网端口</legend>
+              <p class="field-hint">默认为本机端口。请将公网端口加入 VPS 的 frps 允许列表和防火墙规则。修改后客户端需刷新订阅。</p>
+              <div id="v1-relay-port-fields"></div>
+            </fieldset>
+            <div class="v1-relay-wide">
+              <p id="v1-relay-feedback" class="field-hint" role="status" tabindex="-1"></p>
+              <button type="submit" class="primary" id="v1-relay-save" disabled>保存 VPS 配置</button>
+            </div>
+          </form>
+        </section>
+        <section class="v1-public-tab-content v1-public-subscription" data-public-panel="subscription" aria-labelledby="public-subscription-title" hidden>
+          <div class="v1-public-subscription-head">
+            <div>
+              <h3 id="public-subscription-title">公网 HTTPS 订阅</h3>
+              <p id="public-subscription-status" class="field-hint" role="status">正在读取发布状态…</p>
+            </div>
+            <div class="v1-actions">
+              <button type="button" class="secondary" data-v1-action="publish-core-open" aria-haspopup="dialog">配置本地网络节点</button>
+              <button id="public-subscription-labels-open" type="button" class="secondary" aria-haspopup="dialog">状态文字</button>
+              <button id="public-subscription-open" type="button" class="secondary">发布设置</button>
+            </div>
+          </div>
+          <div id="public-subscription-address" class="input-row has-field" hidden>
+            <label for="public-subscription-url" class="sr-only">公网 HTTPS 订阅地址</label>
+            <input id="public-subscription-url" readonly>
+            <button id="public-subscription-copy" type="button" class="secondary">复制地址</button>
+            <button type="button" class="secondary" id="public-subscription-qr">扫码导入</button>
+          </div>
+        </section>
+        <section class="v1-public-tab-content" data-public-panel="logs" hidden>
+          <h3>接入日志</h3>
+          <div class="v1-actions" id="v1-public-log-actions"><button type="button" class="secondary" id="v1-relay-log">frpc 日志</button></div>
+          <p id="v1-public-log-status" class="field-hint">正在读取接入服务…</p>
+        </section>
+        <section class="v1-public-tab-content" data-public-panel="diagnostics" hidden>
+          <h3>故障诊断</h3>
+          <dl class="v1-definitions" id="v1-public-diagnosis"></dl>
+          <p>请从异地网络连接实际节点，分别验证 TCP 和 UDP / QUIC 的握手及数据传输。</p>
+          <button type="button" class="secondary" data-v1-action="v1-public-recheck">重新检测网络环境</button>
+          <button type="button" class="secondary" id="v1-public-probe-command" disabled>复制外网检测命令</button>
+        </section>
+      </section>
+      <section class="card v1-public-shortcuts" aria-label="常用操作">
+        <h2><span aria-hidden="true">ϟ</span> 常用操作</h2>
+        <div class="v1-actions">
+          <button type="button" class="secondary" id="v1-public-guide">接入向导</button>
+          <button type="button" class="secondary" data-v1-action="publish-core-open" aria-haspopup="dialog">配置接入</button>
+          <button type="button" class="secondary" id="v1-public-refresh">刷新接入状态</button>
+          <button type="button" class="secondary" id="v1-public-details-open">查看连接详情</button>
+          <button type="button" class="secondary" id="v1-public-export" disabled>导出接入配置</button>
+          <button type="button" class="secondary" id="v1-public-diagnostics-open">端口可达性诊断</button>
+          <button type="button" class="v1-public-disconnect" id="v1-public-disconnect" disabled>断开接入</button>
+        </div>
+      </section>
+      <dialog id="public-subscription-dialog" class="v1-dialog" aria-labelledby="public-subscription-dialog-title">
+        <form id="public-subscription-form">
+          <header>
+            <h2 id="public-subscription-dialog-title">公网订阅发布</h2>
+            <button id="public-subscription-close" class="text-button" type="button">关闭</button>
+          </header>
+          <div class="v1-core-profile-body v1-core-profile-field">
+            <p id="public-subscription-certificate" class="field-hint"></p>
+            <a href="#certificates" id="public-subscription-cert-link">配置订阅证书</a>
+            <div id="public-subscription-cert-options" class="v1-core-profile-field" hidden>
+              <label for="public-subscription-host">订阅证书</label>
+              <select id="public-subscription-host" name="host"></select>
+            </div>
+            <label for="public-subscription-port">HTTPS 订阅端口</label>
+            <input id="public-subscription-port" name="port" type="number" min="1" max="65535" value="9443" aria-describedby="public-subscription-port-hint" required>
+            <p class="field-hint" id="public-subscription-port-hint">在云安全组（如 RAKsmart）和主机防火墙放行入站 TCP 9443。有 NAT 时，将该端口转发到 Router 主机。</p>
+          </div>
+          <footer class="v1-core-profile-footer">
+            <p id="public-subscription-feedback" role="status"></p>
+            <div class="v1-actions">
+              <button id="public-subscription-disable" type="button" class="secondary" hidden>停用 HTTPS 监听</button>
+              <button id="public-subscription-enable" type="submit" class="primary" disabled>启用公网订阅</button>
+            </div>
+          </footer>
+        </form>
+      </dialog>
+      <dialog id="public-subscription-labels" class="v1-dialog" aria-labelledby="public-subscription-labels-title">
+        <form id="public-subscription-labels-form">
+          <header>
+            <h2 id="public-subscription-labels-title">顶栏订阅文字</h2>
+            <button id="public-subscription-labels-close" type="button" class="text-button">关闭</button>
+          </header>
+          <div class="v1-core-profile-body">
+            <p id="public-subscription-labels-hint" class="field-hint">每项最多四个汉字，留空只显示指示灯。</p>
+            <label class="v1-core-profile-field">已启动
+              <input name="running" pattern="\p{Script=Han}{0,4}" maxlength="8" aria-describedby="public-subscription-labels-hint">
+            </label>
+            <label class="v1-core-profile-field">未启动
+              <input name="stopped" pattern="\p{Script=Han}{0,4}" maxlength="8" aria-describedby="public-subscription-labels-hint">
+            </label>
+            <label class="v1-core-profile-field">启动异常
+              <input name="error" pattern="\p{Script=Han}{0,4}" maxlength="8" aria-describedby="public-subscription-labels-hint">
+            </label>
+          </div>
+          <footer class="v1-core-profile-footer">
+            <p id="public-subscription-labels-feedback" role="status" hidden></p>
+            <button id="public-subscription-labels-save" type="submit" class="primary">保存</button>
+          </footer>
+        </form>
+      </dialog>
+      <dialog id="v1-port-dialog" class="v1-dialog" aria-labelledby="v1-port-dialog-title">
+        <form method="dialog" id="v1-port-form">
+          <header>
+            <h2 id="v1-port-dialog-title">配置端口</h2>
+            <button type="submit" class="text-button" value="close" formnovalidate>关闭</button>
+          </header>
+          <div class="v1-core-profile-body v1-core-profile-field">
+            <label for="v1-port-target">配置对象</label>
+            <select id="v1-port-target" required></select>
+          </div>
+          <footer class="v1-core-profile-footer">
+            <div class="form-actions"><button type="submit" class="primary" value="edit">继续</button></div>
+          </footer>
+        </form>
+      </dialog>
+      <section class="card list-card" id="ikev2-monitor" hidden>
+          <div class="card-head"><div class="card-title"><span class="icon-box blue" aria-hidden="true">⌁</span><div><h2>IKEv2 连接监视</h2><p>UDP 500 第一包起显示，含正在连接</p></div></div><span id="ikev2-monitor-count" class="count">0 台在线</span></div>
+          <p id="ikev2-monitor-summary" class="field-hint">尚未启用 IKEv2</p>
+          <div class="ikev2-table-wrap"><table class="ikev2-table" aria-label="已连接设备"><thead><tr><th>VPN IP</th><th>公网 IP</th><th>本机 ID</th><th>时长</th><th>上行</th><th>下行</th><th>合计</th><th>状态</th></tr></thead><tbody id="ikev2-monitor-body"></tbody></table></div>
+          <div id="ikev2-diagnosis" class="ikev2-diagnosis" hidden><p class="ikev2-diagnosis-title">上网诊断</p><ul id="ikev2-diagnosis-list" class="ikev2-diagnosis-list"></ul></div>
+          <div class="batch-bar"><button id="ikev2-sync-nat" class="secondary" type="button" hidden>修复 VPN 转发/NAT</button></div>
+      </section>
+    </section>
+    <section class="v1-view" data-v1-view="traffic" hidden>
+      <div id="v1-traffic-metrics" class="v1-metrics"></div>
+      <div class="v1-traffic-split v1-traffic-primary">
+        <section class="card">
+          <div class="v1-panel-head">
+            <h2><span aria-hidden="true">⌁</span> <span id="v1-traffic-chart-title">实时流量曲线</span></h2>
+            <div class="v1-traffic-legend" role="group" aria-label="显示流量系列">
+              <label><input type="checkbox" value="down_bytes" checked>下载</label>
+              <label><input type="checkbox" value="up_bytes" checked>上传</label>
+              <label><input type="checkbox" value="total_bytes">总流量</label>
+            </div>
+            <label class="v1-traffic-refresh">统计范围
+              <select id="v1-traffic-scope"><option value="publishers">独立发布</option><option value="legacy">旧版 Xray 历史</option></select>
+            </label>
+            <label class="v1-traffic-refresh">刷新频率
+              <select id="v1-traffic-refresh"><option value="2000">2 秒</option><option value="5000" selected>5 秒</option><option value="10000">10 秒</option><option value="30000">30 秒</option></select>
+            </label>
+          </div>
+          <div class="v1-traffic-plot"><canvas id="v1-traffic-chart" role="img" tabindex="0" aria-label="实时流量曲线" aria-describedby="v1-traffic-chart-caption v1-traffic-chart-point"></canvas>
+            <output id="v1-traffic-chart-point" hidden></output>
+          </div>
+          <p class="v1-chart-caption" id="v1-traffic-chart-caption">正在读取样本…</p>
+        </section>
+        <section class="card">
+          <div class="v1-panel-head"><h2><span aria-hidden="true">◎</span> 已采集流量（今日）</h2></div>
+          <div class="v1-traffic-share">
+            <div class="v1-traffic-donut" id="v1-traffic-donut"><div><strong id="v1-traffic-donut-total">—</strong><small>已采集合计</small></div></div>
+            <ul id="v1-traffic-cores" class="v1-traffic-core-list" aria-label="今日已采集流量占比"></ul>
+          </div>
+          <p class="field-hint" id="v1-traffic-coverage">正在读取独立发布采集范围…</p>
+        </section>
+      </div>
+      <div class="v1-traffic-breakdowns">
+        <section class="card"><div class="v1-panel-head"><h2><span aria-hidden="true">◇</span> 协议流量统计（今日）</h2></div>
+          <dl id="v1-traffic-protocols" class="v1-definitions"></dl>
+          <p id="v1-traffic-protocol-hint" class="field-hint">只展示可单独归属的协议流量。</p>
+        </section>
+        <section class="card"><div class="v1-panel-head"><h2><span aria-hidden="true">▤</span> 流量排行（节点 · 今日）</h2><a href="#nodes">查看节点 →</a></div>
+          <div class="v1-table-wrap"><table class="v1-table v1-traffic-ranking"><thead><tr><th scope="col">#</th><th scope="col">发布端点</th><th scope="col">协议</th><th scope="col">流量</th><th scope="col">占比</th></tr></thead><tbody id="v1-traffic-ranking"></tbody></table></div>
+        </section>
+        <section class="card"><div class="v1-panel-head"><h2><span aria-hidden="true">▣</span> 访问来源统计（今日）</h2></div>
+          <p class="v1-traffic-empty">暂无客户端设备类型数据</p>
+        </section>
+      </div>
+      <div class="v1-traffic-split v1-traffic-week">
+        <section class="card"><div class="v1-panel-head"><h2><span aria-hidden="true">▥</span> 近7天流量趋势</h2><span class="v1-traffic-week-legend"><span>下载</span><span>上传</span></span></div>
+          <canvas id="v1-daily-chart" aria-label="近7天上传下载流量" role="img"></canvas><p class="v1-chart-caption" id="v1-daily-chart-caption"></p>
+        </section>
+        <section class="card"><div class="v1-panel-head"><h2>近7天统计</h2></div>
+          <dl class="v1-traffic-week-stats">
+            <div><dt>下载总量</dt><dd id="v1-traffic-week-down">—</dd></div>
+            <div><dt>上传总量</dt><dd id="v1-traffic-week-up">—</dd></div>
+            <div><dt>总流量</dt><dd id="v1-traffic-week-total">—</dd></div>
+            <div><dt>较前7天</dt><dd id="v1-traffic-week-change">—</dd></div>
+          </dl>
+          <p class="field-hint" id="v1-traffic-week-status"></p>
+        </section>
+      </div>
+      <details class="card v1-traffic-scope"><summary>采集状态与统计范围</summary>
+        <p>统计经本机 Xray 处理的流量。经本机代理转发的流量可能共用同一个计数器，VPS 中转流量需单独采集。</p>
+        <dl class="v1-definitions" id="v1-traffic-details"></dl>
+      </details>
+      <dialog class="v1-dialog" id="v1-traffic-dates" aria-labelledby="v1-traffic-dates-title">
+        <form id="v1-traffic-date-form">
+          <header><h2 id="v1-traffic-dates-title">自定义时间范围</h2><button class="secondary" type="button" id="v1-traffic-date-close">取消</button></header>
+          <div class="v1-traffic-date-fields">
+            <label>开始日期 <input name="start" type="date" required></label>
+            <label>结束日期 <input name="end" type="date" required></label>
+            <p class="field-hint" id="v1-traffic-date-status" role="status">按服务器日期统计，最多选择 366 天。</p>
+            <button class="primary" type="submit">应用</button>
+          </div>
+        </form>
+      </dialog>
+      <section class="card list-card" id="local-traffic-monitor" hidden>
           <div class="card-head"><div class="card-title"><span class="icon-box violet" aria-hidden="true">◎</span><div><h2>本地网络节点流量</h2><p>仅统计经过本地网络节点的流量</p></div></div></div>
           <p id="local-traffic-status" class="field-hint">正在读取流量…</p>
           <div id="local-traffic-values" class="local-traffic-values" hidden>
@@ -39,40 +982,238 @@
           </div>
           <p class="field-hint">统计包含连接协议开销；累计流量从 Xray 启动时开始计算，重启后清零。订阅中直连的其他节点不计入。</p>
         </section>
-        <section class="card list-card" id="ikev2-monitor" hidden>
-          <div class="card-head"><div class="card-title"><span class="icon-box blue" aria-hidden="true">⌁</span><div><h2>IKEv2 连接监视</h2><p>UDP 500 第一包起显示，含正在连接</p></div></div><span id="ikev2-monitor-count" class="count">0 台在线</span></div>
-          <p id="ikev2-monitor-summary" class="field-hint">尚未启用 IKEv2</p>
-          <div class="ikev2-table-wrap"><table class="ikev2-table" aria-label="已连接设备"><thead><tr><th>VPN IP</th><th>公网 IP</th><th>本机 ID</th><th>时长</th><th>上行</th><th>下行</th><th>合计</th><th>状态</th></tr></thead><tbody id="ikev2-monitor-body"></tbody></table></div>
-          <div id="ikev2-diagnosis" class="ikev2-diagnosis" hidden><p class="ikev2-diagnosis-title">上网诊断</p><ul id="ikev2-diagnosis-list" class="ikev2-diagnosis-list"></ul></div>
-          <div class="batch-bar"><button id="ikev2-sync-nat" class="secondary" type="button" hidden>修复 VPN 转发/NAT</button></div>
-        </section>
-        <section class="card list-card" id="source-section"><details><summary class="card-head"><div class="card-title"><span class="icon-box violet" aria-hidden="true">≋</span><div><h2>上游订阅</h2><p>订阅更新失败时，保留上次获取的节点</p></div></div><span id="count" class="count">0 个订阅</span></summary><div class="batch-bar"><button id="batch-update" class="secondary" type="button">批量更新</button><span id="update-progress" role="status"></span></div><div id="sources" class="list"><p class="empty">连接服务后查看订阅</p></div></details></section>
-        <section class="card list-card" id="node-section"><details><summary class="card-head"><div class="card-title"><span class="icon-box cyan" aria-hidden="true">◇</span><div><h2>节点列表</h2><p>测试后按可用性和延迟排序</p></div></div><span id="node-count" class="count">0 个节点</span></summary><fieldset class="group-selector"><legend>批量测试订阅组</legend><p>默认全部参与；点「编辑」勾选要测的组，未勾选的不测。</p><label class="sr-only" for="probe-group-filter">筛选订阅组</label><div class="group-filter-row"><input type="search" id="probe-group-filter" class="group-filter" placeholder="筛选订阅组…" autocomplete="off"><button id="probe-groups-edit" class="secondary" type="button">编辑</button></div><div id="probe-groups" class="group-list" role="list"></div></fieldset><div class="batch-bar batch-bar-probe"><div class="probe-target-picks"><label for="test-target-category">分组</label><select id="test-target-category"><option value="general">通用</option><option value="ai">AI</option><option value="social">社交媒体</option></select><label for="test-target">目标</label><select id="test-target"></select><button id="batch-probe" class="secondary" type="button">批量测试</button></div><span id="probe-progress" role="status"></span></div><div id="nodes" class="list"><p class="empty">连接服务后查看节点</p></div></details></section>
+    </section>
+    <section class="v1-view" data-v1-view="settings" hidden>
+      <section class="card v1-management-confirm" id="v1-management-confirm" aria-label="待确认的管理入口" hidden>
+        <strong>确认新的管理入口</strong>
+        <p id="v1-management-pending-text"></p>
+        <div class="v1-actions">
+          <a class="heading-link" id="v1-management-open" target="_blank" rel="noopener">打开新入口</a>
+          <button type="button" class="primary" id="v1-management-confirm-button" hidden>确认切换</button>
+          <button type="button" class="secondary" id="v1-management-cancel">取消切换</button>
+        </div>
+      </section>
+      <div class="v1-settings-tabs" id="v1-settings-tabs" role="group" aria-label="系统设置分类">
+        <button type="button" data-settings-tab="base" aria-pressed="true"><span aria-hidden="true">⚙</span>基础设置</button>
+        <button type="button" data-settings-tab="network" aria-pressed="false"><span aria-hidden="true">⌁</span>网络设置</button>
+        <button type="button" data-settings-tab="network-security" aria-pressed="false"><span aria-hidden="true">◇</span>网络安全</button>
+        <button type="button" data-settings-tab="security" aria-pressed="false"><span aria-hidden="true">◇</span>安全与权限</button>
+        <button type="button" data-settings-tab="services" aria-pressed="false"><span aria-hidden="true">▱</span>服务与功能</button>
+        <button type="button" data-settings-tab="alerts" aria-pressed="false"><span aria-hidden="true">♧</span>通知告警</button>
+        <button type="button" data-settings-tab="maintenance" aria-pressed="false"><span aria-hidden="true">↻</span>系统维护</button>
       </div>
-      <aside class="side-column"><section class="card form-card card-compact" id="add-source"><div class="side-heading"><div class="icon-box blue" aria-hidden="true">＋</div><div><h2>添加上游订阅</h2><p>从订阅链接拉取节点</p></div></div><p id="add-source-summary" class="field-hint">尚无上游订阅 · 点击添加</p><button type="button" id="add-source-open" class="primary full">添加上游订阅 <span aria-hidden="true">→</span></button></section>
-        <section class="card form-card card-compact" id="local-node"><div class="side-heading"><div class="icon-box violet" aria-hidden="true">◎</div><div><h2>本地网络节点</h2><p>VLESS Reality，可转 Hysteria 2 / TUIC</p></div></div><p id="local-node-summary" class="field-hint">尚未启用</p><p id="local-node-protocol-summary" class="field-hint"></p><button type="button" id="local-node-open" class="secondary full">查看与配置</button></section>
-        <section class="card form-card card-compact" id="acme-card"><div class="side-heading"><div class="icon-box blue" aria-hidden="true">◇</div><div><h2>SSL 证书</h2><p>订阅 HTTPS 证书</p></div></div><p id="acme-card-summary" class="field-hint">正在读取…</p><button type="button" id="acme-open" class="secondary full">查看与配置</button></section>
-        <section class="card form-card card-compact" id="ikev2"><div class="side-heading"><div class="icon-box blue" aria-hidden="true">⌁</div><div><h2>系统 VPN（IKEv2）</h2><p>iPhone 蜂窝 PSK</p></div></div><p id="ikev2-summary" class="field-hint">尚未启用</p><div class="side-actions side-actions-split"><button type="button" id="ikev2-open" class="secondary full">配置</button><button type="button" id="ikev2-settings-open" class="secondary full">设置</button></div></section>
-        <section class="card form-card card-compact" id="manual-import"><div class="side-heading"><div class="icon-box cyan" aria-hidden="true">⌁</div><div><h2>手动导入节点</h2><p>粘贴节点链接</p></div></div><p id="manual-summary" class="field-hint">暂无手动节点</p><button type="button" id="manual-open" class="secondary full">导入节点</button></section>
-        <div class="help-card"><div class="help-icon" aria-hidden="true">i</div><div><strong>使用提示</strong><p>主栏与侧栏均为摘要 + 弹窗；连接说明在「订阅与扫码」里查看。</p></div></div>
-      </aside>
-    </div>
+      <form id="v1-settings-form" novalidate>
+        <div class="v1-settings-grid">
+          <section class="card v1-network-security" data-settings-card="network-security" hidden>
+            <div class="v1-panel-head"><h2>网络安全</h2><button type="button" class="secondary" id="v1-security-reload">刷新状态</button></div>
+            <dl id="v1-security-status" class="v1-definitions"></dl>
+            <p class="field-hint" id="v1-security-scope">适用范围为所选发布实例实际接收的流量。客户端本机 DNS、浏览器加密 DNS 和 WebRTC 需在客户端实测。</p>
+            <div class="v1-settings-fields">
+              <label for="v1-security-publisher">独立发布实例</label><select id="v1-security-publisher" disabled></select>
+              <label for="v1-security-mode">安全模式</label><select id="v1-security-mode" disabled>
+                <option value="compatibility">兼容 · 指定上游的加密 DNS</option>
+                <option value="strict" disabled>严格 · 尚不可应用</option>
+                <option value="rules" disabled>分流 · 尚不可应用</option>
+              </select>
+              <label for="v1-security-resolver">业务 DNS 解析器</label><select id="v1-security-resolver" disabled></select>
+            </div>
+            <details>
+              <summary>新增加密 DNS 解析器</summary>
+              <div class="v1-settings-fields">
+                <label for="v1-security-dns-name">名称</label><input id="v1-security-dns-name" maxlength="60">
+                <label for="v1-security-dns-protocol">协议</label><select id="v1-security-dns-protocol"><option value="doh">DoH</option><option value="dot">DoT</option></select>
+                <label for="v1-security-dns-address">固定 IPv4 / IPv6 地址</label><input id="v1-security-dns-address" maxlength="45" spellcheck="false">
+                <label for="v1-security-dns-port">端口</label><input id="v1-security-dns-port" type="number" value="443" min="1" max="65535">
+                <label for="v1-security-dns-host">证书域名</label><input id="v1-security-dns-host" maxlength="253" spellcheck="false">
+                <label for="v1-security-dns-path">DoH 路径</label><input id="v1-security-dns-path" value="/dns-query" maxlength="256" spellcheck="false">
+              </div>
+              <p class="field-hint">解析器经选定上游访问，TLS 会校验证书。固定地址用于避免依赖系统 DNS 引导。</p>
+              <button type="button" class="secondary" id="v1-security-resolver-add">添加解析器</button>
+            </details>
+            <div class="v1-actions v1-settings-actions">
+              <button type="button" class="secondary" id="v1-security-save" disabled>保存策略</button>
+              <button type="button" class="secondary" data-security-action="validate" disabled>校验配置</button>
+              <button type="button" class="primary" data-security-action="apply" disabled>应用配置</button>
+              <button type="button" class="secondary" data-security-action="rollback" disabled>回滚</button>
+              <button type="button" class="secondary" data-security-action="test" disabled>诊断发布入口</button>
+            </div>
+            <p id="v1-security-feedback" role="status" aria-live="polite"></p>
+            <details id="v1-security-report" hidden><summary>最近一次诊断</summary><dl class="v1-definitions" id="v1-security-findings"></dl></details>
+            <details><summary>最近操作</summary><dl class="v1-definitions" id="v1-security-events"></dl></details>
+          </section>
+          <section class="card v1-basic-settings" data-settings-card="base">
+            <div class="v1-panel-head v1-basic-settings-head">
+              <h2><span aria-hidden="true">⚙</span> 基本设置</h2>
+              <button type="submit" id="v1-settings-basic-save" class="primary" disabled>保存基本设置</button>
+            </div>
+            <div class="v1-settings-fields">
+              <label for="v1-settings-name">平台名称</label><input id="v1-settings-name" name="name" maxlength="40" required disabled>
+              <label for="v1-settings-zone">时钟显示时区</label><select id="v1-settings-zone" name="timezone" disabled>
+                <option value="browser">跟随浏览器</option><option value="Asia/Shanghai">UTC+08:00 北京、上海、香港</option><option value="UTC">UTC</option>
+                <option value="Asia/Tokyo">东京</option><option value="Europe/London">伦敦</option><option value="America/Los_Angeles">洛杉矶</option>
+              </select>
+              <label for="v1-settings-port">管理监听端口</label><input id="v1-settings-port" type="number" min="1024" max="65535" step="1" required disabled>
+              <span>界面语言</span><output>简体中文 <small>当前支持</small></output>
+              <label for="v1-settings-autostart" id="v1-settings-autostart-label">开机自启动</label><input class="v1-settings-switch" id="v1-settings-autostart" type="checkbox" role="switch" disabled aria-describedby="v1-settings-autostart-detail">
+              <label for="v1-settings-https">后台 HTTPS</label><input class="v1-settings-switch" id="v1-settings-https" type="checkbox" role="switch" disabled aria-describedby="v1-settings-access">
+              <span>匿名访问统计</span><output>需管理员认证</output>
+            </div>
+            <div class="v1-actions v1-settings-actions v1-basic-settings-actions">
+              <button type="button" id="v1-settings-retry" class="secondary" hidden>重新读取</button>
+              <span id="v1-settings-basic-feedback" role="status">正在读取设置…</span>
+            </div>
+            <div class="v1-management-options">
+              <button type="button" id="v1-management-apply" class="secondary" disabled>验证新管理入口</button>
+              <p id="v1-settings-access" class="field-hint" role="status"></p>
+              <p id="v1-settings-autostart-detail" class="field-hint" role="status"></p>
+            </div>
+          </section>
+          <section class="card" data-settings-card="security">
+            <div class="v1-panel-head"><h2><span aria-hidden="true">♙</span> 管理员与安全</h2></div>
+            <dl class="v1-definitions v1-settings-fields">
+              <div><dt>管理员账号</dt><dd id="v1-admin-username">等待读取</dd></div>
+              <div><dt>认证方式</dt><dd>浏览器登录会话，API 支持 Basic</dd></div>
+              <div><dt>双重验证（2FA）</dt><dd>未接入</dd></div>
+              <div><dt>访问控制</dt><dd id="v1-settings-listener">等待读取监听地址</dd></div>
+            </dl>
+            <div class="v1-actions v1-settings-actions">
+              <button type="button" class="secondary" id="v1-admin-edit" aria-haspopup="dialog" disabled>修改账号或密码</button>
+            </div>
+          </section>
+          <section class="card" data-settings-card="network services">
+            <div class="v1-panel-head"><h2><span aria-hidden="true">⌁</span> 网络与代理</h2></div>
+            <div class="v1-settings-fields v1-network-fields">
+              <span>发布出口与地址族</span>
+              <div class="v1-network-options"><button type="button" data-v1-action="publish-core-open" aria-haspopup="dialog">按内核配置</button></div>
+              <span>局域网访问（LAN）</span><output id="v1-settings-network-lan">由部署服务管理</output>
+              <span>系统 DNS</span><output>跟随部署环境</output>
+              <span>自定义 DNS</span><output>由部署端配置</output>
+              <label for="v1-settings-probe-target">默认连通性测试应用</label>
+              <select id="v1-settings-probe-target" name="probe_target" aria-describedby="v1-settings-probe-hint" disabled></select>
+            </div>
+            <p class="field-hint" id="v1-settings-probe-hint">节点测试默认访问此应用的网页。可在节点管理中临时选择其他应用。</p>
+            <section class="v1-settings-protocols" aria-labelledby="v1-settings-protocols-title">
+              <h3 id="v1-settings-protocols-title">本地发布协议</h3>
+              <div id="v1-settings-publish-protocols" class="v1-chips"></div>
+            </section>
+            <div class="v1-actions v1-settings-actions">
+              <button type="button" class="secondary" data-v1-action="publish-core-open" aria-haspopup="dialog">配置本地节点</button>
+              <a class="secondary" href="#public">公网接入</a>
+            </div>
+          </section>
+          <section class="card" data-settings-card="services">
+            <div class="v1-panel-head"><h2><span aria-hidden="true">▥</span> 资源与限额</h2></div>
+            <dl class="v1-definitions" id="v1-settings-resources"></dl>
+            <div class="v1-settings-services v1-actions v1-settings-actions">
+              <a class="secondary" href="#cores">内核管理与安装</a>
+              <button type="button" class="secondary" data-v1-action="ikev2-open">配置 IKEv2</button>
+            </div>
+          </section>
+          <section class="card" data-settings-card="alerts">
+            <div class="v1-panel-head"><h2><span aria-hidden="true">♧</span> 通知与告警</h2></div>
+            <dl class="v1-definitions">
+              <div><dt>站内更新通知</dt><dd id="v1-settings-notify-update">等待检查</dd></div>
+              <div><dt>域名证书</dt><dd id="v1-settings-notify-cert">等待读取</dd></div>
+              <div><dt>外部通知</dt><dd>邮件、Webhook、Telegram 未接入</dd></div>
+            </dl>
+            <div class="v1-actions v1-settings-actions"><a class="secondary" href="#certificates">查看证书状态</a></div>
+          </section>
+          <section class="card" data-settings-card="maintenance">
+            <div class="v1-panel-head"><h2><span aria-hidden="true">↻</span> 更新与维护</h2></div>
+            <div class="v1-settings-fields">
+              <span>当前版本</span><output id="v1-settings-version">—</output>
+              <label for="update-auto-check" data-managed-update>自动检测更新</label><input class="v1-settings-switch" id="update-auto-check" type="checkbox" role="switch" name="auto_check" data-managed-update checked>
+              <label for="update-auto-apply" data-managed-update>自动更新</label><input class="v1-settings-switch" id="update-auto-apply" type="checkbox" role="switch" name="auto_apply" data-managed-update checked>
+              <span>更新通道</span><output id="v1-settings-update-channel">—</output>
+            </div>
+            <div class="v1-actions v1-settings-actions v1-settings-update-actions">
+              <button type="button" class="secondary" id="v1-settings-check-update" aria-describedby="v1-settings-update-status" disabled>检查更新</button>
+              <button type="button" class="secondary" id="v1-settings-restart" aria-describedby="v1-settings-restart-status" disabled>重启 Router</button>
+            </div>
+            <div class="v1-settings-update-feedback">
+              <p class="field-hint" id="v1-settings-update-status" role="status">正在读取更新通道…</p>
+              <p class="field-hint" id="v1-settings-restart-status" role="status"></p>
+            </div>
+          </section>
+          <section class="card v1-update-policies" data-settings-card="maintenance">
+            <div class="v1-panel-head"><h2>软件包与内核更新</h2></div>
+            <div class="v1-settings-fields" id="v1-updates-policies"></div>
+            <p class="field-hint">内核自动更新适用于 Router 管理的安装包。运行实例在下次重启时使用新版本。</p>
+            <p id="v1-update-policy-feedback" role="status"></p>
+          </section>
+          <section class="card" data-settings-card="maintenance">
+            <div class="v1-panel-head"><h2><span aria-hidden="true">⇩</span> 备份与恢复</h2></div>
+            <dl class="v1-definitions">
+              <div><dt>数据库快照</dt><dd>设置、订阅、节点与流量记录。用 <code>python -m router.database_backup</code> 停服恢复。</dd></div>
+              <div><dt>加密备份</dt><dd>通过 <code>python -m router.backup_archive</code> 备份数据库、证书与私钥，再恢复到新数据目录。</dd></div>
+            </dl>
+            <p class="field-hint">下载的数据库快照含连接凭据，请保存在受保护的位置。</p>
+            <div class="v1-actions v1-settings-actions"><button type="button" class="secondary" id="v1-settings-backup">下载数据库快照</button></div>
+          </section>
+          <section class="card" data-settings-card="maintenance">
+            <div class="v1-panel-head"><h2><span aria-hidden="true">▤</span> 日志与调试</h2></div>
+            <dl class="v1-definitions">
+              <div><dt>系统日志</dt><dd>由部署服务管理</dd></div>
+            </dl>
+            <div class="v1-actions v1-settings-actions">
+              <label for="v1-settings-log-core" class="sr-only">选择日志内核</label>
+              <select id="v1-settings-log-core" disabled><option>正在读取内核…</option></select>
+              <button type="button" class="secondary" id="v1-settings-view-log" disabled>查看日志</button>
+              <button type="button" class="secondary" id="v1-settings-export-logs" disabled>下载全部内核日志</button>
+            </div>
+          </section>
+          <section class="card" data-settings-card="maintenance">
+            <div class="v1-panel-head"><h2><span aria-hidden="true">ⓘ</span> 系统信息</h2></div>
+            <dl id="v1-system-details" class="v1-definitions"></dl>
+          </section>
+        </div>
+        <div class="v1-settings-footer v1-actions">
+          <span id="v1-settings-feedback" role="status"></span>
+          <button type="button" class="secondary" id="v1-settings-reset" disabled>↻ 重置为默认</button>
+          <button type="submit" class="primary" id="v1-settings-save" disabled>保存设置</button>
+        </div>
+      </form>
+      <dialog id="v1-admin-dialog" class="v1-dialog" aria-labelledby="v1-admin-title">
+        <form id="v1-admin-form" method="post" action="/api/v1/management/account">
+          <header>
+            <h2 id="v1-admin-title">修改账号或密码</h2>
+            <button type="button" class="text-button" id="v1-admin-close">关闭</button>
+          </header>
+          <div class="v1-core-profile-body v1-core-profile-field">
+            <label for="v1-admin-name">管理员账号</label>
+            <input id="v1-admin-name" name="username" autocomplete="username" required spellcheck="false" autocapitalize="none">
+            <label for="v1-admin-current">当前密码</label>
+            <input id="v1-admin-current" name="current_password" type="password" autocomplete="current-password" required autofocus>
+            <label for="v1-admin-new">新密码</label>
+            <input id="v1-admin-new" name="new_password" type="password" autocomplete="new-password" aria-describedby="v1-admin-hint">
+            <p id="v1-admin-hint" class="field-hint">至少 6 个字符。只改账号时留空。</p>
+            <label for="v1-admin-repeat">确认新密码</label>
+            <input id="v1-admin-repeat" type="password" autocomplete="new-password">
+            <p class="field-hint">保存后，所有管理会话都需要重新登录。</p>
+          </div>
+          <footer class="v1-core-profile-footer">
+            <p id="v1-admin-feedback" role="status"></p>
+            <div class="v1-actions"><button type="submit" class="primary" id="v1-admin-save">保存</button></div>
+          </footer>
+        </form>
+      </dialog>
+    </section>
     <footer><span>HopWorld Router</span><span>让连接管理更简单</span></footer>
   </main>
   <div id="toast-host" class="toast-host" aria-hidden="true">
-    <p id="message" class="message" role="status" aria-live="polite" hidden></p>
+    <p id="message" class="message" role="status" aria-live="polite" hidden><button type="button" id="toast-stop" class="toast-icon" hidden aria-label="停止下载">×</button><span id="message-text"></span><button type="button" id="toast-pause" class="toast-icon" hidden aria-label="暂停下载">❚❚</button></p>
   </div>
   <div id="local-node-notice-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="local-node-notice-title">
     <button type="button" class="modal-backdrop" data-modal-close="local-node-notice" aria-label="关闭"></button>
     <div class="modal-panel card notice-panel">
       <div class="modal-panel-head">
         <button type="button" class="modal-close text-button" data-modal-close="local-node-notice" aria-label="关闭">关闭</button>
-        <div class="side-heading"><div class="icon-box violet" aria-hidden="true">◎</div><div><h2 id="local-node-notice-title">本地网络节点尚未启用</h2><p>启用后订阅包含 Reality、Hysteria 2 和 TUIC。安装命令没装上 sing-box 时，可在配置里在线安装</p></div></div>
+        <div class="side-heading"><div class="icon-box violet" aria-hidden="true">◎</div><div><h2 id="local-node-notice-title">本地网络节点尚未启用</h2><p>启用后可将本地节点加入统一订阅</p></div></div>
       </div>
       <div class="modal-panel-body">
         <p class="notice-lead">当前未开启 <strong>本地网络节点</strong>，客户端订阅中不会出现本机出口。</p>
         <ul class="notice-list">
-          <li>适合 Shadowrocket 等代理：更新订阅后可用 VLESS Reality，以及 Hysteria 2、TUIC</li>
+          <li>VLESS Reality 使用 TCP 入站。Hysteria 2、TUIC 可在内核管理中单独配置 UDP 入站。</li>
           <li>需在安全组放行 TCP 端口（默认 8443）；Hysteria 2 和 TUIC 还要放行对应 UDP 端口</li>
           <li>与 IKEv2 系统 VPN 可同时使用，互不影响</li>
         </ul>
@@ -92,14 +1233,15 @@
         <label for="local-name">节点名称</label>
         <input id="local-name" class="is-readonly" maxlength="40" required value="本地网络" readonly placeholder="订阅里显示的名称">
         <label for="local-egress-mode">出口方式</label>
-        <select id="local-egress-mode"><option value="default">本机网络（沿用环境代理设置）</option><option value="local_proxy">本机已有 HTTP/SOCKS 代理</option><option value="auto">从已启用的上游节点自动选择</option></select>
+        <select id="local-egress-mode"><option value="fixed">绑定指定上游（失效时阻断）</option><option value="default">本机网络（沿用环境代理设置）</option><option value="local_proxy">本机已有 HTTP/SOCKS 代理</option><option value="auto">从已启用的上游节点自动选择</option></select>
         <div class="local-protocol-status" aria-label="已保存的传输协议配置">
           <strong>已保存的传输协议配置</strong>
           <p id="local-protocol-status">正在读取…</p>
           <p id="local-protocol-detail"></p>
-          <button id="local-singbox-install" type="button" class="secondary" hidden>在线安装 sing-box</button>
+          <button id="local-singbox-install" type="button" class="secondary" hidden>检测 sing-box</button>
         </div>
         <div id="local-proxy-settings" hidden><label for="local-proxy-port">扫描端口（留空扫描常用端口）</label><div class="input-row"><input id="local-proxy-port" type="number" min="1" max="65535" placeholder="例如 7890"><button id="local-proxy-scan" type="button" class="secondary">扫描</button></div><label for="local-proxy-choice">使用发现的代理</label><select id="local-proxy-choice"><option value="">请先扫描</option></select><p id="local-proxy-protocol" class="field-hint" role="status">请扫描并选择代理，以查看 TCP 和 UDP 状态。</p><p class="field-hint">仅扫描本服务所在网络空间的 127.0.0.1；仅支持无需认证且允许连接本地地址的代理。</p></div>
+        <div id="local-fixed-settings" hidden><label for="local-upstream">上游节点</label><select id="local-upstream"><option value="">请选择已启用的上游节点</option></select><p class="field-hint" id="local-upstream-hint">上游不可用时阻断流量。UDP 能力需独立验证。</p></div>
         <div id="local-auto-settings" hidden><label for="local-auto-target">自动换线测试目标</label><select id="local-auto-target"><option value="google">Google</option><option value="youtube">YouTube</option><option value="cloudflare">Cloudflare</option></select><label for="local-auto-interval">探测间隔</label><select id="local-auto-interval"><option value="30">30 秒</option><option value="60" selected>1 分钟（默认）</option><option value="120">2 分钟</option><option value="300">5 分钟</option></select><p class="field-hint">间隔越短发现变化可能越快，但探测请求和资源消耗也越多。</p><p id="local-auto-summary" class="field-hint">使用列表中所有已启用且支持的上游节点。没有可用出口时阻断，不直连；已有连接不保证不中断。</p><details><summary>候选节点探测状态</summary><p id="local-auto-observation-status" class="field-hint" role="status">启用后显示</p><ul id="local-auto-observations" class="notice-list"></ul><p class="field-hint">显示最近一次探测，不代表每条连接实际使用的出口。</p></details></div>
         <fieldset class="local-pub-fieldset" id="local-pub-fieldset">
           <legend class="local-pub-legend">公网属性</legend>
@@ -109,22 +1251,24 @@
               <span id="local-host-summary-mode" class="local-host-summary-mode"></span>
             </div>
           </div>
-          <section id="local-host-section" class="local-host-section is-off" aria-label="公网入口配置">
-            <label class="checkbox-row" for="local-ddns" title="与「出口 IP 写进订阅」不可同时开启">
-              <input id="local-ddns" type="checkbox">
-              <span>固定域名 + 自动 DNS</span>
-            </label>
-            <label class="checkbox-row" for="local-auto-host" title="与「固定域名 + 自动 DNS」不可同时开启">
-              <input id="local-auto-host" type="checkbox">
-              <span>出口 IP 写进订阅</span>
-            </label>
+          <section id="local-host-section" class="local-host-section" aria-label="公网入口配置">
+            <label for="local-host-mode">订阅地址类型</label>
+            <select id="local-host-mode">
+              <option value="manual">手动输入域名或 IP</option>
+              <option value="auto">自动获取公网 IP</option>
+              <option value="ddns">域名 + 动态 DNS (DDNS)</option>
+            </select>
+            <p class="field-hint">手机或电脑在同一局域网时，可手动填写运行 Router 的主机局域网 IP。</p>
             <div class="local-auto-only">
-              <label for="local-host-prefer">探测偏好</label>
+              <label for="local-host-prefer">地址族</label>
               <select id="local-host-prefer" disabled>
-                <option value="ipv4">优先 IPv4</option>
+                <option value="ipv4">IPv4</option>
                 <option value="ipv6">IPv6</option>
                 <option value="ipv4_first">IPv4，失败再用 IPv6</option>
+                <option value="dual">IPv4 + IPv6（A + AAAA）</option>
               </select>
+              <button type="button" id="local-check-address" class="secondary" hidden>检查公网 IP</button>
+              <p class="field-hint" id="local-check-address-result" role="status"></p>
             </div>
           </section>
           <label for="local-host">公网地址<span class="label-hint">（IP 或域名）</span></label>
@@ -164,16 +1308,31 @@
   <div id="acme-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="acme-modal-title">
     <button type="button" class="modal-backdrop" data-modal-close="acme" aria-label="关闭"></button>
     <div class="modal-panel card">
-      <div class="modal-panel-head"><button type="button" class="modal-close text-button" data-modal-close="acme" aria-label="关闭">关闭</button><div class="side-heading"><div class="icon-box blue" aria-hidden="true">◇</div><div><h2 id="acme-modal-title">SSL 证书</h2><p>为订阅访问申请 HTTPS 证书</p></div></div></div>
+      <div class="modal-panel-head"><button type="button" class="modal-close text-button" data-modal-close="acme" aria-label="关闭">关闭</button><div class="side-heading"><div class="icon-box blue" aria-hidden="true">◇</div><div><h2 id="acme-modal-title">SSL 证书</h2><p>为公网域名、IPv4 或 IPv6 申请 HTTPS 证书</p></div></div></div>
       <div class="modal-panel-body"><form id="acme-form" class="stacked-form">
-        <p id="acme-domain" class="field-hint"></p>
+        <label for="acme-subject">证书类型</label>
+        <select id="acme-subject"><option value="domain">域名</option><option value="ipv4">公网 IPv4</option><option value="ipv6">公网 IPv6</option></select>
+        <div id="acme-domain-fields">
+          <label for="acme-domain">证书域名</label>
+          <select id="acme-domain"></select>
+          <p class="field-hint">申请前请先在「域名与证书」绑定域名。</p>
+        </div>
+        <div id="acme-ip-fields" hidden>
+          <label for="acme-ip-address">公网 IP</label>
+          <input id="acme-ip-address" maxlength="45" placeholder="留空自动检测" spellcheck="false" autocomplete="off">
+        </div>
         <label class="checkbox-row" for="local-acme"><input id="local-acme" type="checkbox"><span>免费 SSL 证书（Let's Encrypt）</span></label>
-        <label for="local-acme-challenge">校验方式</label>
-        <select id="local-acme-challenge"><option value="auto">自动</option><option value="dns">DNS-01（无需 80）</option><option value="http">HTTP-01（80）</option><option value="tls-alpn">TLS-ALPN-01（443）</option></select>
+        <div id="acme-challenge-fields">
+          <label for="local-acme-challenge">校验方式</label>
+          <select id="local-acme-challenge"><option value="auto">自动</option><option value="dns">DNS-01（无需 80）</option><option value="http">HTTP-01（80）</option><option value="tls-alpn">TLS-ALPN-01（443）</option></select>
+        </div>
+        <p id="acme-ip-hint" class="field-hint" hidden>公网 IP 证书有效期 160 小时。HTTP-01 需要公网 TCP 80，TLS-ALPN-01 需要公网 TCP 443 和 lego。</p>
         <label for="local-acme-email">ACME 邮箱</label><input id="local-acme-email" type="email" maxlength="254" placeholder="注册与到期提醒">
         <details id="local-acme-fw-wrap" class="local-acme-fw" hidden><summary class="local-acme-fw-title">证书校验端口（仅申请证书）</summary><p class="field-hint">以下端口仅用于证书校验，与节点转发端口无关。</p><table class="local-acme-fw-table" aria-label="校验方式与需放行端口"><thead><tr><th>校验</th><th>入站端口</th></tr></thead><tbody><tr data-challenge="dns"><td>DNS-01</td><td>不需要</td></tr><tr data-challenge="http"><td>HTTP-01</td><td>80</td></tr><tr data-challenge="tls-alpn"><td>TLS-ALPN-01</td><td>443</td></tr><tr data-challenge="auto"><td>自动</td><td>按检测结果</td></tr></tbody></table></details>
         <p id="local-acme-status" class="field-hint" role="status" hidden></p>
-        <div class="form-actions"><button id="acme-save" class="primary" type="submit">保存</button><button class="secondary" type="button" data-modal-close="acme">取消</button></div>
+        <p id="acme-ip-status" class="field-hint" role="status" hidden></p>
+        <p id="acme-preflight-status" class="field-hint" role="status"></p>
+        <div class="form-actions"><button id="acme-preflight" class="secondary" type="button">验证公网可达性</button><button id="acme-save" class="primary" type="submit" disabled>申请证书</button></div>
       </form></div>
     </div>
   </div>
@@ -216,7 +1375,7 @@
         <button type="button" class="modal-close text-button" data-modal-close="manual" aria-label="关闭">关闭</button>
         <div class="side-heading"><div class="icon-box cyan" aria-hidden="true">⌁</div><div><h2 id="manual-modal-title">手动导入节点</h2><p>粘贴已有的节点链接</p></div></div>
       </div>
-      <div class="modal-panel-body"><form id="manual"><label for="links">节点链接</label><textarea id="links" rows="6" required placeholder="每行粘贴一个节点链接"></textarea><p class="field-hint">支持 VLESS、VMess、Trojan 等链接</p><button type="submit" class="primary full">导入节点</button></form></div>
+      <div class="modal-panel-body"><form id="manual"><label for="links">节点链接</label><textarea id="links" rows="6" required placeholder="每行粘贴一个节点链接"></textarea><label for="v1-node-file">或读取文本文件</label><input type="file" id="v1-node-file" accept=".txt,text/plain"><p class="field-hint">支持 VLESS、VMess、Trojan 等链接</p><button type="submit" class="primary full">导入节点</button></form></div>
     </div>
   </div>
   <div id="subscription-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="subscription-modal-title">
@@ -224,13 +1383,12 @@
     <div class="modal-panel card modal-panel-wide">
       <div class="modal-panel-head">
         <button type="button" class="modal-close text-button" data-modal-close="subscription" aria-label="关闭">关闭</button>
-        <div class="side-heading"><div class="icon-box blue" aria-hidden="true">↗</div><div><h2 id="subscription-modal-title">统一订阅</h2><p>复制链接或扫码导入客户端</p></div></div>
+        <div class="side-heading"><div class="icon-box blue" aria-hidden="true">↗</div><div><h2 id="subscription-modal-title">公网订阅</h2><p>复制链接或扫码导入客户端</p></div></div>
       </div>
       <div class="modal-panel-body">
-        <label for="subscription">订阅链接</label>
-        <div class="input-row has-field"><input id="subscription" readonly placeholder="连接服务后生成"><button id="copy-modal" class="secondary" type="button">复制</button></div>
+        <label for="subscription">公网 HTTPS 订阅地址</label>
+        <div class="input-row has-field"><input id="subscription" readonly placeholder="发布后生成"><button id="copy-modal" class="secondary" type="button">复制</button></div>
         <div class="address-footer"><p class="hint">地址含访问密钥，仅分享给信任设备。</p><button id="rotate" class="text-button" type="button">更换密钥 <span aria-hidden="true">↗</span></button></div>
-        <p class="hint muted">本机 HTTP 适合隧道访问；外网需 HTTPS 入口。二维码仅在本页生成。</p>
         <div class="mobile-connect" aria-label="手机连接方式">
           <div class="mobile-connect-head"><h3>导入方式</h3><p>扫码或粘贴订阅链接到客户端。</p></div>
           <div class="mobile-connect-body">
@@ -239,7 +1397,6 @@
               <div class="mobile-step"><strong>系统 VPN（iPhone / 蜂窝）</strong><p>侧栏「系统 VPN」→「配置」启用，「设置」安装描述文件（推荐）。</p></div>
               <div class="mobile-step"><strong>Android</strong><p>v2rayNG / Clash Meta：订阅或扫码导入，更新后选节点。</p></div>
               <div class="mobile-step"><strong>iOS 代理 App</strong><p>Shadowrocket / Streisand：添加订阅或扫码同一链接。</p></div>
-              <p class="hint muted">客户端若要求 HTTPS，http 链接请手动粘贴添加。</p>
             </div>
           </div>
         </div>
@@ -256,19 +1413,29 @@
       <div class="modal-panel-body"><form id="add"><label for="name">订阅名称</label><input id="name" maxlength="100" required placeholder="例如：我的订阅"><label for="url">订阅地址</label><input id="url" type="url" required placeholder="https://…"><p class="field-hint">支持 HTTPS、Base64 及部分 Clash YAML 订阅</p><button type="submit" class="primary full">添加并更新 <span aria-hidden="true">→</span></button></form></div>
     </div>
   </div>
-  <div id="update-settings-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="update-settings-title">
-    <button type="button" class="modal-backdrop" data-modal-close="update-settings" aria-label="关闭"></button>
+  <div id="source-settings-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="source-settings-title">
+    <button type="button" class="modal-backdrop" data-modal-close="source-settings" aria-label="关闭"></button>
     <div class="modal-panel card">
-      <div class="modal-panel-head">
-        <button type="button" class="modal-close text-button" data-modal-close="update-settings" aria-label="关闭">关闭</button>
-        <div class="side-heading"><div class="icon-box blue" aria-hidden="true">↻</div><div><h2 id="update-settings-title">项目更新</h2><p>检查并更新本机上的项目文件</p></div></div>
+      <div class="modal-panel-head"><div class="side-heading"><h2 id="source-settings-title">订阅设置</h2></div></div>
+      <div class="modal-panel-body">
+        <form id="v1-source-form">
+          <label for="v1-source-name">订阅名称</label><input id="v1-source-name" required maxlength="100">
+          <label for="v1-source-url">HTTPS 订阅地址</label><input id="v1-source-url" type="url" required maxlength="4096" autocomplete="off">
+          <label class="v1-checkbox"><input type="checkbox" id="v1-source-enabled">启用此订阅</label>
+          <label class="v1-checkbox"><input type="checkbox" id="v1-source-auto">自动更新</label>
+          <label for="v1-source-interval">更新周期（分钟）</label><input id="v1-source-interval" type="number" required min="5" max="10080" step="any">
+          <p class="field-hint">更换地址会清空旧地址的节点缓存。停用订阅会移除该来源的节点，并影响依赖它的固定上游绑定。</p>
+          <div class="form-actions"><button class="primary" type="submit">保存订阅</button><button type="button" class="secondary" data-modal-close="source-settings">取消</button></div>
+        </form>
       </div>
-      <div class="modal-panel-body"><form id="update-settings-form">
-        <label class="checkbox-row" for="update-auto-check"><input id="update-auto-check" type="checkbox" checked><span>自动检测更新</span></label>
-        <p class="field-hint">定期查看 GitHub 是否有新的项目文件。</p>
-        <label class="checkbox-row" for="update-auto-apply"><input id="update-auto-apply" type="checkbox" checked><span>自动更新</span></label>
-        <p class="field-hint">发现变动后自动拉取并重启服务，现有连接可能短暂中断。</p>
-      </form></div>
     </div>
   </div>
+  <dialog id="v1-restart-screen" class="v1-restart-screen" aria-labelledby="v1-restart-title">
+    <div class="v1-restart-content">
+      <div class="v1-restart-spinner" id="v1-restart-spinner" aria-hidden="true"></div>
+      <h1 id="v1-restart-title">正在重启 Router</h1>
+      <p id="v1-restart-progress" role="status">启动后会自动跳转到登录页。</p>
+      <button type="button" id="v1-restart-dismiss" class="secondary" hidden>返回管理后台</button>
+    </div>
+  </dialog>
 </body></html>

@@ -82,7 +82,17 @@ def egress_http_outbound_from_environ():
     return {'protocol': 'http', 'tag': 'egress', 'settings': {'servers': [server]}}
 
 
-def _finish_local_xray_config(config, proxy_pool=None, probe_url=None, single_proxy=False, probe_interval=60):
+def _finish_local_xray_config(config, proxy_pool=None, probe_url=None, single_proxy=False, probe_interval=60, fixed_upstream=False):
+    if fixed_upstream:
+        config['outbounds'] = [{'protocol': 'blackhole', 'tag': 'blocked', 'settings': {}}]
+        if proxy_pool:
+            upstream = {**proxy_pool[0], 'tag': 'fixed-upstream'}
+            config['outbounds'].append(upstream)
+            config['routing'] = {'domainStrategy': 'AsIs', 'rules': [{
+                'type': 'field', 'network': 'tcp' if upstream['protocol'] == 'http' else 'tcp,udp',
+                'outboundTag': 'fixed-upstream',
+            }]}
+        return config
     if proxy_pool is not None:
         config['outbounds'] = [{'protocol': 'blackhole', 'tag': 'blocked', 'settings': {}}]
         if proxy_pool:
@@ -144,7 +154,7 @@ def build_local_node(hostname, port, client_id, certificate, private_key, name=D
 
 def build_local_reality_node(public_host, port, client_id, private_key, public_key, short_id,
                              dest=DEFAULT_REALITY_DEST, server_name=DEFAULT_REALITY_SERVER_NAME,
-                             name=DEFAULT_NODE_NAME, proxy_pool=None, probe_url=None, single_proxy=False, probe_interval=60):
+                             name=DEFAULT_NODE_NAME, proxy_pool=None, probe_url=None, single_proxy=False, probe_interval=60, fixed_upstream=False):
     """Generate a VLESS Reality inbound config and matching client share link."""
     if type(probe_interval) is not int or probe_interval not in (30, 60, 120, 300):
         raise ValueError('自动换线探测间隔无效')
@@ -184,7 +194,7 @@ def build_local_reality_node(public_host, port, client_id, private_key, public_k
                 },
             },
         }],
-    }, proxy_pool=proxy_pool, probe_url=probe_url, single_proxy=single_proxy, probe_interval=probe_interval)
+    }, proxy_pool=proxy_pool, probe_url=probe_url, single_proxy=single_proxy, probe_interval=probe_interval, fixed_upstream=fixed_upstream)
     params = urlencode({
         'encryption': 'none',
         'flow': 'xtls-rprx-vision',
@@ -201,15 +211,23 @@ def build_local_reality_node(public_host, port, client_id, private_key, public_k
 
 def quic_ports(port):
     """UDP ports for Hysteria 2 and TUIC, distinct from the VLESS port and the loopback SOCKS port."""
+    return _local_udp_ports(port)[:2]
+
+
+def native_hysteria_port(port):
+    return _local_udp_ports(port)[2]
+
+
+def _local_udp_ports(port):
     port = _validate_port(port)
     used = {port, LOCAL_EGRESS_SOCKS_PORT}
     found = []
-    for candidate in (port + 1, port + 2, port - 1, port - 2, 8444, 8445):
+    for candidate in (port + 1, port + 2, port - 1, port - 2, 8444, 8445, 8446):
         if 1 <= candidate <= 65535 and candidate not in used:
             found.append(candidate)
             used.add(candidate)
-        if len(found) == 2:
-            return found[0], found[1]
+        if len(found) == 3:
+            return tuple(found)
     raise ValueError('没有可用的 Hysteria 2 / TUIC 端口')
 
 
@@ -227,7 +245,7 @@ def _protocol_label(name, suffix):
     return suffix[:40] if room < 1 else f'{name[:room]} {suffix}'
 
 
-def build_quic_links(public_host, port, client_id, hy2_password, tuic_password, name=DEFAULT_NODE_NAME, insecure=True):
+def build_quic_links(public_host, port, client_id, hy2_password, tuic_password, name=DEFAULT_NODE_NAME, *, ports=None):
     """Share links for the same local egress, carried over Hysteria 2 and TUIC."""
     public_host = validate_public_host(public_host)
     port = _validate_port(port)
@@ -235,19 +253,43 @@ def build_quic_links(public_host, port, client_id, hy2_password, tuic_password, 
     hy2_password = _secret(hy2_password, 'Hysteria 2 密码')
     tuic_password = _secret(tuic_password, 'TUIC 密码')
     name = validate_node_name(name)
-    hy2_port, tuic_port = quic_ports(port)
-    host = _link_host(public_host)
-    hy2_query = {'sni': public_host}
-    tuic_query = {'congestion_control': 'bbr', 'udp_relay_mode': 'native', 'alpn': 'h3', 'sni': public_host}
-    if insecure:
-        hy2_query['insecure'] = '1'
-        tuic_query['allow_insecure'] = '1'
-    hy2 = f"hysteria2://{quote(hy2_password, safe='')}@{host}:{hy2_port}?{urlencode(hy2_query)}#{quote(_protocol_label(name, 'Hysteria2'))}"
-    tuic = f"tuic://{client_id}:{quote(tuic_password, safe='')}@{host}:{tuic_port}?{urlencode(tuic_query)}#{quote(_protocol_label(name, 'TUIC'))}"
+    hy2_port, tuic_port = ports or quic_ports(port)
+    hy2 = _hysteria_link(public_host, hy2_port, hy2_password, _protocol_label(name, 'Hysteria2'))
+    tuic = _tuic_link(public_host, tuic_port, client_id, tuic_password, _protocol_label(name, 'TUIC'))
     return hy2, tuic
 
 
-def build_singbox_config(public_host, port, client_id, hy2_password, tuic_password, certificate, key):
+def _hysteria_link(host, port, password, name, *, sni=None, certificate_pin=''):
+    query = {} if sni == '' else {'sni': sni or host}
+    if certificate_pin:
+        query.update(insecure='1', pinSHA256=certificate_pin)
+    parameters = '?' + urlencode(query) if query else ''
+    return f"hysteria2://{quote(password, safe='')}@{_link_host(host)}:{port}{parameters}#{quote(name)}"
+
+
+def _tuic_link(host, port, client_id, password, name):
+    query = {'congestion_control': 'bbr', 'udp_relay_mode': 'native', 'alpn': 'h3', 'sni': host}
+    return f"tuic://{client_id}:{quote(password, safe='')}@{_link_host(host)}:{port}?{urlencode(query)}#{quote(name)}"
+
+
+def build_native_hysteria(settings, certificate, key):
+    host = validate_public_host(settings['public_host'])
+    port = native_hysteria_port(settings['port'])
+    password = _secret(settings['native_hysteria_password'], '原生 Hysteria 2 密码')
+    name = _protocol_label(validate_node_name(settings.get('name') or DEFAULT_NODE_NAME), '原生 Hysteria2')
+    if not all(isinstance(path, str) and path.startswith('/') and '\x00' not in path for path in (certificate, key)):
+        raise ValueError('证书和私钥必须使用绝对路径')
+    listen = {'ipv6': '[::]', 'dual': '', 'ipv4_first': ''}.get(settings.get('public_host_prefer'), '0.0.0.0')
+    config = {
+        'listen': f'{listen}:{port}',
+        'tls': {'cert': certificate, 'key': key},
+        'auth': {'type': 'password', 'password': password},
+        'outbounds': [{'name': 'egress', 'type': 'socks5', 'socks5': {'addr': f'127.0.0.1:{LOCAL_EGRESS_SOCKS_PORT}'}}],
+    }
+    return config, _hysteria_link(host, port, password, name)
+
+
+def build_singbox_config(public_host, port, client_id, hy2_password, tuic_password, certificate, key, *, ports=None):
     """Sing-box inbounds that forward into the local Xray SOCKS egress."""
     public_host = validate_public_host(public_host)
     client_id = _parse_client_id(client_id)
@@ -255,7 +297,7 @@ def build_singbox_config(public_host, port, client_id, hy2_password, tuic_passwo
     tuic_password = _secret(tuic_password, 'TUIC 密码')
     if not all(isinstance(path, str) and path.startswith('/') and '\x00' not in path for path in (certificate, key)):
         raise ValueError('证书和私钥必须使用绝对路径')
-    hy2_port, tuic_port = quic_ports(port)
+    hy2_port, tuic_port = ports or quic_ports(port)
     tls = {'enabled': True, 'server_name': public_host, 'certificate_path': certificate, 'key_path': key, 'alpn': ['h3']}
     return {
         'log': {'level': 'warn'},
@@ -263,6 +305,6 @@ def build_singbox_config(public_host, port, client_id, hy2_password, tuic_passwo
             {'type': 'hysteria2', 'tag': 'hy2-in', 'listen': '0.0.0.0', 'listen_port': hy2_port, 'users': [{'name': 'hopworld', 'password': hy2_password}], 'tls': tls},
             {'type': 'tuic', 'tag': 'tuic-in', 'listen': '0.0.0.0', 'listen_port': tuic_port, 'users': [{'uuid': client_id, 'password': tuic_password}], 'congestion_control': 'bbr', 'tls': dict(tls)},
         ],
-        # shortcut: IPv4 only; listen on :: as well when clients connect over IPv6 without NAT64.
         'outbounds': [{'type': 'socks', 'tag': 'egress', 'server': '127.0.0.1', 'server_port': LOCAL_EGRESS_SOCKS_PORT, 'version': '5'}],
+        'route': {'final': 'egress'},
     }

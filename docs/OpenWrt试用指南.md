@@ -28,12 +28,12 @@ python3 -m venv .venv
 
 ```sh
 ( set -C; umask 077; cat > /etc/hopworld-router.env <<'EOF'
-HOPWORLD_ADMIN_PASSWORD='请替换为至少16字符的随机密码'
+HOPWORLD_ADMIN_PASSWORD=admin
 EOF
 )
 ```
 
-创建时若文件已存在，命令会拒绝覆盖；请先检查现有配置。将示例替换成至少 16 个随机英文字母和数字；不能包含冒号。配置文件会被 root 的 shell 读取执行，**不能使用不受信任用户提供的内容**。不要分享文件、订阅地址或数据。服务固定只监听路由器本机的 `127.0.0.1:8080`，数据放在 `/etc/hopworld-router/data`。敏感数据需要可靠备份；系统升级或恢复出厂设置可能删除它们，应事先确认 OpenWrt 的备份与升级策略。
+创建时若文件已存在，命令会拒绝覆盖，请先检查现有配置。配置文件会被 root 的 shell 读取执行，内容须来自可信来源。不要分享文件、订阅地址或数据。服务固定只监听路由器本机的 `127.0.0.1:8080`，数据放在 `/etc/hopworld-router/data`。系统升级或恢复出厂设置可能删除数据，应事先确认 OpenWrt 的备份与升级策略。
 
 确认目标文件尚不存在后，以 root 安装项目提供的两个模板：
 
@@ -47,7 +47,7 @@ chmod 755 /usr/libexec/hopworld-router /etc/init.d/hopworld-router
 /etc/init.d/hopworld-router start
 ```
 
-从电脑使用 `ssh -L 8080:127.0.0.1:8080 root@路由器地址` 建立隧道，再打开本机 `http://127.0.0.1:8080`，用户名为 `admin`。不要在路由器防火墙中直接开放管理端口。日志可通过系统日志查看，但其中可能含敏感内容，分享前应检查。
+从电脑使用 `ssh -L 8080:127.0.0.1:8080 root@路由器地址` 建立隧道，再打开本机 `http://127.0.0.1:8080`。新安装使用 `admin / admin` 并按页面要求设置至少 6 个字符的新密码。不要在路由器防火墙中直接开放管理端口。日志可通过系统日志查看，分享前应检查其中的敏感内容。
 
 ## 停止与限制
 
@@ -60,4 +60,4 @@ chmod 755 /usr/libexec/hopworld-router /etc/init.d/hopworld-router
 
 停止后可先备份 `/etc/hopworld-router.env` 和 `/etc/hopworld-router/data`，再根据需要移除模板与代码；停止服务不会删除数据。设备升级、重启恢复及卸载仍需在目标固件验证。
 
-节点测试需要兼容设备架构的 Xray 与 curl，本地网络节点还涉及端口和入站网络；二者均未在本方案中验证。不要执行 `deploy/hopworld-install-root.sh`：这条授权依赖 apt、dnf 或 yum，以及 systemd 上的本机防火墙，OpenWrt 不适用，管理页也不会在这里自动安装 Xray。IKEv2、证书自动签发、动态 DNS 和透明网关不在当前试用范围。请按[运行环境适配路线图](运行环境适配路线图.md)记录每项结果。
+节点测试需要兼容设备架构的 Xray 与 curl，本地网络节点还涉及端口和入站网络；二者均未在本方案中验证。IKEv2、证书自动签发、动态 DNS 和透明网关不在当前试用范围。请按[运行环境适配路线图](运行环境适配路线图.md)记录每项结果。

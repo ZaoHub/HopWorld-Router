@@ -4,9 +4,36 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+from router import system_update
 
 
 class ServerUpdateTests(unittest.TestCase):
+    def test_package_reports_apt_instead_of_triggering_the_git_updater(self):
+        with patch.dict(os.environ, {'HOPWORLD_PACKAGE_VERSION': '1.0.0~dev1'}), \
+             patch.object(system_update, '_unit_running') as unit_running:
+            status = system_update.status()
+            self.assertEqual((status['state'], status['current']), ('unavailable', '1.0.0~dev1'))
+            self.assertEqual((status['managed'], status['channel']), (False, 'APT'))
+            self.assertIn('APT', status['error'])
+            with self.assertRaisesRegex(ValueError, 'APT'):
+                system_update.start()
+            unit_running.assert_not_called()
+
+    def test_local_source_does_not_run_the_deployed_updater(self):
+        with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, clear=True):
+            root = Path(temporary)
+            (root / '.git').mkdir()
+            with patch.object(system_update, 'APP_ROOT', root), patch.object(system_update, '_unit_running') as unit_running:
+                status = system_update.status()
+                self.assertFalse(status['managed'])
+                self.assertEqual(status['channel'], '本地源码')
+                self.assertIn('Git 工作区', status['error'])
+                with self.assertRaisesRegex(ValueError, 'Git 工作区'):
+                    system_update.start()
+                unit_running.assert_not_called()
+
     def test_fast_forward_and_refuse_local_changes(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

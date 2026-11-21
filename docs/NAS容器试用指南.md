@@ -30,11 +30,11 @@ cd HopWorld-Router
 umask 077
 mkdir -p data
 chmod 700 data
-printf 'HOPWORLD_ADMIN_PASSWORD=%s\n' '请替换为随机密码' > router.env
+printf '%s\n' 'HOPWORLD_ADMIN_PASSWORD=admin' > router.env
 chmod 600 router.env
 ```
 
-在启动前，将 `router.env` 中的密码替换为至少 16 个字符、不含冒号的随机密码。`router.env`、`data/` 和订阅地址包含敏感信息，不要提交或分享；备份时也应妥善保护。`data/` 存放数据库及运行配置，升级或删除容器前应先备份。
+`router.env`、`data/` 和订阅地址包含敏感信息，不要提交或分享。备份时也应妥善保护。`data/` 存放管理员密码校验记录、数据库和运行配置，升级或删除容器前应先备份。
 
 ## 3. 构建、启动和访问
 
@@ -50,9 +50,9 @@ docker compose exec hopworld-router xray version
 ssh -L 8080:127.0.0.1:8080 用户名@NAS地址
 ```
 
-保持连接，打开电脑上的 `http://127.0.0.1:8080`，用户名为 `admin`，密码为刚配置的值。若电脑本地 8080 已占用，可把命令中的第一个 `8080` 改为其他端口，并访问该端口。不要把管理界面直接开放到公网。
+保持连接，打开电脑上的 `http://127.0.0.1:8080`。新安装使用 `admin / admin` 并按页面要求设置至少 6 个字符的新密码。若电脑本地 8080 已占用，可把命令中的第一个 `8080` 改为其他端口，并访问该端口。不要把管理界面直接开放到公网。
 
-容器默认包含 Xray 和 curl。这是镜像自带的，不是管理页自动安装。不要在容器或 NAS 上执行 `deploy/hopworld-install-root.sh`；那条授权只用于带 apt、dnf 或 yum 的 Linux systemd 安装，不会改 NAS 防火墙或容器端口。节点测试与本地网络节点仍需实际验证。启用本地节点时，客户端需要能访问 NAS 对应入站端口；局域网可达不代表公网可达。远程获取订阅需另行配置安全的 HTTPS 入口，仅转发订阅路径。
+容器默认包含 Xray 和 curl；节点测试与本地网络节点仍需实际验证。启用本地节点时，客户端需要能访问 NAS 对应入站端口；局域网可达不代表公网可达。远程获取订阅需另行配置安全的 HTTPS 入口，仅转发订阅路径。
 
 ## 4. 更新、停止和备份
 

@@ -20,11 +20,12 @@ def main():
     agent = Path.home() / 'Library/LaunchAgents' / f'{LABEL}.plist'
     if agent.exists():
         raise SystemExit(f'配置已存在：{agent}。请先按说明卸载，避免覆盖。')
-    password = getpass.getpass('设置管理密码（至少 16 字符，不能包含冒号）：')
-    if len(password) < 16 or ':' in password:
-        raise SystemExit('密码必须至少 16 字符且不包含冒号。')
-    if password != getpass.getpass('再次输入管理密码：'):
-        raise SystemExit('两次输入的密码不一致。')
+    password = getpass.getpass('设置管理密码（留空使用 admin 进行首次登录）：') or 'admin'
+    if password != 'admin':
+        if len(password) < 6:
+            raise SystemExit('密码必须至少 6 个字符。')
+        if password != getpass.getpass('再次输入管理密码：'):
+            raise SystemExit('两次输入的密码不一致。')
     data = root / 'data'
     data.mkdir(mode=0o700, parents=True, exist_ok=True)
     agent.parent.mkdir(parents=True, exist_ok=True)

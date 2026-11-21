@@ -1,0 +1,11 @@
+[Unit]
+Description=Install the stable HopWorld Router Debian release
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+StateDirectory=hopworld-router-package-updates
+StateDirectoryMode=0755
+ExecStart=/usr/bin/python3 -I /usr/lib/hopworld-router/deploy/hopworld-package-update.py
+TimeoutStartSec=12min

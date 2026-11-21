@@ -8,6 +8,7 @@ import secrets
 import shutil
 import signal
 import socket
+import stat
 import subprocess
 import tempfile
 import threading
@@ -32,14 +33,18 @@ class XrayService:
         self.data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.config_path = self.data_dir / 'xray-local.json'
         self.pid_path = self.data_dir / 'xray-local.pid'
-        self.binary = binary or os.environ.get('HOPWORLD_XRAY') or shutil.which('xray')
+        self.log_path = self.data_dir / 'xray-local.log'
+        self.binary = binary
         self._lock = threading.Lock()
         self._metrics_lock = threading.Lock()
         self._metrics_dir = None
         self._process = None
+        if binary is None:
+            self.locate()
 
     def locate(self):
-        found = os.environ.get('HOPWORLD_XRAY') or shutil.which('xray')
+        bundled = self.data_dir / 'bin' / 'xray'
+        found = os.environ.get('HOPWORLD_XRAY') or (str(bundled) if os.access(bundled, os.X_OK) else None) or shutil.which('xray')
         if not found and os.access('/usr/local/bin/xray', os.X_OK):
             found = '/usr/local/bin/xray'
         if found:
@@ -79,10 +84,12 @@ class XrayService:
                 host = ''
         auto_env = os.environ.get('HOPWORLD_PUBLIC_HOST_AUTO', '').strip().lower()
         prefer = os.environ.get('HOPWORLD_PUBLIC_HOST_PREFER', 'ipv4').strip().lower()
-        if prefer not in ('ipv4', 'ipv6', 'ipv4_first'):
+        if prefer not in ('ipv4', 'ipv6', 'ipv4_first', 'dual'):
             prefer = 'ipv4'
         return {
             'enabled': False,
+            'legacy_singbox_enabled': False,
+            'egress_mode': 'fixed',
             'port': DEFAULT_LOCAL_PORT,
             'public_host': host,
             'auto_public_host': auto_env in ('1', 'true', 'yes', 'on'),
@@ -137,9 +144,12 @@ class XrayService:
             return path if len(os.fsencode(path)) < 100 else None
 
     def build(self, settings):
+        port = int(settings['port'])
+        if port == LOCAL_EGRESS_SOCKS_PORT:
+            raise ValueError('TCP 端口与本机 QUIC 出口端口冲突')
         config, link = build_local_reality_node(
             settings['public_host'],
-            int(settings['port']),
+            port,
             settings['uuid'],
             settings['private_key'],
             settings['public_key'],
@@ -147,20 +157,17 @@ class XrayService:
             settings.get('dest', DEFAULT_REALITY_DEST),
             settings.get('server_name', DEFAULT_REALITY_SERVER_NAME),
             settings.get('name') or DEFAULT_NODE_NAME,
-            (settings.get('proxy_pool') or []) if settings.get('egress_mode') in ('auto', 'local_proxy') else None,
+            (settings.get('proxy_pool') or []) if settings.get('egress_mode') in ('auto', 'local_proxy', 'fixed') else None,
             settings.get('auto_probe_url'),
             settings.get('egress_mode') == 'local_proxy',
             settings.get('auto_interval', 60),
+            fixed_upstream=settings.get('egress_mode') == 'fixed',
         )
+        if ':' in settings['public_host'] or settings.get('public_host_prefer') in ('ipv6', 'dual', 'ipv4_first'):
+            config['inbounds'][0]['listen'] = '::'
         path = self._metrics_path()
         if path:
-            config['inbounds'][0]['tag'] = 'local-node-in'
-            config['stats'] = {}
-            config['policy'] = {'system': {'statsInboundUplink': True, 'statsInboundDownlink': True}}
-            config['metrics'] = {'tag': 'internal-metrics'}
-            config['inbounds'].append({'tag': 'internal-metrics-in', 'listen': path, 'protocol': 'dokodemo-door', 'settings': {'address': '127.0.0.1', 'port': 80, 'network': 'tcp'}})
-            routing = config.setdefault('routing', {'domainStrategy': 'AsIs', 'rules': []})
-            routing['rules'].insert(0, {'type': 'field', 'inboundTag': ['internal-metrics-in'], 'outboundTag': 'internal-metrics'})
+            _add_metrics(config, path)
         config['inbounds'].append({
             'listen': '127.0.0.1', 'port': LOCAL_EGRESS_SOCKS_PORT, 'protocol': 'socks', 'tag': 'local-socks-in',
             'settings': {'auth': 'noauth', 'udp': True},
@@ -169,28 +176,7 @@ class XrayService:
 
     def _metrics(self):
         path = self._metrics_path()
-        if not path:
-            return None
-        conn = http.client.HTTPConnection('localhost', timeout=0.5)
-        try:
-            conn.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            conn.sock.settimeout(0.5)
-            conn.sock.connect(path)
-            conn.request('GET', '/debug/vars', headers={'Connection': 'close'})
-            response = conn.getresponse()
-            if response.status != 200:
-                return None
-            raw = response.read(1024 * 1024 + 1)
-            if len(raw) > 1024 * 1024:
-                return None
-            payload = json.loads(raw)
-            if not isinstance(payload, dict):
-                return None
-            return payload
-        except (OSError, ValueError, http.client.HTTPException):
-            return None
-        finally:
-            conn.close()
+        return _read_core_counters('/debug/vars', socket_path=path) if path else None
 
     def auto_observations(self):
         payload = self._metrics()
@@ -229,6 +215,8 @@ class XrayService:
             'running': is_running,
             'egress_protocol_info': self._protocol_info(settings, is_running),
             'egress_mode': settings.get('egress_mode', 'default'),
+            'upstream_id': settings.get('upstream_id', ''),
+            'upstream_ready': settings.get('egress_mode') == 'fixed' and bool(settings.get('proxy_pool')),
             'local_proxy': settings.get('local_proxy', ''),
             'auto_pool_count': len(settings.get('proxy_pool') or []) if settings.get('egress_mode') == 'auto' else 0,
             'auto_target': settings.get('auto_target', 'google'),
@@ -262,10 +250,16 @@ class XrayService:
             udp, detail = '不支持', '当前使用本机 HTTP 代理出口，UDP 无法通过。'
         elif tags.get('local-proxy') == 'socks':
             udp, detail = '待验证', 'SOCKS 出口是否支持 UDP 需要实际测试；代理扫描只验证 TCP。'
+        elif 'fixed-upstream' in tags:
+            udp = '已阻断' if tags['fixed-upstream'] == 'http' else '待验证'
+            detail = '业务流量只走绑定的上游，上游不可用时会失败。'
+            if udp == '已阻断':
+                detail += ' 当前 HTTP 上游不支持 UDP。'
         elif any(str(tag).startswith('candidate-') for tag in tags if tag):
             udp, detail = '取决于上游', '自动换线的 UDP 支持取决于所选上游，网页测速不能证明 UDP 可用。'
         elif tags.get('blocked') == 'blackhole':
-            return {'tcp': '已阻断', 'udp': '已阻断', 'detail': '没有可用的出口配置。'}
+            detail = '绑定的上游不存在、已停用或配置不受支持。' if settings.get('egress_mode') == 'fixed' else '没有可用的出口配置。'
+            return {'tcp': '已阻断', 'udp': '已阻断', 'detail': detail}
         elif tags.get('direct') == 'freedom':
             udp, detail = '已配置', '服务器直连出口已配置 TCP 和 UDP；客户端、服务器网络及防火墙仍需支持，实际可用性尚未测试。'
         else:
@@ -288,7 +282,7 @@ class XrayService:
                 return False
             return True
 
-    def apply(self, settings):
+    def apply(self, settings, *, rollback=True):
         with self._lock:
             if os.name == 'nt':
                 if settings.get('enabled'):
@@ -299,19 +293,62 @@ class XrayService:
                 payload = json.dumps(config, ensure_ascii=False, indent=2).encode('utf-8')
                 if self._config_matches(payload) and self._alive_locked():
                     return link
-                self._write_config(config)
-                self._restart_locked()
+                try:
+                    self._activate_locked(config, rollback)
+                except OSError:
+                    raise ValueError('无法保存或应用 Xray 配置，请检查数据目录权限') from None
                 return link
             self._stop_locked()
             if self.config_path.exists():
                 self.config_path.unlink()
             return ''
 
+    def _activate_locked(self, config, rollback):
+        if not self.binary:
+            raise ValueError('未找到 Xray，请安装后设置 HOPWORLD_XRAY')
+        with tempfile.TemporaryDirectory(dir=self.data_dir, prefix='.xray-') as directory:
+            candidate = Path(directory) / 'candidate.json'
+            previous = Path(directory) / 'previous.json'
+            self._write_config(config, candidate)
+            try:
+                subprocess.run(
+                    [self.binary, 'run', '-test', '-c', str(candidate)], check=True, timeout=5,
+                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+            except (OSError, subprocess.SubprocessError):
+                raise ValueError('Xray 配置校验失败，请检查内核版本和节点参数') from None
+            if rollback and self._alive_locked() and self.config_path.is_file():
+                shutil.copy2(self.config_path, previous)
+            os.replace(candidate, self.config_path)
+            try:
+                self._restart_locked()
+            except (OSError, ValueError) as exc:
+                if previous.exists():
+                    try:
+                        os.replace(previous, self.config_path)
+                        self._restart_locked()
+                    except (OSError, ValueError):
+                        self._stop_locked()
+                        raise ValueError('Xray 新配置启动失败，旧配置已恢复，需重新启动服务') from exc
+                    raise ValueError(f'{exc}。已恢复原有 Xray 服务') from exc
+                self._stop_locked()
+                self.config_path.unlink(missing_ok=True)
+                raise
+
     def stop(self):
         if os.name == 'nt':
             return
         with self._lock:
             self._stop_locked()
+
+    def restart(self):
+        with self._lock:
+            if not self._alive_locked():
+                raise ValueError('这个内核没有在运行，请先启动')
+            self._restart_locked()
+
+    def log_text(self):
+        return _read_log(self.log_path)
 
     def _config_matches(self, payload):
         try:
@@ -331,27 +368,31 @@ class XrayService:
             return False
         return True
 
-    def _write_config(self, config):
+    def _write_config(self, config, path=None):
         payload = json.dumps(config, ensure_ascii=False, indent=2)
-        fd = os.open(self.config_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        try:
-            os.write(fd, payload.encode('utf-8'))
-        finally:
-            os.close(fd)
+        fd = os.open(path or self.config_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, 'w', encoding='utf-8') as handle:
+            handle.write(payload)
 
     def _restart_locked(self):
         if not self.binary:
             raise ValueError('未找到 Xray，请安装后设置 HOPWORLD_XRAY')
         self._stop_locked()
         try:
+            log = _capture_log(self.log_path)
+        except OSError as exc:
+            raise ValueError('无法写入 Xray 日志') from exc
+        try:
             process = subprocess.Popen(
                 [self.binary, 'run', '-c', str(self.config_path)],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=log,
+                stderr=log,
                 start_new_session=True,
             )
         except OSError as exc:
             raise ValueError('无法启动 Xray，请检查安装和执行权限') from exc
+        finally:
+            log.close()
         try:
             process.wait(timeout=0.5)
         except subprocess.TimeoutExpired:
@@ -386,6 +427,13 @@ class XrayService:
                     self._kill(pid)
         self._process = None
         self._clear_pid()
+        if self._metrics_dir is not None:
+            path = Path(self._metrics_dir) / 'metrics.sock'
+            try:
+                if stat.S_ISSOCK(path.lstat().st_mode):
+                    path.unlink()
+            except FileNotFoundError:
+                pass
 
     def _read_pid(self):
         try:
@@ -412,6 +460,71 @@ class XrayService:
             os.kill(pid, signal.SIGKILL)
         except OSError:
             pass
+
+
+def _capture_log(path):
+    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND
+    if hasattr(os, 'O_NOFOLLOW'):
+        flags |= os.O_NOFOLLOW
+    fd = os.open(path, flags, 0o600)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
+            raise OSError('日志文件无效')
+        if info.st_size > 200_000:
+            os.ftruncate(fd, 0)
+        return os.fdopen(fd, 'ab', closefd=True)
+    except OSError:
+        os.close(fd)
+        raise
+
+
+def _read_log(path):
+    try:
+        if path.is_symlink() or not path.is_file():
+            return ''
+        with path.open('rb') as handle:
+            handle.seek(0, os.SEEK_END)
+            handle.seek(max(0, handle.tell() - 8000))
+            return handle.read().decode('utf-8', 'replace')
+    except OSError:
+        return ''
+
+
+def _add_metrics(config, path):
+    config['inbounds'][0]['tag'] = 'local-node-in'
+    config['stats'] = {}
+    config['policy'] = {'system': {'statsInboundUplink': True, 'statsInboundDownlink': True}}
+    config['metrics'] = {'tag': 'internal-metrics'}
+    config['inbounds'].append({'tag': 'internal-metrics-in', 'listen': path, 'protocol': 'dokodemo-door',
+                               'settings': {'address': '127.0.0.1', 'port': 80, 'network': 'tcp'}})
+    routing = config.setdefault('routing', {'domainStrategy': 'AsIs', 'rules': []})
+    routing['rules'].insert(0, {'type': 'field', 'inboundTag': ['internal-metrics-in'], 'outboundTag': 'internal-metrics'})
+
+
+def _read_core_counters(path, *, socket_path=None, port=None, secret=None):
+    conn = http.client.HTTPConnection('127.0.0.1', port=port, timeout=0.5)
+    try:
+        if socket_path:
+            conn.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            conn.sock.settimeout(0.5)
+            conn.sock.connect(socket_path)
+        headers = {'Connection': 'close'}
+        if secret:
+            headers['Authorization'] = secret
+        conn.request('GET', path, headers=headers)
+        response = conn.getresponse()
+        if response.status != 200:
+            return None
+        raw = response.read(1024 * 1024 + 1)
+        if len(raw) > 1024 * 1024:
+            return None
+        payload = json.loads(raw)
+        return payload if isinstance(payload, dict) else None
+    except (OSError, ValueError, http.client.HTTPException):
+        return None
+    finally:
+        conn.close()
 
 
 def _inbound_bytes(payload, tag):

@@ -139,13 +139,13 @@ class QuicLinkTests(unittest.TestCase):
     def test_hysteria2_and_tuic_use_the_same_egress_ports_and_secrets(self):
         hy2, tuic = build_quic_links(
             '8.8.8.8', 8443, 'a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89',
-            'hy2-password-value', 'tuic-password-value', name='家里宽带', insecure=True,
+            'hy2-password-value', 'tuic-password-value', name='家里宽带',
         )
         hy2_parts, tuic_parts = urlsplit(hy2), urlsplit(tuic)
         self.assertEqual((hy2_parts.scheme, hy2_parts.hostname, hy2_parts.port, hy2_parts.username), ('hysteria2', '8.8.8.8', 8444, 'hy2-password-value'))
         self.assertEqual((tuic_parts.scheme, tuic_parts.port, tuic_parts.username, tuic_parts.password), ('tuic', 8445, 'a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89', 'tuic-password-value'))
-        self.assertEqual(parse_qs(hy2_parts.query)['insecure'], ['1'])
-        self.assertEqual(parse_qs(tuic_parts.query)['allow_insecure'], ['1'])
+        self.assertNotIn('insecure', parse_qs(hy2_parts.query))
+        self.assertNotIn('allow_insecure', parse_qs(tuic_parts.query))
         self.assertEqual(unquote(hy2_parts.fragment), '家里宽带 Hysteria2')
         self.assertEqual(unquote(tuic_parts.fragment), '家里宽带 TUIC')
         config = build_singbox_config('8.8.8.8', 8443, 'a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89', 'hy2-password-value', 'tuic-password-value', '/cert.pem', '/key.pem')
@@ -164,32 +164,26 @@ class QuicLinkTests(unittest.TestCase):
                 'uuid': 'a9fc544e-a0a5-4a0c-a2a9-7c08e8057f89',
                 'hy2_password': 'hy2-password-value', 'tuic_password': 'tuic-password-value',
             }
-            with unittest.mock.patch.object(service, '_self_signed', return_value=('/cert.pem', '/key.pem')), \
-                 unittest.mock.patch('router.singbox_service.subprocess.Popen') as popen:
+            certificate = Path(temp) / 'cert.pem'
+            key = Path(temp) / 'key.pem'
+            certificate.touch()
+            key.touch()
+            with unittest.mock.patch('router.core_process.subprocess.Popen') as popen:
+                self.assertEqual(service.apply(settings), [])
+                self.assertIn('证书', service.public_view(settings)['error'])
+                popen.assert_not_called()
                 popen.return_value.wait.side_effect = subprocess.TimeoutExpired('sing-box', 0.5)
                 popen.return_value.poll.return_value = None
-                links = service.apply(settings)
+                links = service.apply(settings, (str(certificate), str(key)))
             self.assertEqual(popen.call_args.args[0][:3], ['/usr/bin/sing-box', 'run', '-c'])
             self.assertEqual([urlsplit(link).scheme for link in links], ['hysteria2', 'tuic'])
-            self.assertTrue(json.loads((Path(temp) / 'singbox-local.meta.json').read_text())['insecure'])
+            self.assertTrue(all('insecure' not in urlsplit(link).query for link in links))
+            service.meta_path.write_text('{"insecure": true}', encoding='utf-8')
+            self.assertEqual(service.links(settings), [])
             missing = SingboxService(Path(temp) / 'absent', binary='')
-            with unittest.mock.patch('router.singbox_service.subprocess.Popen') as idle:
+            with unittest.mock.patch('router.core_process.subprocess.Popen') as idle:
                 self.assertEqual(missing.apply(settings), [])
             idle.assert_not_called()
-
-    def test_self_signed_cert_works_without_openssl_addext(self):
-        if not shutil.which('openssl'):
-            self.skipTest('openssl missing')
-        with tempfile.TemporaryDirectory() as temp:
-            service = SingboxService(Path(temp), binary='/usr/bin/sing-box')
-            cert, key = service._self_signed('8.8.8.8')
-            text = subprocess.run(
-                ['openssl', 'x509', '-in', cert, '-noout', '-text'],
-                check=True, capture_output=True, text=True, timeout=10,
-            ).stdout
-            self.assertIn('8.8.8.8', text)
-            self.assertTrue(Path(key).is_file())
-
 
 class XrayRenameTests(unittest.TestCase):
     def test_node_traffic_uses_private_metrics_for_every_egress_mode(self):
@@ -345,6 +339,17 @@ class XrayRenameTests(unittest.TestCase):
             self.assertIsNone(service._process)
             with self.assertRaises(ValueError):
                 service.apply({**settings, 'port': 9443})
+
+    def test_restart_requires_a_running_process_and_log_reads_the_file(self):
+        with tempfile.TemporaryDirectory() as temp:
+            service = XrayService(Path(temp), binary='/usr/bin/xray')
+            with self.assertRaisesRegex(ValueError, '没有在运行'):
+                service.restart()
+            service.log_path.write_text('line\n', encoding='utf-8')
+            self.assertEqual(service.log_text(), 'line\n')
+            service.log_path.unlink()
+            service.log_path.symlink_to(Path(temp) / 'elsewhere')
+            self.assertEqual(service.log_text(), '')
 
 
 if __name__ == '__main__':

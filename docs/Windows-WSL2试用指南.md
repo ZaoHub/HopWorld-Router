@@ -30,13 +30,12 @@ git clone https://github.com/ZaoHub/HopWorld-Router.git
 cd HopWorld-Router
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-export HOPWORLD_ADMIN_PASSWORD='请替换为至少16字符的随机密码'
 .venv/bin/python -m router.server
 ```
 
-启动前将密码替换为至少 16 个字符、不含冒号的随机字符串。服务默认只监听 WSL 内的 `127.0.0.1:8080`。保持 Ubuntu 终端运行，在 Windows 浏览器中尝试打开 `http://localhost:8080`；用户名为 `admin`，密码为设置的值。Windows 到 WSL 的 localhost 访问取决于 WSL 的实际网络配置；打不开时先按 [Microsoft WSL 网络说明](https://learn.microsoft.com/zh-cn/windows/wsl/networking)检查，不要直接将管理接口暴露到公网。
+服务默认监听 WSL 内的 `127.0.0.1:8080`。保持 Ubuntu 终端运行，在 Windows 浏览器中尝试打开 `http://localhost:8080`。新安装使用 `admin / admin` 并按页面要求设置至少 6 个字符的新密码。Windows 到 WSL 的 localhost 访问取决于 WSL 的实际网络配置，打不开时可参照 [Microsoft WSL 网络说明](https://learn.microsoft.com/zh-cn/windows/wsl/networking)检查。
 
-在 Ubuntu 终端按 `Ctrl+C` 停止服务。下次进入项目目录后重新设置密码环境变量并运行 `.venv/bin/python -m router.server`。此方法依赖 WSL 与进程持续运行，Windows 关机、休眠或 WSL 停止时服务可能不可用，恢复后需要检查服务状态。
+在 Ubuntu 终端按 `Ctrl+C` 停止服务。下次进入项目目录后运行 `.venv/bin/python -m router.server`，继续使用已设置的新密码。此方法依赖 WSL 与进程持续运行，Windows 关机、休眠或 WSL 停止时服务可能不可用，恢复后需要检查服务状态。
 
 ## 3. 可选：在 WSL 用户会话中后台运行
 
@@ -46,16 +45,10 @@ export HOPWORLD_ADMIN_PASSWORD='请替换为至少16字符的随机密码'
 
 ```sh
 mkdir -p -m 700 "$HOME/.config/hopworld-router" "$HOME/.config/systemd/user"
-read -r -s -p '设置至少16位随机字母数字密码：' router_password; printf '\n'
-if [ "${#router_password}" -ge 16 ] && ! printf '%s' "$router_password" | LC_ALL=C grep -q '[^A-Za-z0-9]'; then
-  (umask 077; set -C; printf 'HOPWORLD_ADMIN_PASSWORD=%s\n' "$router_password" > "$HOME/.config/hopworld-router/router.env")
-else
-  echo '密码不符合要求，未写入配置。'
-fi
-unset router_password
+(umask 077; set -C; printf '%s\n' 'HOPWORLD_ADMIN_PASSWORD=admin' > "$HOME/.config/hopworld-router/router.env")
 ```
 
-如果配置文件已经存在，命令会拒绝覆盖；检查并保留现有文件。该文件含密码，默认仅当前用户可读写，不要分享或加入 Git。确认密码文件存在且正确后，复制并启动用户服务：
+如果配置文件已经存在，命令会拒绝覆盖。确认现有配置后，复制并启动用户服务。网页设置的新密码记录保存在数据目录里。
 
 ```sh
 test ! -e "$HOME/.config/systemd/user/hopworld-router.service" && cp "$HOME/HopWorld-Router/deploy/systemd/hopworld-router-user.service" "$HOME/.config/systemd/user/" || echo '服务文件已存在或复制失败，请先检查'
@@ -70,7 +63,7 @@ systemctl --user status hopworld-router.service
 
 ## 4. 功能与数据
 
-- 上面的命令只准备订阅管理，并且以当前 Ubuntu 用户运行，不是 README 里的 `hopworld-router` 系统服务。不要执行 `deploy/hopworld-install-root.sh`。管理页不会在这里自动安装 Xray、nginx、certbot 或 strongSwan，也不会改 Windows 防火墙。节点测试和本地网络节点仍要自行安装与 WSL CPU 架构匹配的 Linux 版 Xray，可参考 README 的 Xray 安装命令；客户端还要有到达 WSL 入站端口的网络路径。
+- 上面的命令仅准备订阅管理。节点测试还需要 Xray 和 curl，本地网络节点还需要 Xray，以及从客户端到 WSL 入站端口的实际网络路径。Xray 应使用与 WSL CPU 架构匹配的 Linux 版本；可参考项目 README 的 Linux Xray 安装步骤。
 - WSL 的外网入站与端口转发取决于 Windows、WSL 网络模式、防火墙和上游路由；不要把 Windows 上能打开管理页视作公网节点已可访问。
 - 该试用方式不配置 IKEv2、证书自动签发或动态 DNS 的系统集成。它们需要单独配置和验证。
 - 数据默认保存在 `~/HopWorld-Router/data/`，包含订阅、节点凭据和访问密钥。备份时先停止服务并保护备份；不要提交或分享 `data/`、环境文件或订阅地址。

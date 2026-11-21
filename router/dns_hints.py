@@ -86,14 +86,14 @@ def build_dns_hints(settings, probe=True):
         except ValueError:
             return {**empty, 'mode': 'ddns', 'summary': '域名无效', 'records': []}
         records = []
-        if egress_v4:
+        if egress_v4 and prefer != 'ipv6':
             records.append({
                 'type': 'A',
                 'host': sub,
                 'value': egress_v4,
                 'managed': True,
             })
-        if egress_v6 and prefer in ('ipv6', 'ipv4_first'):
+        if egress_v6 and prefer in ('ipv6', 'dual', 'ipv4_first'):
             records.append({
                 'type': 'AAAA',
                 'host': sub,
@@ -116,8 +116,11 @@ def build_dns_hints(settings, probe=True):
             sub, _apex = split_hostname(host)
         except ValueError:
             return {**empty, 'mode': 'fixed_domain', 'summary': '域名无效', 'records': []}
-        value = egress_v4 or '—'
-        records = [{'type': 'A', 'host': sub, 'value': value, 'managed': False}]
+        records = []
+        if prefer != 'ipv6':
+            records.append({'type': 'A', 'host': sub, 'value': egress_v4 or '—', 'managed': False})
+        if prefer in ('ipv6', 'dual'):
+            records.append({'type': 'AAAA', 'host': sub, 'value': egress_v6 or '—', 'managed': False})
         return {**empty, 'mode': 'fixed_domain', 'summary': '', 'records': records}
 
     return {

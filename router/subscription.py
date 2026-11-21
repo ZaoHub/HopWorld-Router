@@ -2,10 +2,37 @@
 
 import base64
 import binascii
+import hashlib
+import json
 from urllib.parse import urlsplit
 
 MAX_SUBSCRIPTION_BYTES = 2 * 1024 * 1024
 NODE_SCHEMES = frozenset({"vless", "vmess", "trojan", "ss", "hysteria2", "hy2", "tuic", "anytls", "wireguard", "wg", "masque", "socks", "socks5", "http", "https"})
+
+
+def vmess_fields(link):
+    parts = urlsplit(link)
+    if parts.scheme != 'vmess' or parts.query or parts.fragment:
+        return None
+    try:
+        payload = (parts.netloc + parts.path).encode('ascii')
+        decoded = base64.b64decode(payload + b'=' * (-len(payload) % 4), altchars=b'-_', validate=True)
+        fields = json.loads(decoded.decode('utf-8'))
+        return fields if isinstance(fields, dict) else None
+    except (ValueError, RecursionError):
+        return None
+
+
+def upstream_node_id(link):
+    # Keep every connection parameter in the identity, including credentials and TLS options.
+    identity = link.partition('#')[0]
+    if link[:8].lower() == 'vmess://' and (fields := vmess_fields(link)) is not None:
+        fields.pop('ps', None)
+        try:
+            identity = 'vmess:' + json.dumps(fields, sort_keys=True, separators=(',', ':'))
+        except RecursionError:
+            pass
+    return hashlib.sha256(('upstream:' + identity).encode('utf-8')).hexdigest()
 
 
 def _check_link(link: str) -> None:

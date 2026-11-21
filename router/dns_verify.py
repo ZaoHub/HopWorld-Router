@@ -60,9 +60,9 @@ def verify_dns_resolution(settings, probe_expected=False):
         return {**base, 'detail': '出口 IP 模式不使用固定域名解析'}
 
     prefer = (settings.get('public_host_prefer') or 'ipv4').strip().lower()
-    check_v6 = bool(settings.get('ddns_enabled')) and prefer in ('ipv6', 'ipv4_first')
+    check_v6 = prefer in ('ipv6', 'dual') or (bool(settings.get('ddns_enabled')) and prefer == 'ipv4_first')
 
-    expected_v4 = _resolve_egress_ipv4(settings, probe=probe_expected)
+    expected_v4 = _resolve_egress_ipv4(settings, probe=probe_expected) if prefer != 'ipv6' else ''
     expected_v6 = _resolve_egress_ipv6(settings, probe=probe_expected and check_v6) if check_v6 else ''
 
     base['expected_ipv4'] = expected_v4

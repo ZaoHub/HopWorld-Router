@@ -12,13 +12,55 @@ fi
 
 domain="$(basename "$LINEAGE")"
 dest="$DATA/certs/$domain"
-mkdir -p "$dest"
+if [[ -L "$DATA/certs" || -L "$dest" || -L "$dest/fullchain.pem" || -L "$dest/privkey.pem" ]]; then
+  echo "证书目标位置不能是符号链接" >&2
+  exit 1
+fi
+install -d -m 700 -o hopworld-router -g hopworld-router "$dest"
+stage="$(mktemp -d "$dest/.certbot.XXXXXX")"
+trap 'rm -rf -- "$stage"' EXIT
 install -m 600 -o hopworld-router -g hopworld-router \
-  "$LINEAGE/fullchain.pem" "$dest/fullchain.pem"
+  "$LINEAGE/fullchain.pem" "$stage/fullchain.pem"
 install -m 600 -o hopworld-router -g hopworld-router \
-  "$LINEAGE/privkey.pem" "$dest/privkey.pem"
-chmod 700 "$dest" 2>/dev/null || true
+  "$LINEAGE/privkey.pem" "$stage/privkey.pem"
+cert_pub="$(openssl x509 -in "$stage/fullchain.pem" -noout -pubkey)"
+key_pub="$(openssl pkey -in "$stage/privkey.pem" -passin pass: -pubout)"
+if [[ -z "$cert_pub" || "$cert_pub" != "$key_pub" ]]; then
+  echo "证书与私钥不匹配" >&2
+  exit 1
+fi
+for part in fullchain.pem privkey.pem; do
+  if [[ -f "$dest/$part" ]]; then
+    cp -p "$dest/$part" "$stage/previous-$part"
+  fi
+done
+restore_pair() {
+  local part
+  for part in fullchain.pem privkey.pem; do
+    if [[ -f "$stage/previous-$part" ]]; then
+      mv -f -- "$stage/previous-$part" "$dest/$part"
+    else
+      rm -f -- "$dest/$part"
+    fi
+  done
+}
+mv -f -- "$stage/privkey.pem" "$dest/privkey.pem"
+if ! mv -f -- "$stage/fullchain.pem" "$dest/fullchain.pem"; then
+  restore_pair
+  exit 1
+fi
 
-if command -v nginx >/dev/null && systemctl is-active --quiet nginx; then
-  nginx -t && systemctl reload nginx
+reload_website() {
+  if command -v nginx >/dev/null && systemctl is-active --quiet nginx; then
+    nginx -t && systemctl reload nginx || return 1
+  fi
+  if command -v caddy >/dev/null && systemctl is-active --quiet caddy; then
+    caddy validate --config "${HOPWORLD_CADDY_CONFIG:-/etc/caddy/Caddyfile}" && systemctl reload caddy || return 1
+  fi
+}
+if ! reload_website; then
+  restore_pair
+  reload_website || true
+  echo "网站配置校验或重载失败，已恢复 Router 缓存的证书" >&2
+  exit 1
 fi
