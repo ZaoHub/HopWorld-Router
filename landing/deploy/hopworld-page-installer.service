@@ -1,0 +1,20 @@
+[Unit]
+Description=HopWorld-Router web SSH installation gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=hopworld-installer
+Group=hopworld-installer
+WorkingDirectory=/opt/hopworld-page-installer
+EnvironmentFile=/etc/hopworld-page-installer.env
+ExecStart=/opt/hopworld-page-installer/.venv/bin/python /opt/hopworld-page-installer/installer.py --port 18731
+Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

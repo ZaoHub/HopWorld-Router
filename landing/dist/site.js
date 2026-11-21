@@ -1,6 +1,6 @@
 const byId = id => document.getElementById(id);
 const form = byId('install-form');
-const launcher = byId('launcher');
+const availability = byId('installer-availability');
 const mode = byId('connection-mode');
 const result = byId('installation-result');
 const status = byId('installation-status');
@@ -10,21 +10,42 @@ const submit = byId('install-submit');
 const password = form.elements.password;
 const toggle = byId('password-toggle');
 
+const local = location.hostname === '127.0.0.1' && location.protocol === 'http:';
+let apiBase;
+
 async function initialize() {
-  if (location.hostname === '127.0.0.1') {
-    try {
-      const response = await fetch('/api/ready', { cache: 'no-store', signal: AbortSignal.timeout(2500) });
-      if (response.ok && (await response.json()).installer === true) {
-        mode.textContent = '本机安装器';
-        form.hidden = false;
-        return;
-      }
-    } catch {
-      // Fall back to the downloadable launcher.
+  try {
+    if (local) {
+      apiBase = location.origin;
+    } else {
+      const config = await fetch('install-config.json', { cache: 'no-store' });
+      if (!config.ok) throw new Error();
+      const configured = (await config.json()).apiOrigin;
+      const endpoint = new URL(configured);
+      if (endpoint.protocol !== 'https:' || endpoint.origin !== configured) throw new Error();
+      apiBase = endpoint.origin + '/hopworld-installer';
     }
+    const ready = await fetch(`${apiBase}/api/ready`, {
+      cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(4000),
+    });
+    if (!ready.ok || (await ready.json()).installer !== true) throw new Error();
+    if (!local) {
+      form.elements.host.labels[0].firstChild.textContent = '服务器公网 IP';
+      form.elements.method.querySelector('[value="agent"]').remove();
+      byId('operator-field').hidden = false;
+      form.elements.operatorToken.disabled = false;
+      form.elements.operatorToken.required = true;
+      availability.textContent = '安装服务通过 HTTPS 接收本次 SSH 凭据，连接前会校验服务器指纹。';
+    } else {
+      availability.hidden = true;
+    }
+    mode.textContent = local ? '本机安装器' : '网页安装';
+    form.hidden = false;
+  } catch {
+    apiBase = undefined;
+    mode.textContent = '服务未就绪';
+    availability.textContent = '在线安装服务暂不可用。你可以使用下方的终端安装命令。';
   }
-  mode.textContent = '下载后开始';
-  launcher.hidden = false;
 }
 initialize();
 
@@ -85,10 +106,16 @@ async function consume(response, target) {
 
 form.addEventListener('submit', async event => {
   event.preventDefault();
-  if (submit.disabled) return;
+  if (submit.disabled || !apiBase) return;
   const target = Object.fromEntries(new FormData(form));
   for (const name of ['host', 'username', 'fingerprint']) target[name] = target[name].trim();
   target.port = Number(target.port);
+  const headers = { 'Content-Type': 'application/json' };
+  if (!local) {
+    headers.Authorization = `Bearer ${target.operatorToken}`;
+    form.elements.operatorToken.value = '';
+    delete target.operatorToken;
+  }
   password.value = '';
   password.type = 'password';
   toggle.textContent = '显示';
@@ -100,20 +127,22 @@ form.addEventListener('submit', async event => {
   result.hidden = false;
   updateStatus('正在准备 SSH 连接…');
   try {
-    const reply = await fetch('/api/install', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(target),
-    });
+    const body = JSON.stringify(target);
     delete target.password;
+    const reply = await fetch(`${apiBase}/api/install`, {
+      method: 'POST',
+      headers,
+      redirect: 'error',
+      body,
+    });
     if (!reply.ok) throw new Error((await reply.json()).error);
     await consume(reply, target);
   } catch (error) {
-    updateStatus(error.message || '无法连接本机安装器。', 'error');
+    updateStatus(error.message || '无法连接安装服务。', 'error');
   } finally {
     delete target.password;
     submit.disabled = false;
-    submit.textContent = '安装到服务器';
+    submit.textContent = '立即安装到服务器';
   }
 });
 
