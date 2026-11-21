@@ -1,0 +1,19 @@
+[Unit]
+Description=HopWorld Router subscription manager
+After=network-online.target hopworld-boot.service
+Wants=network-online.target hopworld-boot.service
+
+[Service]
+Type=simple
+User=hopworld-router
+Group=hopworld-router
+WorkingDirectory=/opt/hopworld-router
+EnvironmentFile=/etc/hopworld-router.env
+Environment=HOPWORLD_DATA=/var/lib/hopworld-router
+ExecStart=/opt/hopworld-router/.venv/bin/python -m router.server
+Restart=on-failure
+# CentOS 7 systemd: avoid ReadWritePaths / ProtectSystem=strict (unsupported).
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,8 @@
+services:
+  hopworld-router:
+    build: .
+    restart: unless-stopped
+    network_mode: host
+    env_file: router.env
+    volumes:
+      - ./data:/data

@@ -1,0 +1,7 @@
+*
+!Dockerfile
+!requirements.txt
+!router/
+!router/**
+router/**/__pycache__/
+router/**/*.pyc

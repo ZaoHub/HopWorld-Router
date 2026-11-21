@@ -1,0 +1,12 @@
+services:
+  hopworld-router:
+    build: .
+    restart: unless-stopped
+    env_file: router.env
+    environment:
+      HOPWORLD_HOST: 0.0.0.0
+      HOPWORLD_PORT: "8080"
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./data:/data

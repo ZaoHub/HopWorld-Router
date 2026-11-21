@@ -1,0 +1,459 @@
+#!/bin/bash
+# Apply or disable HopWorld Router IKEv2 (strongSwan) configuration.
+set -euo pipefail
+
+ACTION="${1:-}"
+DATA_DIR="${2:-/var/lib/hopworld-router/ikev2}"
+POOL="10.66.0.0/24"
+
+if [[ -f "$DATA_DIR/meta.env" ]]; then
+  # shellcheck disable=SC1090
+  source "$DATA_DIR/meta.env"
+fi
+
+detect_unit() {
+  for unit in strongswan strongswan-starter ipsec; do
+    if systemctl cat "$unit.service" >/dev/null 2>&1; then
+      echo "$unit"
+      return 0
+    fi
+  done
+  return 1
+}
+
+detect_conf_dir() {
+  if [[ -d /etc/strongswan ]]; then
+    echo /etc/strongswan
+  else
+    echo /etc
+  fi
+}
+
+install_charon_tweaks() {
+  # strongswan.conf 把 strongswan.d/charon/*.conf 插进 plugins，全局参数写在那里不会生效。
+  local dropin='/etc/strongswan/strongswan.d/hopworld-router.conf'
+  local misplaced='/etc/strongswan/strongswan.d/charon/hopworld-router.conf'
+  rm -f "$misplaced" "${misplaced}.loaded_hash"
+  cat >"$dropin" <<'EOF'
+# Managed by HopWorld Router — avoid bad virt-IP routes; push DNS via attr.
+charon {
+    install_routes = no
+    uniqueids = never
+    multiple_authentication = no
+    ignore_unknown_ikev2_extensions = yes
+    fragmentation = yes
+    fragment_size = 1280
+    keep_alive = 10s
+    retransmit_tries = 12
+    retransmit_timeout = 1.0
+    plugins {
+        openssl {
+            fips_mode = 0
+        }
+        attr {
+            dns = 1.1.1.1, 8.8.8.8
+        }
+        socket-default {
+            nat_ikev2_keepalive_interval = 10
+        }
+    }
+}
+EOF
+  chmod 644 "$dropin"
+}
+
+ensure_vpn_gateway_addrs() {
+  # .1 会分给手机。留在本机 lo 上时，回包被本机吃掉。
+  ip addr del 10.66.0.1/32 dev lo 2>/dev/null || true
+  ip -6 addr del fd66:66:66::1/128 dev lo 2>/dev/null || true
+}
+
+ensure_server_cert() {
+  local cert_dir="$DATA_DIR/certs"
+  local swan=/etc/strongswan/swanctl
+  command -v openssl >/dev/null 2>&1 || return 0
+  mkdir -p "$cert_dir"
+  if [[ ! -f "$cert_dir/server.crt" || ! -f "$cert_dir/server.key" ]]; then
+    openssl req -newkey rsa:2048 -nodes \
+      -keyout "$cert_dir/server.key" -x509 -days 3650 -out "$cert_dir/server.crt" \
+      -subj "/CN=${public_host:-hopworld.local}" 2>/dev/null || return 0
+    chmod 600 "$cert_dir/server.key"
+    chmod 644 "$cert_dir/server.crt"
+  fi
+  install -d -m 755 "$swan/x509" "$swan/private"
+  install -m 644 "$cert_dir/server.crt" "$swan/x509/hopworld-server.crt"
+  ln -sf hopworld-server.crt "$swan/x509/hopworld-server"
+  install -m 600 "$cert_dir/server.key" "$swan/private/hopworld-server.key"
+  install -d -m 755 /etc/strongswan/strongswan.d/charon
+  cat >/etc/strongswan/strongswan.d/charon/hopworld-openssl-nofips.conf <<'EOF'
+charon {
+    plugins {
+        openssl {
+            fips_mode = 0
+        }
+    }
+}
+EOF
+  chmod 644 /etc/strongswan/strongswan.d/charon/hopworld-openssl-nofips.conf
+}
+
+ensure_forward_nat() {
+  ensure_vpn_gateway_addrs
+  sysctl -w net.ipv4.ip_forward=1 >/dev/null
+  sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null 2>&1 || true
+  sysctl -w net.ipv4.conf.all.rp_filter=2 >/dev/null
+  sysctl -w net.ipv4.conf.default.rp_filter=2 >/dev/null
+  if ! grep -q '^net\.ipv4\.ip_forward\s*=\s*1' /etc/sysctl.conf 2>/dev/null; then
+    echo 'net.ipv4.ip_forward = 1' >>/etc/sysctl.conf
+  fi
+  IFACE="$(ip route show default 0.0.0.0/0 2>/dev/null | awk '{print $5; exit}')"
+  IFACE="${IFACE:-eth0}"
+  PUB_IP="$(ip -4 addr show dev "$IFACE" 2>/dev/null | awk '/inet / {split($2,a,"/"); print a[1]; exit}')"
+  PUB_IP="${public_host:-${PUB_IP:-}}"
+  # 全隧道下手机访问本机公网 IP（8080/SSH）会 hairpin，需放行并 SNAT 回包
+  iptables -C INPUT -s "$POOL" -p tcp -m multiport --dports 8080,40300 -j ACCEPT 2>/dev/null \
+    || iptables -I INPUT 1 -s "$POOL" -p tcp -m multiport --dports 8080,40300 -j ACCEPT
+  if [[ -n "$PUB_IP" ]]; then
+    iptables -t nat -C POSTROUTING -s "$POOL" -d "$PUB_IP" -j MASQUERADE 2>/dev/null \
+      || iptables -t nat -I POSTROUTING 1 -s "$POOL" -d "$PUB_IP" -j MASQUERADE
+  fi
+  iptables -C FORWARD -s "$POOL" -j ACCEPT 2>/dev/null || iptables -I FORWARD -s "$POOL" -j ACCEPT
+  iptables -C FORWARD -d "$POOL" -j ACCEPT 2>/dev/null || iptables -I FORWARD -d "$POOL" -j ACCEPT
+  iptables -t nat -C POSTROUTING -s "$POOL" -o "$IFACE" -j MASQUERADE 2>/dev/null \
+    || iptables -t nat -A POSTROUTING -s "$POOL" -o "$IFACE" -j MASQUERADE
+  iptables -C INPUT -p udp --dport 500 -j ACCEPT 2>/dev/null || iptables -I INPUT -p udp --dport 500 -j ACCEPT
+  iptables -C INPUT -p udp --dport 4500 -j ACCEPT 2>/dev/null || iptables -I INPUT -p udp --dport 4500 -j ACCEPT
+  iptables -C FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null \
+    || iptables -I FORWARD 1 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+  iptables -t mangle -C FORWARD -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1280 2>/dev/null \
+    || iptables -t mangle -A FORWARD -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1280
+  iptables -N HOPWORLD_VPN 2>/dev/null || true
+  iptables -C HOPWORLD_VPN -j RETURN 2>/dev/null || iptables -A HOPWORLD_VPN -j RETURN
+  iptables -C FORWARD -s "$POOL" -j HOPWORLD_VPN 2>/dev/null || iptables -I FORWARD 1 -s "$POOL" -j HOPWORLD_VPN
+  iptables -C FORWARD -d "$POOL" -j HOPWORLD_VPN 2>/dev/null || iptables -I FORWARD 1 -d "$POOL" -j HOPWORLD_VPN
+  if command -v firewall-cmd &>/dev/null && systemctl is-active firewalld &>/dev/null; then
+    firewall-cmd --permanent --add-masquerade 2>/dev/null || true
+    firewall-cmd --reload 2>/dev/null || true
+  fi
+  ensure_host_xfrm_bypass "$PUB_IP"
+}
+
+# 客户端上线后内核 xfrm 可能劫持本机公网 IP，导致 8080/40300 外网直至重启才恢复
+ensure_host_xfrm_bypass() {
+  local pub="${1:-}"
+  [[ -n "$pub" ]] || return 0
+  command -v ip >/dev/null 2>&1 || return 0
+  local port
+  for port in 8080 40300; do
+    ip xfrm policy delete dir in dst "$pub/32" proto tcp sport "$port" 2>/dev/null || true
+    ip xfrm policy add dir in priority 5 dst "$pub/32" proto tcp sport "$port" action allow 2>/dev/null || true
+    ip xfrm policy delete dir out src "$pub/32" proto tcp sport "$port" 2>/dev/null || true
+    ip xfrm policy add dir out priority 5 src "$pub/32" proto tcp sport "$port" action allow 2>/dev/null || true
+  done
+  # IKE 确认包必须明文离开。子 SA 装上之后，宽策略会把发往手机的 UDP 4500 吃进 ESP。
+  for port in 500 4500; do
+    ip xfrm policy delete dir out src "$pub/32" dst 0.0.0.0/0 proto udp sport "$port" 2>/dev/null || true
+    ip xfrm policy add dir out priority 1 src "$pub/32" dst 0.0.0.0/0 proto udp sport "$port" action allow 2>/dev/null || true
+    ip xfrm policy delete dir in dst "$pub/32" src 0.0.0.0/0 proto udp dport "$port" 2>/dev/null || true
+    ip xfrm policy add dir in priority 1 dst "$pub/32" src 0.0.0.0/0 proto udp dport "$port" action allow 2>/dev/null || true
+  done
+  ip xfrm policy delete dir in dst "$pub/32" 2>/dev/null || true
+  ip xfrm policy add dir in priority 10 dst "$pub/32" action allow 2>/dev/null || true
+  ip xfrm policy delete dir out src "$pub/32" 2>/dev/null || true
+  ip xfrm policy add dir out priority 10 src "$pub/32" action allow 2>/dev/null || true
+}
+
+dump_vpn_traffic() {
+  echo '---TRAFFIC---'
+  declare -A UP DOWN
+  if iptables -L HOPWORLD_VPN -v -n -x &>/dev/null; then
+    while read -r line; do
+      [[ "$line" == *hopworld-up:* ]] || continue
+      local vip bytes
+      bytes=$(awk '{print $2}' <<<"$line")
+      vip=$(sed -n 's/.*hopworld-up:\([0-9.]*\).*/\1/p' <<<"$line")
+      [[ -n "$vip" ]] && UP[$vip]=$bytes
+    done < <(iptables -L HOPWORLD_VPN -v -n -x 2>/dev/null)
+    while read -r line; do
+      [[ "$line" == *hopworld-down:* ]] || continue
+      local vip bytes
+      bytes=$(awk '{print $2}' <<<"$line")
+      vip=$(sed -n 's/.*hopworld-down:\([0-9.]*\).*/\1/p' <<<"$line")
+      [[ -n "$vip" ]] && DOWN[$vip]=$bytes
+    done < <(iptables -L HOPWORLD_VPN -v -n -x 2>/dev/null)
+  fi
+  local vip
+  for vip in "${!UP[@]}" "${!DOWN[@]}"; do
+    [[ -n "$vip" ]] || continue
+    echo "vip=${vip} up=${UP[$vip]:-0} down=${DOWN[$vip]:-0}"
+  done | sort -u
+  echo '---XFRM---'
+  local srv
+  srv="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '/src/ {for(i=1;i<=NF;i++) if ($i=="src") print $(i+1)}')"
+  if command -v ip &>/dev/null && [[ -n "$srv" ]]; then
+    ip -s xfrm state 2>/dev/null | awk -v srv="$srv" '
+      /^src / {
+        if (src != "" && bytes > 0) {
+          if (dst == srv) print "peer=" src " up=" bytes
+          if (src == srv) print "peer=" dst " down=" bytes
+        }
+        split($2, a, "["); src=a[1]
+        split($4, b, "["); dst=b[1]
+        bytes=0
+      }
+      /^\tbytes / { bytes=$2 }
+      END {
+        if (src != "" && bytes > 0) {
+          if (dst == srv) print "peer=" src " up=" bytes
+          if (src == srv) print "peer=" dst " down=" bytes
+        }
+      }
+    '
+  fi
+}
+
+install_boot_units() {
+  local base script
+  script="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || realpath "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+  base="$(dirname "$script")"
+  local svc_dir=""
+  for try in "$base" "/opt/hopworld-router/deploy" "$(dirname "$base")/deploy" "$base/../deploy"; do
+    if [[ -f "$try/hopworld-boot.service" ]]; then
+      svc_dir="$try"
+      break
+    fi
+  done
+  [[ -n "$svc_dir" ]] || return 0
+  base="$svc_dir"
+  [[ -f "$base/hopworld-boot" ]] || return 0
+  local boot_bin=/usr/local/sbin/hopworld-boot
+  if [[ "$(readlink -f "$base/hopworld-boot" 2>/dev/null || echo "$base/hopworld-boot")" != "$(readlink -f "$boot_bin" 2>/dev/null || echo "$boot_bin")" ]]; then
+    install -m 755 "$base/hopworld-boot" "$boot_bin"
+  fi
+  install -m 644 "$base/hopworld-boot.service" /etc/systemd/system/hopworld-boot.service
+  systemctl daemon-reload
+  systemctl enable hopworld-boot.service hopworld-router.service 2>/dev/null || true
+}
+
+install_updown() {
+  local src="${BASH_SOURCE[0]%/*}/hopworld-ikev2-updown"
+  if [[ ! -f "$src" ]]; then
+    src='/usr/local/sbin/hopworld-ikev2-updown'
+  fi
+  local dest=/usr/local/sbin/hopworld-ikev2-updown
+  if [[ -f "$src" ]]; then
+    if [[ "$(readlink -f "$src" 2>/dev/null || echo "$src")" != "$(readlink -f "$dest" 2>/dev/null || echo "$dest")" ]]; then
+      install -m 755 "$src" "$dest"
+    fi
+  fi
+}
+
+detect_swanctl_dir() {
+  if [[ -d /etc/strongswan/swanctl/conf.d ]]; then
+    echo /etc/strongswan/swanctl/conf.d
+  elif [[ -d /etc/swanctl/conf.d ]]; then
+    echo /etc/swanctl/conf.d
+  else
+    echo /etc/strongswan/swanctl/conf.d
+  fi
+}
+
+install_swanctl() {
+  [[ -f "$DATA_DIR/swanctl.conf" ]] || return 0
+  command -v swanctl >/dev/null 2>&1 || return 0
+  local swan_dir
+  swan_dir="$(detect_swanctl_dir)"
+  install -d -m 755 "$swan_dir"
+  if grep -qE '^[[:space:]]*conn[[:space:]]+hopworld-ikev2' "$DATA_DIR/ipsec.conf" 2>/dev/null; then
+    rm -f "$swan_dir/hopworld.conf" /etc/swanctl/conf.d/hopworld.conf 2>/dev/null || true
+    timeout 5 swanctl --terminate --ike hopworld-ikev2 2>/dev/null || true
+    return 0
+  fi
+  install -m 644 "$DATA_DIR/swanctl.conf" "$swan_dir/hopworld.conf"
+  rm -f /etc/swanctl/conf.d/hopworld.conf 2>/dev/null || true
+  swanctl --load-pools >/dev/null 2>&1 || true
+  swanctl --load-creds >/dev/null 2>&1 || true
+  swanctl --load-conns >/dev/null 2>&1 || true
+  swanctl --terminate --ike hopworld-ikev2 >/dev/null 2>&1 || true
+}
+
+install_files() {
+  local conf_dir
+  conf_dir="$(detect_conf_dir)"
+  install -d -m 755 "$conf_dir/ipsec.d" 2>/dev/null || true
+  install -m 644 "$DATA_DIR/ipsec.conf" "$conf_dir/ipsec.d/hopworld.conf"
+  install -m 600 "$DATA_DIR/ipsec.secrets" "$conf_dir/ipsec.d/hopworld.secrets"
+  if [[ -f $conf_dir/ipsec.conf ]] && ! grep -q 'ipsec.d/hopworld.conf' "$conf_dir/ipsec.conf"; then
+    printf '\ninclude %s/ipsec.d/hopworld.conf\n' "$conf_dir" >>"$conf_dir/ipsec.conf"
+  fi
+  if [[ -f $conf_dir/ipsec.secrets ]] && ! grep -q 'ipsec.d/hopworld.secrets' "$conf_dir/ipsec.secrets"; then
+    printf '\ninclude %s/ipsec.d/hopworld.secrets\n' "$conf_dir" >>"$conf_dir/ipsec.secrets"
+  fi
+  # Some builds only read /etc/ipsec.secrets includes with absolute path form:
+  if [[ -f /etc/ipsec.secrets ]] && [[ $conf_dir != /etc ]] && ! grep -q 'hopworld.secrets' /etc/ipsec.secrets 2>/dev/null; then
+    printf '\ninclude %s/ipsec.d/hopworld.secrets\n' "$conf_dir" >>/etc/ipsec.secrets || true
+  fi
+}
+
+remove_conn() {
+  local conf_dir
+  conf_dir="$(detect_conf_dir)"
+  rm -f "$conf_dir/ipsec.d/hopworld.conf" "$conf_dir/ipsec.d/hopworld.secrets"
+  rm -f /etc/swanctl/conf.d/hopworld.conf
+  if command -v swanctl >/dev/null 2>&1; then
+    swanctl --unload-conns 2>/dev/null || true
+  fi
+}
+
+sync_client_nat() {
+  local updown=/usr/local/sbin/hopworld-ikev2-updown
+  [[ -x "$updown" ]] || return 0
+  local st vip
+  local st
+  st="$(swanctl --list-sas 2>/dev/null || true)"
+  if [[ -n "$st" ]]; then
+    while read -r vip; do
+      [[ -n "$vip" ]] || continue
+      PLUTO_VERB=up-client PLUTO_PEER_CLIENT="$vip" "$updown"
+    done < <(echo "$st" | sed -n 's/.*\[\(10\.66\.[^]]*\)\].*/\1/p' | sort -u)
+    return 0
+  fi
+  st="$(strongswan status 2>/dev/null || ipsec status 2>/dev/null || true)"
+  [[ -n "$st" ]] || return 0
+  while read -r vip; do
+    [[ -n "$vip" ]] || continue
+    PLUTO_VERB=up-client PLUTO_PEER_CLIENT="$vip" "$updown"
+  done < <(echo "$st" | sed -n 's/.*=== \([0-9.]\{7,\}\)\/32.*/\1/p' | sort -u)
+}
+
+systemctl_prop() {
+  # CentOS 7 systemctl has no --value; avoid set -e abort on failed substitution (bash 4.2).
+  local unit="$1" key="$2"
+  systemctl show "$unit" -p "$key" 2>/dev/null | sed -n "s/^${key}=//p" | head -1
+}
+
+prune_orphan_charon() {
+  local unit cgroup pid
+  unit="$(detect_unit 2>/dev/null)" || return 0
+  cgroup="$(systemctl_prop "$unit" ControlGroup || true)"
+  [[ -n "$cgroup" ]] || return 0
+  local procs="/sys/fs/cgroup/systemd${cgroup}/cgroup.procs"
+  [[ -f "$procs" ]] || return 0
+  for pid in $(pgrep -x charon 2>/dev/null); do
+  [[ "$pid" =~ ^[0-9]+$ ]] || continue
+  if ! grep -qx "$pid" "$procs" 2>/dev/null; then
+    kill "$pid" 2>/dev/null || true
+  fi
+  done
+  sleep 1
+  for pid in $(pgrep -x charon 2>/dev/null); do
+  [[ "$pid" =~ ^[0-9]+$ ]] || continue
+  if ! grep -qx "$pid" "$procs" 2>/dev/null; then
+    kill -9 "$pid" 2>/dev/null || true
+  fi
+  done
+}
+
+reload_service() {
+  local unit charon_dropin='/etc/strongswan/strongswan.d/hopworld-router.conf'
+  local need_restart=0
+  unit="$(detect_unit)" || {
+    echo "strongSwan service not found" >&2
+    exit 1
+  }
+  systemctl enable "$unit" >/dev/null 2>&1 || true
+  prune_orphan_charon
+  if [[ ! -f "${charon_dropin}.loaded_hash" ]] \
+     || ! cmp -s "$charon_dropin" "${charon_dropin}.loaded_hash" 2>/dev/null; then
+    need_restart=1
+    cp -f "$charon_dropin" "${charon_dropin}.loaded_hash" 2>/dev/null || true
+  fi
+  if ! systemctl is-active --quiet "$unit"; then
+    systemctl start "$unit"
+    need_restart=0
+  elif [[ "$need_restart" -eq 1 ]]; then
+  # 仅 charon 全局参数变更时才整服务重启，避免蜂窝握手途中被 SIGINT 打断。
+    systemctl restart "$unit"
+    sleep 1
+  else
+    # 停用后再启用时，配置文件已写回，但正在运行的 charon 不会自己重新读。
+    strongswan update >/dev/null 2>&1 || true
+    strongswan rereadsecrets >/dev/null 2>&1 || true
+  fi
+  if command -v swanctl >/dev/null 2>&1 && [[ -f /etc/strongswan/swanctl/conf.d/hopworld.conf ]]; then
+    swanctl --load-all >/dev/null 2>&1 || true
+  fi
+}
+
+case "$ACTION" in
+  apply)
+    [[ -f $DATA_DIR/ipsec.conf && -f $DATA_DIR/ipsec.secrets ]] || {
+      echo "missing IKEv2 config in $DATA_DIR" >&2
+      exit 1
+    }
+    install_files
+    install_swanctl
+    install_updown
+    install_charon_tweaks
+    ensure_forward_nat
+    reload_service
+    install_swanctl
+    ensure_host_xfrm_bypass "${public_host:-}"
+    sync_client_nat
+    install_boot_units
+    echo ok
+    ;;
+  sync-clients)
+    ensure_forward_nat
+    sync_client_nat
+    ensure_host_xfrm_bypass "${public_host:-}"
+    echo ok
+    ;;
+  host-bypass)
+    ensure_host_xfrm_bypass "${public_host:-}"
+    echo ok
+    ;;
+  disable)
+    remove_conn
+    if unit="$(detect_unit 2>/dev/null)"; then
+      if command -v strongswan >/dev/null 2>&1 && systemctl is-active --quiet "$unit"; then
+        strongswan reload || true
+        strongswan rereadsecrets || true
+      fi
+    fi
+    echo ok
+    ;;
+  status)
+    echo '---HOPWORLD---'
+    echo "forward=$(sysctl -n net.ipv4.ip_forward 2>/dev/null || echo 0)"
+    IFACE="$(ip route show default 0.0.0.0/0 2>/dev/null | awk '{print $5; exit}')"
+    IFACE="${IFACE:-eth0}"
+    if iptables -t nat -C POSTROUTING -s "$POOL" -o "$IFACE" -j MASQUERADE 2>/dev/null; then
+      echo 'nat=ok'
+    else
+      echo 'nat=missing'
+    fi
+    echo '---STATUS---'
+    if command -v strongswan >/dev/null 2>&1; then
+      strongswan status 2>/dev/null || true
+    elif command -v ipsec >/dev/null 2>&1; then
+      ipsec statusall 2>/dev/null || ipsec status 2>/dev/null || true
+    else
+      echo "strongSwan not installed" >&2
+      exit 1
+    fi
+    echo '---LEASES---'
+    if command -v swanctl >/dev/null 2>&1; then
+      swanctl --list-sas 2>/dev/null || true
+    fi
+    dump_vpn_traffic
+    echo '---HANDSHAKE---'
+    journalctl -u strongswan --since "45 sec ago" -o short-iso --no-pager 2>/dev/null \
+      | grep -E 'is initiating an IKE_SA|established between|retransmit of request|received packet: from' \
+      | tail -80 || true
+    ;;
+  *)
+    echo "usage: $0 apply|disable|status|sync-clients|host-bypass <data-dir>" >&2
+    exit 2
+    ;;
+esac
