@@ -9,45 +9,55 @@ const access = byId('access');
 const submit = byId('install-submit');
 const password = form.elements.password;
 const toggle = byId('password-toggle');
+const retry = byId('installer-retry');
+const confirmation = byId('ssh-confirmation');
+const confirmationForm = byId('ssh-confirmation-form');
+const tokenInput = confirmationForm.elements.operatorToken;
+const fingerprintInput = confirmationForm.elements.fingerprint;
 
 const local = location.hostname === '127.0.0.1' && location.protocol === 'http:';
 let apiBase;
+let pageToken;
 
 async function initialize() {
+  retry.hidden = true;
+  availability.textContent = '正在检查在线安装服务…';
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  const options = { cache: 'no-store', redirect: 'error', signal: controller.signal };
   try {
     if (local) {
       apiBase = location.origin;
     } else {
-      const config = await fetch('install-config.json', { cache: 'no-store' });
+      const config = await fetch('install-config.json', options);
       if (!config.ok) throw new Error();
       const configured = (await config.json()).apiOrigin;
       const endpoint = new URL(configured);
       if (endpoint.protocol !== 'https:' || endpoint.origin !== configured) throw new Error();
       apiBase = endpoint.origin + '/hopworld-installer';
     }
-    const ready = await fetch(`${apiBase}/api/ready`, {
-      cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(4000),
-    });
+    const ready = await fetch(`${apiBase}/api/ready`, options);
     if (!ready.ok || (await ready.json()).installer !== true) throw new Error();
-    if (!local) {
-      form.elements.host.labels[0].firstChild.textContent = '服务器公网 IP';
-      form.elements.method.querySelector('[value="agent"]').remove();
-      byId('operator-field').hidden = false;
-      form.elements.operatorToken.disabled = false;
-      form.elements.operatorToken.required = true;
-      availability.textContent = '安装服务通过 HTTPS 接收本次 SSH 凭据，连接前会校验服务器指纹。';
-    } else {
-      availability.hidden = true;
+    if (local) {
+      byId('host-label').textContent = '服务器 IP 或域名';
+      const agent = form.elements.method.querySelector('[value="agent"]');
+      agent.hidden = false;
+      agent.disabled = false;
     }
+    availability.hidden = true;
     mode.textContent = local ? '本机安装器' : '网页安装';
-    form.hidden = false;
+    submit.disabled = false;
   } catch {
     apiBase = undefined;
     mode.textContent = '服务未就绪';
-    availability.textContent = '在线安装服务暂不可用。你可以使用下方的终端安装命令。';
+    availability.textContent = '暂时无法连接安装服务。你可以重试，或使用下方的终端安装命令。';
+    retry.hidden = false;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 initialize();
+retry.addEventListener('click', initialize);
 
 form.elements.method.addEventListener('change', () => {
   const usePassword = form.elements.method.value === 'password';
@@ -69,7 +79,47 @@ function updateStatus(message, state = '') {
   status.dataset.state = state;
 }
 
-async function consume(response, target) {
+function readFingerprint(key) {
+  try {
+    const value = localStorage.getItem(key);
+    if (/^SHA256:[A-Za-z0-9+/]{43}$/.test(value)) return value;
+  } catch {
+    // Browser storage can be unavailable.
+  }
+}
+
+function rememberFingerprint(key, value) {
+  try {
+    if (value) localStorage.setItem(key, value);
+    else localStorage.removeItem(key);
+  } catch {
+    // Installation still works without browser storage.
+  }
+}
+
+function confirmTarget(target, needsToken, needsFingerprint) {
+  byId('confirmation-target').textContent = `${target.username} · ${target.host} · SSH ${target.port}`;
+  byId('operator-field').hidden = !needsToken;
+  byId('fingerprint-field').hidden = !needsFingerprint;
+  tokenInput.disabled = !(tokenInput.required = needsToken);
+  fingerprintInput.disabled = !(fingerprintInput.required = needsFingerprint);
+  confirmation.returnValue = '';
+  return new Promise(resolve => {
+    confirmation.addEventListener('close', () => {
+      const values = confirmation.returnValue === 'confirm'
+        ? { token: tokenInput.value, fingerprint: fingerprintInput.value }
+        : null;
+      confirmationForm.reset();
+      resolve(values);
+    }, { once: true });
+    confirmation.showModal();
+    (needsToken ? tokenInput : fingerprintInput).focus();
+  });
+}
+
+byId('cancel-confirmation').addEventListener('click', () => confirmation.close());
+
+async function consume(response, target, fingerprintKey) {
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
   let pending = '';
   let ended = false;
@@ -87,9 +137,11 @@ async function consume(response, target) {
         } else if (event.type === 'status') {
           updateStatus(event.text);
         } else if (event.type === 'error') {
+          if (event.text.startsWith('主机指纹不匹配')) rememberFingerprint(fingerprintKey);
           updateStatus(event.text, 'error');
           ended = true;
         } else if (event.type === 'success') {
+          rememberFingerprint(fingerprintKey, target.fingerprint);
           updateStatus('安装完成，后台已就绪。', 'success');
           byId('access-command').textContent =
             `ssh -N -p ${target.port} -L 18080:127.0.0.1:8080 ${target.username}@${target.host}`;
@@ -106,20 +158,27 @@ async function consume(response, target) {
 
 form.addEventListener('submit', async event => {
   event.preventDefault();
-  if (submit.disabled || !apiBase) return;
+  if (submit.disabled || !apiBase || confirmation.open) return;
   const target = Object.fromEntries(new FormData(form));
-  for (const name of ['host', 'username', 'fingerprint']) target[name] = target[name].trim();
+  target.host = target.host.trim();
+  target.username = target.username.trim();
   target.port = Number(target.port);
-  const headers = { 'Content-Type': 'application/json' };
-  if (!local) {
-    headers.Authorization = `Bearer ${target.operatorToken}`;
-    form.elements.operatorToken.value = '';
-    delete target.operatorToken;
-  }
+  const fingerprintKey = `hopworld-router:ssh-host:${target.host.toLowerCase()}:${target.port}`;
+  target.fingerprint = readFingerprint(fingerprintKey);
+  const needsToken = !local && !pageToken;
+  const needsFingerprint = !target.fingerprint;
+  const confirmed = needsToken || needsFingerprint
+    ? await confirmTarget(target, needsToken, needsFingerprint)
+    : {};
   password.value = '';
   password.type = 'password';
   toggle.textContent = '显示';
   toggle.setAttribute('aria-pressed', 'false');
+  if (!confirmed) return;
+  target.fingerprint ||= confirmed.fingerprint;
+  const token = pageToken || confirmed.token;
+  const headers = { 'Content-Type': 'application/json' };
+  if (!local) headers.Authorization = `Bearer ${token}`;
   submit.disabled = true;
   submit.textContent = '正在安装…';
   log.textContent = '';
@@ -135,8 +194,10 @@ form.addEventListener('submit', async event => {
       redirect: 'error',
       body,
     });
+    if (reply.status === 401) pageToken = undefined;
     if (!reply.ok) throw new Error((await reply.json()).error);
-    await consume(reply, target);
+    if (!local) pageToken = token;
+    await consume(reply, target, fingerprintKey);
   } catch (error) {
     updateStatus(error.message || '无法连接安装服务。', 'error');
   } finally {
