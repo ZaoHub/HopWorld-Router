@@ -1,0 +1,17 @@
+[Unit]
+Description=HopWorld Router (user service)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/HopWorld-Router
+Environment=HOPWORLD_HOST=127.0.0.1
+Environment=HOPWORLD_PORT=8080
+Environment="HOPWORLD_DATA=%h/HopWorld-Router/data"
+EnvironmentFile=%h/.config/hopworld-router/router.env
+ExecStart="%h/HopWorld-Router/.venv/bin/python" -m router.server
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

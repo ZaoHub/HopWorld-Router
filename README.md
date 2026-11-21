@@ -4,6 +4,8 @@ HopWorld Router 是独立于 [HopWorld macOS 应用](https://github.com/ZaoHub/H
 
 功能完成情况与限制见 [功能实现清单](docs/功能实现清单.md)。
 
+旧版源码归档见 [V0](V0/README.md)（V1 开发前的基线 `e9f1d7a`）。
+
 ## 当前可用
 
 HopWorld Router 同时做两件事：**把运行本服务的机器网络做成可订阅的节点**，以及**汇总多条订阅与手动节点**。
@@ -108,6 +110,16 @@ export HOPWORLD_ADMIN_PASSWORD='请替换为至少16字符的随机密码'
 
 <details>
 <summary><strong>Linux 服务器 / VPS：原生安装</strong></summary>
+
+### 从 GitHub 一键安装管理后台
+
+在使用 systemd 的全新 Ubuntu 22.04+ 或 Debian 12+ VPS 上，以 root 执行。服务器需要可以访问 GitHub、系统软件源和 PyPI。
+
+```bash
+( set -o pipefail; { command -v curl >/dev/null || { apt-get update && apt-get install -y curl ca-certificates; }; } && curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/main/deploy/install.sh | bash )
+```
+
+安装完成会显示 `admin` 的随机密码并开启开机自启。后台监听服务器的 `127.0.0.1:8080`，按下方「打开管理页」通过 SSH 登录。需要在后台管理代理内核或系统组件时，可单独按手动安装中的说明执行 `/opt/hopworld-router/deploy/hopworld-install-root.sh`。
 
 ### 全新 Linux 服务器
 

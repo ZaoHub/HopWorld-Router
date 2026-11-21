@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Installed as root-owned /usr/local/libexec/hopworld-router-page-update.
+set -euo pipefail
+umask 022
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export HOME=/root GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0
+state=/var/lib/hopworld-router-updates
+install -d -m 755 "$state" "$state/venvs" "$state/previous"
+write_state() { printf '{"state":"%s"}\n' "$1" > "$state/page-status.tmp"; chmod 644 "$state/page-status.tmp"; mv -f "$state/page-status.tmp" "$state/page-status.json"; }
+trap 'write_state failed' ERR
+write_state running
+exec 9>/var/lock/hopworld-router-update.lock
+flock -n 9 || { echo 'Another update is running' >&2; false; }
+cd /opt/hopworld-router
+test -d .git && test ! -L .git && test -x .venv/bin/python
+service_uid=$(id -u hopworld-router)
+test "$(stat -c %u .)" != "$service_uid"
+test $((8#$(stat -c %a .) & 022)) = 0
+test "$(stat -c %u .git)" = 0
+test $((8#$(stat -c %a .git) & 022)) = 0
+# Never execute Git hooks or trust a Git configuration writable by the service account.
+test "$(stat -c %u .git/config)" = 0
+test $((8#$(stat -c %a .git/config) & 022)) = 0
+test -z "$(find .git \( -user "$service_uid" -o -perm /022 -o -type l \) -print -quit)"
+test -z "$(find .git/hooks -type f -perm /111 -print -quit 2>/dev/null)"
+test "$(git symbolic-ref --short HEAD)" = main
+test -z "$(git status --porcelain)"
+old=$(git rev-parse HEAD)
+git fetch https://github.com/ZaoHub/HopWorld-Router.git refs/heads/main
+target=$(git rev-parse FETCH_HEAD)
+test "$(git merge-base "$old" "$target")" = "$old"
+if test "$old" = "$target"; then write_state complete; exit 0; fi
+
+backup=$(mktemp -d "$state/backup.XXXXXXXX")
+chmod 700 "$backup"
+for db in /var/lib/hopworld-router/*.db; do
+  test -f "$db" || continue
+  sqlite3 "$db" ".backup '$backup/$(basename "$db")'"
+done
+test ! -f /etc/hopworld-router.env || cp -p /etc/hopworld-router.env "$backup/"
+requirements=$(mktemp)
+trap 'rm -f "$requirements"; write_state failed' ERR
+git show "$target:requirements.txt" > "$requirements"
+new_venv=
+if ! cmp -s requirements.txt "$requirements"; then
+  python=$(readlink -f .venv/bin/python)
+  test "$(stat -c %u "$python")" = 0
+  new_venv=$(mktemp -d "$state/venvs/venv.XXXXXXXX")
+  chmod 755 "$new_venv"
+  "$python" -I -m venv "$new_venv"
+  "$new_venv/bin/pip" install -r "$requirements"
+fi
+rm -f "$requirements"
+test -z "$(git status --porcelain)"
+git merge --ff-only "$target"
+if test -n "$new_venv"; then
+  previous=$(mktemp -d "$state/previous/venv.XXXXXXXX")
+  rmdir "$previous"
+  mv .venv "$previous"
+  ln -s "$new_venv" .venv
+fi
+systemctl restart hopworld-router
+sleep 5
+systemctl is-active --quiet hopworld-router
+write_state complete

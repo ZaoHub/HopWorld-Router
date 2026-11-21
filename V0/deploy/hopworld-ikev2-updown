@@ -1,0 +1,98 @@
+#!/bin/bash
+# strongSwan updown: SNAT VPN clients and per-client traffic counters.
+set -euo pipefail
+
+POOL="${HOPWORLD_VPN_POOL:-10.66.0.0/24}"
+CHAIN='HOPWORLD_VPN'
+
+OUT_IF="$(ip route show default 0.0.0.0/0 2>/dev/null | awk '{print $5; exit}')"
+OUT_IF="${OUT_IF:-eth0}"
+PUB_IP="$(ip -4 addr show dev "$OUT_IF" 2>/dev/null | awk '/inet / {split($2,a,"/"); print a[1]; exit}')"
+
+ensure_traffic_chain() {
+  iptables -N "$CHAIN" 2>/dev/null || true
+  iptables -C "$CHAIN" -j RETURN 2>/dev/null || iptables -A "$CHAIN" -j RETURN
+  iptables -C FORWARD -s "$POOL" -j "$CHAIN" 2>/dev/null || iptables -I FORWARD 1 -s "$POOL" -j "$CHAIN"
+  iptables -C FORWARD -d "$POOL" -j "$CHAIN" 2>/dev/null || iptables -I FORWARD 1 -d "$POOL" -j "$CHAIN"
+}
+
+traffic_up() {
+  local vip="$1"
+  [[ -n "$vip" ]] || return 0
+  ensure_traffic_chain
+  iptables -C "$CHAIN" -s "$vip" -m comment --comment "hopworld-up:$vip" -j RETURN 2>/dev/null \
+    || iptables -I "$CHAIN" 1 -s "$vip" -m comment --comment "hopworld-up:$vip" -j RETURN
+  iptables -C "$CHAIN" -d "$vip" -m comment --comment "hopworld-down:$vip" -j RETURN 2>/dev/null \
+    || iptables -I "$CHAIN" 1 -d "$vip" -m comment --comment "hopworld-down:$vip" -j RETURN
+}
+
+traffic_down() {
+  local vip="$1"
+  [[ -n "$vip" ]] || return 0
+  iptables -D "$CHAIN" -s "$vip" -m comment --comment "hopworld-up:$vip" -j RETURN 2>/dev/null || true
+  iptables -D "$CHAIN" -d "$vip" -m comment --comment "hopworld-down:$vip" -j RETURN 2>/dev/null || true
+}
+
+snat_up() {
+  local client="$1"
+  [[ -n "$client" && -n "$PUB_IP" ]] || return 0
+  iptables -t nat -C POSTROUTING -s "${client}/32" -o "$OUT_IF" -j SNAT --to-source "$PUB_IP" 2>/dev/null \
+    && return 0
+  iptables -t nat -I POSTROUTING 1 -s "${client}/32" -o "$OUT_IF" -j SNAT --to-source "$PUB_IP" 2>/dev/null || true
+  iptables -C FORWARD -s "${client}/32" -j ACCEPT 2>/dev/null || iptables -I FORWARD 2 -s "${client}/32" -j ACCEPT 2>/dev/null || true
+  iptables -C FORWARD -d "${client}/32" -j ACCEPT 2>/dev/null || iptables -I FORWARD 2 -d "${client}/32" -j ACCEPT 2>/dev/null || true
+}
+
+snat_down() {
+  local client="$1"
+  [[ -n "$client" ]] || return 0
+  iptables -t nat -D POSTROUTING -s "${client}/32" -o "$OUT_IF" -j SNAT --to-source "$PUB_IP" 2>/dev/null || true
+}
+
+reapply_host_bypass() {
+  [[ -x /usr/local/sbin/hopworld-ikev2-apply ]] || return 0
+  /usr/local/sbin/hopworld-ikev2-apply host-bypass /var/lib/hopworld-router/ikev2 2>/dev/null || true
+}
+
+_vip_from_env() {
+  local c="${PLUTO_PEER_CLIENT:-}"
+  [[ -n "$c" ]] || c="${PLUTO_PEER:-}"
+  [[ -n "$c" ]] || return 0
+  if [[ "$c" == */* ]]; then
+    c="${c%/*}"
+  fi
+  if [[ "$c" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "$c"
+  fi
+}
+
+client_up() {
+  local client="$(_vip_from_env)"
+  [[ -n "$client" ]] || return 0
+  # updown 非零退出会导致 strongSwan 拒绝隧道，必须容错
+  set +e
+  snat_up "$client"
+  traffic_up "$client"
+  reapply_host_bypass
+  set -e
+}
+
+client_down() {
+  local client="$(_vip_from_env)"
+  [[ -n "$client" ]] || return 0
+  set +e
+  traffic_down "$client"
+  snat_down "$client"
+  reapply_host_bypass
+  set -e
+}
+
+case "${PLUTO_VERB:-}" in
+  up|up-client|client-up)
+    client_up
+    ;;
+  down|down-client|client-down)
+    client_down
+    ;;
+esac
+exit 0
