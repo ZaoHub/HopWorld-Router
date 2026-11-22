@@ -1,0 +1,73 @@
+.install-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.install-card .card-title {
+  margin-bottom: 24px;
+}
+
+.install-fields {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.install-fields > label {
+  grid-template-columns: 8rem minmax(0, 1fr);
+  column-gap: 16px;
+  align-items: start;
+}
+
+.install-fields .field-label {
+  padding-block: 11px;
+  text-align: end;
+}
+
+.install-fields .quiet {
+  grid-column: 2;
+}
+
+.install-fields select {
+  width: max-content;
+  min-width: 9rem;
+  max-width: 100%;
+}
+
+.install-actions {
+  justify-content: center;
+  margin-block: 22px 6px;
+}
+
+.install-actions .button {
+  min-width: 12rem;
+}
+
+@media (min-width: 741px) {
+  .install-grid .requirements dl {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+  }
+}
+
+@media (max-width: 560px) {
+  .install-card .card-title {
+    margin-bottom: 18px;
+  }
+
+  .install-fields > label {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .install-fields .field-label {
+    padding: 0;
+    text-align: start;
+  }
+
+  .install-fields .quiet {
+    grid-column: 1;
+  }
+
+  .install-actions .button {
+    width: 100%;
+  }
+}
