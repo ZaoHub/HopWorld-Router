@@ -270,7 +270,7 @@ class ManagementAccessTests(unittest.TestCase):
                     with self.subTest(expected=expected), self.assertRaises(HTTPError) as error:
                         request(root, restart, {}, **options)
                     self.assertEqual(error.exception.code, expected)
-                request(root, '/api/v1/settings', {'name': 'Restart check', 'timezone': 'UTC'}).close()
+                request(root, '/api/v1/settings', {'timezone': 'UTC'}).close()
 
                 managed_port = available_port()
                 managed = f'http://127.0.0.1:{managed_port}'
@@ -290,7 +290,7 @@ class ManagementAccessTests(unittest.TestCase):
                 after = ready(managed, before)
                 self.assertEqual(ready(root), after)
                 self.assertIsNone(process.poll())
-                self.assertEqual(json.load(request(managed, '/api/v1/settings'))['name'], 'Restart check')
+                self.assertEqual(json.load(request(managed, '/api/v1/settings'))['timezone'], 'UTC')
                 with self.assertRaises(HTTPError) as expired:
                     request(managed, '/api/v1/settings', auth=None, headers=headers)
                 self.assertEqual(expired.exception.code, 401)

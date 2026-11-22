@@ -8,7 +8,7 @@ HopWorld Router 是独立于 [HopWorld macOS 应用](https://github.com/ZaoHub/H
 
 旧版源码归档见 [V0](V0/README.md)（V1 开发前的基线 `e9f1d7a`）。 加密 DNS 配置、隔离出口实验与验收进度见 [V1 网络安全与验收](docs/V1网络安全与验收.md)。
 
-[打开安装落地页](https://zaohub.github.io/HopWorld-Router/#install) · [查看 V1 放行端口表](#v1-部署端口与安全组)
+[查看 V1 放行端口表](#v1-部署端口与安全组)
 
 ## 当前可用
 
@@ -84,9 +84,6 @@ HopWorld Router 同时做两件事：**把运行本服务的机器网络做成�
 - OpenWrt、Windows 与透明网关等场景的完整部署与验证
 
 ## 安装教程
-
-- [打开 HopWorld-Router 安装落地页](https://zaohub.github.io/HopWorld-Router/#install) · [终端命令大全](https://zaohub.github.io/HopWorld-Router/commands.html)
-- 网页安装可直接填写 SSH 信息并查看实时输出，无需安装本机软件。[在线安装工具说明](landing/README.md)
 
 ### V1 部署端口与安全组
 
@@ -173,7 +170,7 @@ Ubuntu／Debian 测试环境可从源码构建带 SHA-256 校验文件的 `.deb`
 在使用 systemd 的 VPS 上，以 root 执行。服务器需有 `curl` 并能访问 GitHub：
 
 ```bash
-( set -o pipefail; curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/v1.0.2/deploy/install.sh | bash )
+( set -o pipefail; curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/v1.0.3/deploy/install.sh | bash )
 ```
 
 - **Ubuntu 22.04+、Debian 12+**：校验 Release 的 `.deb`，由 APT 安装并启动后台。

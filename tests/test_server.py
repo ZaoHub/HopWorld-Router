@@ -118,7 +118,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(original['port'], self.server.server_port)
         self.assertEqual(original['name'], 'HopWorld-Router')
         self.assertEqual(original['probe_target'], 'google')
-        data = {'name': 'Home Router', 'timezone': 'Asia/Shanghai', 'auto_check': False, 'auto_apply': False}
+        data = {'timezone': 'Asia/Shanghai', 'auto_check': False, 'auto_apply': False}
         with self.assertRaises(HTTPError) as no_origin:
             self.request(path, data, origin=False)
         self.assertEqual(no_origin.exception.code, 403)
@@ -128,12 +128,21 @@ class ServerTests(unittest.TestCase):
         with self.assertRaises(HTTPError) as invalid_target:
             self.request(path, {**data, 'probe_target': 'unknown'})
         self.assertEqual(invalid_target.exception.code, 400)
+        with self.assertRaises(HTTPError) as immutable_name:
+            self.request(path, {**data, 'name': 'Home Router'})
+        self.assertEqual(immutable_name.exception.code, 400)
         self.assertEqual(json.load(self.request(path)), original)
-        self.assertEqual(json.load(self.request(path, data)), data)
-        self.assertEqual(json.load(self.request(path))['name'], 'Home Router')
+        result = json.load(self.request(path, data))
+        self.assertEqual(result['name'], 'HopWorld-Router')
+        self.assertEqual(result['timezone'], 'Asia/Shanghai')
+        self.assertEqual(result['auto_check'], False)
+        self.assertEqual(result['auto_apply'], False)
+        self.assertEqual(json.load(self.request(path))['name'], 'HopWorld-Router')
         self.assertEqual(self.store.update_prefs(), {'auto_check': False, 'auto_apply': False})
-        basic = {'name': 'New name', 'timezone': 'UTC'}
-        self.assertEqual(json.load(self.request(path, basic)), basic)
+        basic = {'timezone': 'UTC'}
+        saved_basic = json.load(self.request(path, basic))
+        self.assertEqual(saved_basic['name'], 'HopWorld-Router')
+        self.assertEqual(saved_basic['timezone'], 'UTC')
         self.assertEqual(self.store.update_prefs(), {'auto_check': False, 'auto_apply': False})
 
     def test_public_subscription_requires_admin_and_a_certificate(self):
@@ -1475,8 +1484,11 @@ class ServerTests(unittest.TestCase):
         self.store.add_manual('trojan://a@example.test:443#first\ntrojan://b@example.test:443#second')
         selected, other = self.store.nodes()
         selection = [selected['id'], selected['id']]
-        settings = {'name': 'Router', 'timezone': 'UTC', 'probe_target': 'cloudflare'}
-        self.assertEqual(json.load(self.request('/api/v1/settings', settings)), settings)
+        settings = {'timezone': 'UTC', 'probe_target': 'cloudflare'}
+        saved = json.load(self.request('/api/v1/settings', settings))
+        self.assertEqual(saved['timezone'], 'UTC')
+        self.assertEqual(saved['probe_target'], 'cloudflare')
+        self.assertEqual(saved['name'], 'HopWorld-Router')
         self.assertEqual(Store(self.store.path).probe_target(), 'cloudflare')
         for invalid in ([], 'invalid', [3], [selected['id'], 'unknown']):
             with self.assertRaises(HTTPError):

@@ -475,22 +475,30 @@ class Store:
                            (ACCESS_SETTINGS_KEY, json.dumps({'port': port, 'https': https})))
 
     def save_management_settings(self, data):
-        basic_fields = {'name', 'timezone'}
-        update_fields = {'auto_check', 'auto_apply'}
-        if set(data) - {'probe_target'} not in (basic_fields, basic_fields | update_fields):
+        if not isinstance(data, dict):
             raise ValueError('设置字段无效')
-        name, timezone = data['name'], data['timezone']
-        if not isinstance(name, str) or not (1 <= len(name.strip()) <= 40) or not name.isprintable():
-            raise ValueError('平台名称需为 1 至 40 个可显示字符')
-        if not isinstance(timezone, str) or timezone not in UI_TIMEZONES:
-            raise ValueError('界面时区无效')
-        prefs = {key: data[key] for key in update_fields if key in data}
+        allowed = {'name', 'timezone', 'auto_check', 'auto_apply', 'probe_target'}
+        keys = set(data)
+        if not keys or keys - allowed:
+            raise ValueError('设置字段无效')
+        current = self.management_ui_settings()
+        if 'name' in data:
+            name = data['name']
+            if not isinstance(name, str) or name.strip() != current['name']:
+                raise ValueError('平台名称不可修改')
+        timezone = current['timezone']
+        if 'timezone' in data:
+            timezone = data['timezone']
+            if not isinstance(timezone, str) or timezone not in UI_TIMEZONES:
+                raise ValueError('界面时区无效')
+        prefs = {key: data[key] for key in ('auto_check', 'auto_apply') if key in data}
         if any(type(value) is not bool for value in prefs.values()):
             raise ValueError('更新设置无效')
-        ui = {'name': name.strip(), 'timezone': timezone}
-        rows = [(UI_SETTINGS_KEY, json.dumps(ui, ensure_ascii=False))]
+        rows = []
+        if 'timezone' in data:
+            rows.append((UI_SETTINGS_KEY, json.dumps({'name': current['name'], 'timezone': timezone}, ensure_ascii=False)))
         if prefs:
-            rows.append(('project_update', json.dumps(prefs)))
+            rows.append(('project_update', json.dumps({**self.update_prefs(), **prefs})))
         probe_settings = {}
         if 'probe_target' in data:
             target = data['probe_target']
@@ -498,9 +506,10 @@ class Store:
                 raise ValueError('测试目标无效')
             rows.append((PROBE_TARGET_KEY, target))
             probe_settings['probe_target'] = target
-        with self.connect() as db:
-            db.executemany('INSERT OR REPLACE INTO settings VALUES (?, ?)', rows)
-        return {**ui, **prefs, **probe_settings}
+        if rows:
+            with self.connect() as db:
+                db.executemany('INSERT OR REPLACE INTO settings VALUES (?, ?)', rows)
+        return {'name': current['name'], 'timezone': timezone, **prefs, **probe_settings}
 
     def token(self):
         with self.connect() as db:
@@ -3121,6 +3130,9 @@ def make_handler(store, password, public_subscription=None, *, request_restart=N
             if path == '/first-login.js':
                 return self.reply(200, (STATIC / 'first-login.js').read_bytes(), 'application/javascript; charset=utf-8')
             if path == '/v1.js': return self.reply(200, (STATIC / 'v1.js').read_bytes(), 'application/javascript; charset=utf-8')
+            if path == '/v1-icons.js': return self.reply(200, (STATIC / 'v1-icons.js').read_bytes(), 'application/javascript; charset=utf-8')
+            if path == '/v1-overview-secret.js': return self.reply(200, (STATIC / 'v1-overview-secret.js').read_bytes(), 'application/javascript; charset=utf-8')
+            if path == '/v1-about.js': return self.reply(200, (STATIC / 'v1-about.js').read_bytes(), 'application/javascript; charset=utf-8')
             if path == '/v1.css': return self.reply(200, (STATIC / 'v1.css').read_bytes(), 'text/css; charset=utf-8')
             if path == '/app.js': return self.reply(200, (STATIC / 'app.js').read_bytes(), 'application/javascript; charset=utf-8')
             if path == '/qrcode.js': return self.reply(200, (STATIC / 'qrcode.js').read_bytes(), 'application/javascript; charset=utf-8')
@@ -3338,7 +3350,9 @@ def make_handler(store, password, public_subscription=None, *, request_restart=N
                 elif path == '/api/refresh': store.refresh(int(data['id']))
                 elif path == '/api/delete':
                     if not store.delete(int(data['id'])): raise ValueError('订阅不存在')
-                elif path == '/api/rotate': store.rotate()
+                elif path == '/api/rotate':
+                    store.rotate()
+                    return self.json(200, {'ok': True})
                 elif path == '/api/v1/relay':
                     return self.json(200, store.configure_relay(data))
                 elif path == '/api/manual': store.add_manual(data.get('content', ''))

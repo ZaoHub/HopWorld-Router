@@ -2,7 +2,7 @@
 set -euo pipefail
 
 main() (
-  local version=1.0.2
+  local version=1.0.3
   if [[ "$EUID" != 0 || "$(uname -s)" != Linux || ! -d /run/systemd/system ]]; then
     echo '请在使用 systemd 的 Linux 服务器上以 root 运行。' >&2
     exit 1

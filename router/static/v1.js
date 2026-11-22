@@ -11,6 +11,7 @@
       [['接入向导', 'v1-public-guide'], ['配置 VPS 中转', 'v1-relay-configure']]],
     traffic: ['流量监控', '实时流量、历史统计、按内核/协议/节点/端口多维度分析'],
     settings: ['系统设置', '平台运行、网络、权限、安全与维护等全局配置'],
+    about: ['关于', '产品信息、版本与支持开发'],
   };
   const statuses = {running: '运行中', stopped: '已停止', unmanaged: '已安装 · 未托管', not_installed: '未安装'};
   let page = 'overview';
@@ -73,6 +74,19 @@
     if (className) node.className = className;
     return node;
   }
+  function iconsApi() {
+    return (typeof window !== 'undefined' && window.hopworldIcons) || null;
+  }
+  function iconSvg(name, size) {
+    const api = iconsApi();
+    return (api && typeof api.svg === 'function' && api.svg(name, size)) || '';
+  }
+  function setIcon(node, name, size) {
+    if (!node) return;
+    const html = iconSvg(name, size);
+    if (html) node.innerHTML = html;
+    else node.replaceChildren();
+  }
   function saveBlob(blob, name) {
     const url = URL.createObjectURL(blob);
     const link = element('a');
@@ -85,20 +99,96 @@
   }
   function metrics(id, entries) {
     const box = byId(id);
-    box.replaceChildren(...entries.map(([label, value, icon, tone]) => {
+    const cards = entries.map(([label, value, icon, tone]) => {
       const card = element('div', null, 'v1-metric');
-      const mark = element('span', icon, 'icon-box ' + (tone || 'blue'));
+      const api = iconsApi();
+      const iconName = (api && typeof api.resolve === 'function' && api.resolve(icon)) || (icon === 'updown' ? 'arrow-up-down' : icon);
+      const mark = element('span', null, 'icon-box ' + (tone || 'blue') + (iconName === 'arrow-up-down' ? ' v1-metric-updown' : ''));
       mark.setAttribute('aria-hidden', 'true');
+      setIcon(mark, iconName, 24);
       const details = element('div');
       details.append(element('span', label), element('strong', value ?? dash));
       card.append(mark, details);
       return card;
-    }));
+    });
+    if (id === 'v1-overview-metrics' && cards.length) {
+      const lead = element('div', null, 'v1-overview-metrics-lead');
+      const last = cards[cards.length - 1];
+      last.classList.add('v1-overview-metrics-rate');
+      lead.append(...cards.slice(0, -1));
+      box.replaceChildren(lead, last);
+      return;
+    }
+    box.replaceChildren(...cards);
+  }
+  const overviewSecretApi = window.hopworldOverviewSecret;
+  const overviewSecretIcons = overviewSecretApi?.ICONS || {};
+  function fallbackOverviewSecrets() {
+    const mask = '********';
+    const placeholders = new Set(['', '—', '–', '-', '未配置', '待配置', '未获取', '待检测', '待签发', '无']);
+    const values = new Map();
+    const snapshot = id => {
+      const value = values.get(id) || '';
+      const text = value.trim();
+      const maskable = !placeholders.has(text);
+      return {value, maskable, revealed: false, until: null, display: maskable ? mask : (text || '—')};
+    };
+    return {
+      setValue(id, value) { values.set(id, value == null ? '' : String(value)); return snapshot(id); },
+      toggle(id) { return snapshot(id); },
+      hideAll() {},
+      snapshot,
+    };
+  }
+  const overviewSecrets = overviewSecretApi?.createOverviewSecrets({
+    onChange() { paintOverviewSecrets(); },
+  }) || fallbackOverviewSecrets();
+  function secretViewState(label, snap) {
+    if (overviewSecretApi?.viewState) return overviewSecretApi.viewState(label, snap);
+    return {text: snap.display, maskable: snap.maskable, revealed: false, button: null};
+  }
+  function paintOverviewSecret(dd, id) {
+    const label = dd.dataset.overviewSecretName || '';
+    const snap = overviewSecrets.snapshot(id);
+    const view = secretViewState(label, snap);
+    const valueNode = element('span', view.text, 'v1-overview-secret-value');
+    dd.replaceChildren(valueNode);
+    dd.removeAttribute('title');
+    if (!view.button) {
+      dd.classList.remove('v1-overview-secret');
+      return;
+    }
+    dd.classList.add('v1-overview-secret');
+    const button = element('button', null, 'v1-icon-btn v1-overview-secret-toggle');
+    button.type = 'button';
+    button.setAttribute('aria-label', view.button.ariaLabel);
+    button.setAttribute('aria-pressed', view.button.ariaPressed);
+    button.innerHTML = overviewSecretIcons[view.button.icon] || '';
+    button.addEventListener('click', () => overviewSecrets.toggle(id));
+    dd.append(button);
+  }
+  function paintOverviewSecrets() {
+    for (const dd of document.querySelectorAll('[data-overview-secret]')) {
+      paintOverviewSecret(dd, dd.dataset.overviewSecret);
+    }
+  }
+  function hideOverviewSecrets() {
+    overviewSecrets.hideAll();
+    paintOverviewSecrets();
   }
   function definitions(id, entries) {
-    byId(id).replaceChildren(...entries.map(([name, value]) => {
+    byId(id).replaceChildren(...entries.map(([name, value, secret]) => {
       const item = element('div');
-      item.append(element('dt', name), element('dd', value ?? dash));
+      const dd = element('dd');
+      item.append(element('dt', name), dd);
+      if (secret?.id) {
+        dd.dataset.overviewSecret = secret.id;
+        dd.dataset.overviewSecretName = secret.label || name;
+        overviewSecrets.setValue(secret.id, value ?? '');
+        paintOverviewSecret(dd, secret.id);
+      } else {
+        dd.textContent = value ?? dash;
+      }
       return item;
     }));
   }
@@ -110,11 +200,11 @@
   function renderOverview() {
     const nodes = overview?.nodes || [];
     metrics('v1-overview-metrics', [
-      ['管理服务', overview ? '在线' : '等待连接', '⌁'],
-      ['运行内核', system ? `${system.cores.filter(c => c.status === 'running').length} / ${system.cores.length}` : null, '▤', 'cyan'],
-      ['订阅中启用节点', overview ? nodes.filter(n => n.enabled).length : null, '☷', 'violet'],
-      ['今日节点流量', bytes(traffic?.today?.total_bytes), '⇄'],
-      ['实时速率', `↓ ${rate(traffic?.down_bps)} / ↑ ${rate(traffic?.up_bps)}`, '⇄', 'violet'],
+      ['管理服务', overview ? '在线' : '等待连接', 'zap'],
+      ['运行内核', system ? `${system.cores.filter(c => c.status === 'running').length} / ${system.cores.length}` : null, 'cpu', 'cyan'],
+      ['订阅中启用节点', overview ? nodes.filter(n => n.enabled).length : null, 'network', 'violet'],
+      ['今日节点流量', bytes(traffic?.today?.total_bytes), 'arrow-left-right'],
+      ['实时速率', `↓ ${rate(traffic?.down_bps)} / ↑ ${rate(traffic?.up_bps)}`, 'updown', 'violet'],
     ]);
   }
   function renderGlobalProbe({jobs, nodes, sources}, wasRunning) {
@@ -214,9 +304,9 @@
       : acme.source === 'manual' ? '不可用'
       : acme.error ? '签发异常' : '待签发';
     metrics('v1-node-metrics', [
-      ['全部节点', nodes.length, '☷'], ['已启用', shownNodes.length, '✓', 'cyan'],
-      ['本地发布', nodes.filter(n => n.local).length, '▣', 'violet'], ['订阅导入', subNodes.length, '↗'],
-      ['今日流量', traffic ? bytes(traffic.today?.total_bytes) : null, '⇄', 'cyan'],
+      ['全部节点', nodes.length, 'network'], ['已启用', shownNodes.length, 'check', 'cyan'],
+      ['本地发布', nodes.filter(n => n.local).length, 'radio', 'violet'], ['订阅导入', subNodes.length, 'rss'],
+      ['今日流量', traffic ? bytes(traffic.today?.total_bytes) : null, 'arrow-left-right', 'cyan'],
     ]);
     renderNodes();
     const probed = subNodes.filter(node => node.probe && node.probe.status !== 'testing');
@@ -224,11 +314,11 @@
     const failed = probed.filter(node => node.probe.status !== 'ok').length;
     const nextUpdate = sources.map(source => source.next_update).filter(Boolean).sort((a, b) => a - b)[0];
     metrics('v1-sub-metrics', [
-      ['订阅源总数', sources.length, '↗'],
-      ['解析节点总数', sources.reduce((sum, source) => sum + (source.count || 0), 0), '☷', 'violet'],
-      ['可用节点', probed.length ? passed : null, '✓', 'cyan'],
-      ['异常节点', probed.length ? failed : null, '!', 'violet'],
-      ['下次自动更新', nextUpdate ? remainText(nextUpdate) : null, '⟳'],
+      ['订阅源总数', sources.length, 'rss'],
+      ['解析节点总数', sources.reduce((sum, source) => sum + (source.count || 0), 0), 'layers', 'violet'],
+      ['可用节点', probed.length ? passed : null, 'check', 'cyan'],
+      ['异常节点', probed.length ? failed : null, 'triangle-alert', 'violet'],
+      ['下次自动更新', nextUpdate ? remainText(nextUpdate) : null, 'refresh-cw'],
     ]);
     renderSubscriptions();
     renderPublicAccess(local);
@@ -238,15 +328,16 @@
     renderCertificates();
     renderSettingsNetwork(acme);
     definitions('v1-overview-cert', [
-      ['证书域名', acme.domain || host], ['证书状态', certLabel],
+      ['证书域名', acme.domain || host, {id: 'overview-cert-domain', label: '证书域名'}],
+      ['证书状态', certLabel],
       ['剩余有效期', Number.isFinite(acme.days_left) ? `${acme.days_left} 天` : dash],
       ['自动续签', acme.automatic ? '已开启' : '未开启'],
     ]);
     metrics('v1-overview-nodes', [
-      ['全部节点', nodes.length, '▦'],
-      ['Reality', nodes.filter(n => n.local && n.protocol === 'vless').length, '⇄', 'violet'],
-      ['UDP / QUIC', nodes.filter(n => n.local && ['hysteria2','hy2','tuic'].includes(n.protocol)).length, '⌁', 'cyan'],
-      ['已启用', shownNodes.length, '✓'],
+      ['全部节点', nodes.length, 'layout-grid'],
+      ['Reality', nodes.filter(n => n.local && n.protocol === 'vless').length, 'shield', 'violet'],
+      ['UDP / QUIC', nodes.filter(n => n.local && ['hysteria2','hy2','tuic'].includes(n.protocol)).length, 'zap', 'cyan'],
+      ['已启用', shownNodes.length, 'check'],
     ]);
     const recent = sources.filter(source => source.updated).sort((a,b) => b.updated - a.updated).slice(0,5);
     byId('v1-overview-events').replaceChildren(...(recent.length ? recent.map(source => {
@@ -332,7 +423,7 @@
     actions.append(copyProgram, copyConfig, install, remove);
     const body = byId('v1-core-settings-body');
     body.replaceChildren(facts, element('p', explain(core), 'field-hint'),
-      detailHeading('◇', '可发布协议'), coreProtocolChips(core));
+      detailHeading('shield', '可发布协议'), coreProtocolChips(core));
     if (core.instances?.length) {
       const instanceActions = element('div', null, 'v1-core-protocol-switches');
       for (const instance of core.instances) {
@@ -349,7 +440,7 @@
         }
         instanceActions.append(row);
       }
-      body.append(detailHeading('⌁', '其他发布端口'), instanceActions);
+      body.append(detailHeading('radio', '其他发布端口'), instanceActions);
     }
     body.append(actions);
     const dialog = byId('v1-core-settings');
@@ -363,28 +454,45 @@
     all.checked = boxes.length > 0 && checked === boxes.length;
     all.indeterminate = checked > 0 && checked < boxes.length;
   }
-  function iconButton(symbol, label, act, id) {
-    const button = element('button', symbol, 'v1-icon-btn');
+  function iconButton(name, label, act, id) {
+    const button = element('button', null, 'v1-icon-btn');
     button.type = 'button';
     button.setAttribute('aria-label', label);
     button.dataset.coreAct = act;
     button.dataset.coreId = id;
+    setIcon(button, name, 20);
     return button;
   }
-  function tile(icon, label, act, enabled) {
+  const nodeActionIcons = {
+    edit: '<svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" /><path d="m15 5 4 4" /></svg>',
+    probe: '<svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m12 14 4-4" /><path d="M3.34 19a10 10 0 1 1 17.32 0" /></svg>',
+    logs: '<svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 12h-5" /><path d="M15 8h-5" /><path d="M19 17V5a2 2 0 0 0-2-2H4" /><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3" /></svg>',
+  };
+  function nodeIconButton(act, label, id) {
+    const button = element('button', null, 'v1-icon-btn');
+    button.type = 'button';
+    button.setAttribute('aria-label', label);
+    button.dataset.nodeAct = act;
+    button.dataset.nodeId = id;
+    button.innerHTML = nodeActionIcons[act];
+    return button;
+  }
+  function tile(name, label, act, enabled) {
     const button = element('button', null, 'secondary');
     button.type = 'button';
     button.dataset.coreAct = act;
-    const mark = element('span', icon, 'v1-tile-icon');
+    const mark = element('span', null, 'v1-tile-icon');
     mark.setAttribute('aria-hidden', 'true');
+    setIcon(mark, name, 20);
     button.append(mark, element('span', label));
     button.disabled = !enabled;
     return button;
   }
-  function detailHeading(icon, text) {
+  function detailHeading(name, text) {
     const heading = element('h3');
-    const mark = element('span', icon, 'v1-section-mark');
+    const mark = element('span', null, 'v1-section-mark');
     mark.setAttribute('aria-hidden', 'true');
+    setIcon(mark, name, 14);
     heading.append(mark, document.createTextNode(text));
     return heading;
   }
@@ -499,8 +607,8 @@
     const actions = element('div', null, 'v1-core-actions');
     const running = core.status === 'running';
     actions.append(
-      running ? tile('■', '停止', 'stop', true) : tile('▶', '启动', 'start', true),
-      tile('↻', '重启内核', 'restart', running), tile('☰', '查看日志', 'logs', true),
+      running ? tile('square', '停止', 'stop', true) : tile('play', '启动', 'start', true),
+      tile('rotate-cw', '重启内核', 'restart', running), tile('scroll-text', '查看日志', 'logs', true),
     );
     const hint = element('p', explain(core), 'field-hint');
     hint.id = 'v1-core-limit';
@@ -522,7 +630,7 @@
     const configText = element('span', core.config_path ? core.config_path + (core.config_ready ? '' : '（尚未生成）') : '无');
     if (core.config_path) configText.title = core.config_path;
     config.append(configText);
-    if (core.config_path) config.append(iconButton('▢', '复制配置路径', 'copy-config', core.id));
+    if (core.config_path) config.append(iconButton('copy', '复制配置路径', 'copy-config', core.id));
     facts.append(
       detailLine('运行时长', duration(core.uptime_seconds) || '未采集'),
       detailLine('CPU 使用率', cpuValue),
@@ -532,13 +640,13 @@
     );
     const quick = element('div', null, 'v1-core-quick');
     quick.append(
-      tile('✎', '独立配置', 'profile', core.installed),
-      tile('⇩', '导出配置', 'export', !!core.config_ready),
-      tile('▣', '备份配置', 'backup', !!core.config_ready),
-      coreNeedsDownload(core) ? tile('⇩', '下载内核', 'download', true) : tile('↻', '更新内核', 'install', true),
+      tile('pencil', '独立配置', 'profile', core.installed),
+      tile('download', '导出配置', 'export', !!core.config_ready),
+      tile('archive', '备份配置', 'backup', !!core.config_ready),
+      coreNeedsDownload(core) ? tile('download', '下载内核', 'download', true) : tile('refresh-cw', '更新内核', 'install', true),
     );
-    panel.replaceChildren(head, actions, hint, detailHeading('◇', '可发布协议'), coreProtocolChips(core),
-      detailHeading('↓', '运行信息'), facts, detailHeading('⚡', '快捷操作'), quick);
+    panel.replaceChildren(head, actions, hint, detailHeading('shield', '可发布协议'), coreProtocolChips(core),
+      detailHeading('file-text', '运行信息'), facts, detailHeading('zap', '快捷操作'), quick);
   }
   function selectCore(id, scroll) {
     selectedCoreId = id;
@@ -738,6 +846,7 @@
     if (!dialog.open) dialog.showModal();
     else if (!dialog.contains(document.activeElement)) dismiss.focus();
   }
+  window.hopworldOpenConfirm = openConfirm;
   function askRestart(core) {
     if (!core.managed) {
       openConfirm('无法重启 ' + core.name, explain(core));
@@ -1380,7 +1489,9 @@
     note(text, {duration: 0, controls: true});
     const pause = byId('toast-pause');
     if (!pause) return;
-    pause.textContent = paused ? '▶' : '❚❚';
+    const html = iconSvg(paused ? 'play' : 'pause', 16);
+    if (html) pause.innerHTML = html;
+    else pause.replaceChildren();
     pause.setAttribute('aria-label', paused ? '继续下载' : '暂停下载');
     pause.setAttribute('aria-pressed', String(paused));
   }
@@ -1514,12 +1625,12 @@
     }
     const trafficValue = traffic ? bytes(traffic.today?.total_bytes) : null;
     metrics('v1-core-metrics', [
-      ['已安装内核', system ? `${installed} / ${cores.length}` : null, '▤'],
-      ['运行中', system ? cores.filter(core => core.status === 'running').length : null, '▷', 'cyan'],
-      ['已停止', system ? cores.filter(core => core.status === 'stopped').length : null, 'Ⅱ', 'violet'],
-      ['总节点数', overview ? (overview.nodes || []).length : null, '☷'],
+      ['已安装内核', system ? `${installed} / ${cores.length}` : null, 'cpu'],
+      ['运行中', system ? cores.filter(core => core.status === 'running').length : null, 'play', 'cyan'],
+      ['已停止', system ? cores.filter(core => core.status === 'stopped').length : null, 'pause', 'violet'],
+      ['总节点数', overview ? (overview.nodes || []).length : null, 'network'],
     ]);
-    metrics('v1-core-traffic', [['总流量（今日）', trafficValue, '⇄', 'cyan']]);
+    metrics('v1-core-traffic', [['总流量（今日）', trafficValue, 'arrow-left-right', 'cyan']]);
     const counts = {
       all: cores.length,
       running: cores.filter(core => core.status === 'running').length,
@@ -1588,16 +1699,11 @@
       const ops = element('td');
       const opsBox = element('div', null, 'v1-core-ops');
       const canStop = core.status === 'running';
-      const settingsButton = iconButton(null, '设置 ' + core.name, 'edit', core.id);
-      settingsButton.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
-        stroke-width="2" stroke-linejoin="round" aria-hidden="true">
-        <path d="M9 2h6l.5 3 1 .6 2.8-1.1 3 5.2-2.3 1.7v1.2l2.3 1.7-3 5.2-2.8-1.1-1 .6-.5 3H9l-.5-3-1-.6-2.8 1.1-3-5.2 2.3-1.7v-1.2l-2.3-1.7 3-5.2 2.8 1.1 1-.6z"/>
-        <circle cx="12" cy="12" r="3"/>
-      </svg>`;
+      const settingsButton = iconButton('settings', '设置 ' + core.name, 'edit', core.id);
       const packageButton = coreNeedsDownload(core)
-        ? iconButton('⇩', '下载 ' + core.name, 'download', core.id)
-        : iconButton('↻', '更新 ' + core.name, 'install', core.id);
-      opsBox.append(iconButton(canStop ? '■' : '▶', `${canStop ? '停止' : '启动'} ${core.name}`, canStop ? 'stop' : 'start', core.id),
+        ? iconButton('download', '下载 ' + core.name, 'download', core.id)
+        : iconButton('refresh-cw', '更新 ' + core.name, 'install', core.id);
+      opsBox.append(iconButton(canStop ? 'square' : 'play', `${canStop ? '停止' : '启动'} ${core.name}`, canStop ? 'stop' : 'start', core.id),
         packageButton, settingsButton);
       ops.append(opsBox);
       const trafficCell = element('td', bytes(traffic?.by_core?.[core.id]?.total_bytes));
@@ -1702,11 +1808,11 @@
     const dnsLabel = result => ({ok: '已验证', mismatch: '记录不匹配', error: '查询失败'}[result?.status] || '待验证');
     const resolved = dnsLabel(dns);
     metrics('v1-cert-metrics', [
-      ['已绑定域名', new Set((overview.bound_domains || []).map(binding => binding.host)).size, '◎'],
-      ['有效证书', Number(!!acme.certificate_valid), '◇', 'cyan'],
-      ['即将到期', Number(!!acme.certificate_valid && acme.days_left <= 14), '!', 'violet'],
-      ['自动续签', Number(!!acme.automatic), '⟳', 'violet'],
-      ['DNS 解析', resolved === '已验证' ? records : dash, '▰'],
+      ['已绑定域名', new Set((overview.bound_domains || []).map(binding => binding.host)).size, 'circle-dot'],
+      ['有效证书', Number(!!acme.certificate_valid), 'shield', 'cyan'],
+      ['即将到期', Number(!!acme.certificate_valid && acme.days_left <= 14), 'triangle-alert', 'violet'],
+      ['自动续签', Number(!!acme.automatic), 'refresh-cw', 'violet'],
+      ['DNS 解析', resolved === '已验证' ? records : dash, 'blocks'],
     ]);
     byId('v1-cert-domain').textContent = hasDomain ? domain : '域名详情';
     const status = byId('v1-cert-badge');
@@ -1874,6 +1980,91 @@
   let relayBusy = false;
   let relayLoading = false;
   let relayCandidatesKey = '';
+  let relayEditing = false;
+
+  function relaySummary(status) {
+    const configured = Boolean(status && status.configured);
+    return {
+      configured,
+      domain: ((status && status.domain) || '').trim() || '未配置',
+      server: ((status && status.server) || '').trim() || '未配置',
+      port: status && status.port ? String(status.port) : '未配置',
+      token: configured ? '已配置' : '未配置',
+      ca: configured ? '已配置' : '未配置',
+      cores: Array.isArray(status && status.cores) ? status.cores.slice() : [],
+    };
+  }
+
+  function paintRelayView(status) {
+    const statusNode = byId('v1-relay-view-status');
+    const feedback = byId('v1-relay-view-feedback');
+    const fields = byId('v1-relay-view-fields');
+    const edit = byId('v1-relay-edit');
+    const setup = byId('v1-relay-setup');
+    if (!statusNode || !fields || !edit || !setup) return;
+    if (!status) {
+      statusNode.textContent = '正在读取 VPS 配置…';
+      if (feedback) {
+        feedback.hidden = true;
+        feedback.textContent = '';
+      }
+      fields.hidden = true;
+      fields.replaceChildren();
+      edit.hidden = true;
+      setup.hidden = true;
+      return;
+    }
+    const view = relaySummary(status);
+    if (view.configured) {
+      const registered = (status.mappings || []).filter(item => item.registered).length;
+      statusNode.textContent = !status.enabled
+        ? status.mappings.length ? '隧道已停止。' : 'VPS 入口已登记，等待配置映射。'
+        : status.error || (status.running
+          ? `${registered} / ${status.mappings.length} 个端口已注册 · 公网待异地验证`
+          : '等待本机监听器或 frpc 进程恢复。');
+      definitions('v1-relay-view-fields', [
+        ['节点统一域名', view.domain],
+        ['VPS 控制地址', view.server],
+        ['VPS 控制端口', view.port],
+        ['FRP 令牌', view.token],
+        ['VPS CA 证书', view.ca],
+        ['要发布的内核', view.cores.length ? view.cores.map(id => coreName(id)).join('、') : '未选择'],
+      ]);
+      fields.hidden = false;
+      edit.hidden = false;
+      setup.hidden = true;
+    } else {
+      statusNode.textContent = '尚未配置 VPS 隧道。可先登记 VPS 入口；待域名指向 VPS、独立节点启动后，再勾选要发布的内核并保存。';
+      fields.hidden = true;
+      fields.replaceChildren();
+      edit.hidden = true;
+      setup.hidden = false;
+    }
+  }
+
+  function setRelayEditing(editing, options = {}) {
+    const {resetForm = false, focus = false, notice = ''} = options;
+    const view = byId('v1-relay-view');
+    const viewFeedback = byId('v1-relay-view-feedback');
+    const leaving = relayEditing && !editing;
+    relayEditing = Boolean(editing);
+    if (relayForm) relayForm.hidden = !relayEditing;
+    if (view) view.hidden = relayEditing;
+    if (leaving && relay) renderRelay(relay, true);
+    else if (relayEditing && resetForm && relay) renderRelay(relay, true);
+    else if (!relayEditing) paintRelayView(relay);
+    if (leaving && relayFeedback) relayFeedback.textContent = '';
+    if (relayEditing) {
+      if (viewFeedback) {
+        viewFeedback.hidden = true;
+        viewFeedback.textContent = '';
+      }
+      if (focus && relayForm) relayForm.elements.domain.focus();
+    } else if (viewFeedback) {
+      viewFeedback.hidden = !notice;
+      viewFeedback.textContent = notice;
+    }
+  }
 
   let directAddresses;
   let directProbeCommand = '';
@@ -1960,7 +2151,8 @@
     const portsFor = transport => [...new Set(publicPortRows.filter(row => row.protocol === transport)
       .map(row => row.publicPort ?? row.port))].join(' / ') || dash;
     definitions('v1-overview-access', [
-      ['公网入口', entryAddresses.join('、') || directHost], ['本地节点', state], ['VPS 隧道', relayState],
+      ['公网入口', entryAddresses.join('、') || directHost, {id: 'overview-access-entry', label: '公网入口'}],
+      ['本地节点', state], ['VPS 隧道', relayState],
       ['TCP 端口', portsFor('TCP')], ['UDP 端口', portsFor('UDP')],
     ]);
     directProbeCommand = /^[a-z0-9:.\-]+$/i.test(directHost)
@@ -1968,11 +2160,11 @@
       : '';
     byId('v1-public-probe-command').disabled = !directProbeCommand;
     metrics('v1-public-metrics', [
-      ['接入状态', relayOn ? relayState : state, '⌁', running ? 'cyan' : 'blue'],
-      ['接入模式', relayOn ? 'VPS 中转' : entryHost ? '本机入口' : '未配置', '▤'],
-      ['隧道类型', relay?.configured ? 'FRP · TCP / UDP' : '未配置', '⇄', 'violet'],
-      ['通道延迟（VPS）', dash, '⌾', 'cyan'],
-      ['中转流量（今日）', dash, '◴', 'violet'],
+      ['接入状态', relayOn ? relayState : state, 'unplug', running ? 'cyan' : 'blue'],
+      ['接入模式', relayOn ? 'VPS 中转' : entryHost ? '本机入口' : '未配置', 'layout-grid'],
+      ['隧道类型', relay?.configured ? 'FRP · TCP / UDP' : '未配置', 'arrow-left-right', 'violet'],
+      ['通道延迟（VPS）', dash, 'timer', 'cyan'],
+      ['中转流量（今日）', dash, 'activity', 'violet'],
     ]);
     byId('v1-public-entry').textContent = entryHost || '未配置';
     byId('v1-public-path').textContent = relayOn ? 'VPS → FRP → 本机' : entryHost ? '直接入口 · 待外网验证' : '待配置';
@@ -1986,9 +2178,10 @@
       ...['ipv4', 'ipv6'].flatMap((family, index) => {
         const result = directAddresses?.[family];
         const label = index === 0 ? 'IPv4' : 'IPv6';
+        const kind = family === 'ipv4' && result?.kind === '本机公网地址' ? '' : result?.kind;
         return [
           [`公网出口 ${label}`, result?.public || hints?.['egress_' + family] || '未获取'],
-          [`本机路由 ${label}`, result ? [result.local, result.kind].filter(Boolean).join(' · ') : '待检测'],
+          [`本机路由 ${label}`, result ? [result.local, kind].filter(Boolean).join(' · ') : '待检测'],
           ...(result?.last_change ? [[`${label} 最近记录变更`, formatWhen(result.last_change)]] : []),
         ];
       }),
@@ -2005,8 +2198,9 @@
     ];
     byId('v1-public-steps').replaceChildren(...steps.map(([label, detail, ok]) => {
       const item = element('li');
-      const icon = element('span', ok ? '✓' : '○', ok ? 'running' : '');
+      const icon = element('span', null, ok ? 'running' : '');
       icon.setAttribute('aria-hidden', 'true');
+      setIcon(icon, ok ? 'check' : 'circle', 16);
       item.append(icon, element('span', `${label} · ${detail}`));
       return item;
     }));
@@ -2111,6 +2305,8 @@
   }
 
   function showPublicTab(tab) {
+    const current = document.querySelector('[data-public-tab][aria-pressed="true"]')?.dataset.publicTab;
+    if (current === 'vps' && tab !== 'vps' && relayEditing) setRelayEditing(false);
     for (const button of document.querySelectorAll('[data-public-tab]')) {
       button.setAttribute('aria-pressed', String(button.dataset.publicTab === tab));
     }
@@ -2150,36 +2346,38 @@
   function renderRelay(status, resetForm = false) {
     const initialize = !relay || resetForm;
     relay = status;
-    const {elements} = relayForm;
-    const selected = new Set(initialize ? status.cores : new FormData(relayForm).getAll('cores'));
-    if (initialize) {
-      relayPortDraft.clear();
-      relayPortFields.replaceChildren();
-      for (const key of ['domain', 'server', 'port']) elements[key].value = status[key];
-      for (const key of ['token', 'ca']) {
-        elements[key].value = '';
-        elements[key].required = !status.configured;
-        elements[key].placeholder = status.configured ? '留空沿用已保存的值' : '';
+    if (!(relayEditing && !initialize)) {
+      const {elements} = relayForm;
+      const selected = new Set(initialize ? status.cores : new FormData(relayForm).getAll('cores'));
+      if (initialize) {
+        relayPortDraft.clear();
+        relayPortFields.replaceChildren();
+        for (const key of ['domain', 'server', 'port']) elements[key].value = status[key];
+        for (const key of ['token', 'ca']) {
+          elements[key].value = '';
+          elements[key].required = !status.configured;
+          elements[key].placeholder = status.configured ? '留空沿用已保存的值' : '';
+        }
       }
+      const choices = [...new Set([...status.candidates.map(item => item.core_id), ...selected])];
+      const optionsKey = JSON.stringify([choices, status.candidates]);
+      if (initialize || optionsKey !== relayCandidatesKey) {
+        const options = choices.map(id => {
+          const label = element('label');
+          const input = element('input');
+          input.type = 'checkbox';
+          input.name = 'cores';
+          input.value = id;
+          input.checked = selected.has(id);
+          const hosts = [...new Set(status.candidates.filter(item => item.core_id === id).map(item => item.public_host))];
+          label.append(input, element('span', `${coreName(id)} · ${hosts.join('、') || '等待本机发布'}`));
+          return label;
+        });
+        relayCores.replaceChildren(...(options.length ? options : [element('p', '请先启动至少一个仅监听本机的独立节点。', 'field-hint')]));
+        relayCandidatesKey = optionsKey;
+      }
+      renderRelayPorts();
     }
-    const choices = [...new Set([...status.candidates.map(item => item.core_id), ...selected])];
-    const optionsKey = JSON.stringify([choices, status.candidates]);
-    if (initialize || optionsKey !== relayCandidatesKey) {
-      const options = choices.map(id => {
-        const label = element('label');
-        const input = element('input');
-        input.type = 'checkbox';
-        input.name = 'cores';
-        input.value = id;
-        input.checked = selected.has(id);
-        const hosts = [...new Set(status.candidates.filter(item => item.core_id === id).map(item => item.public_host))];
-        label.append(input, element('span', `${coreName(id)} · ${hosts.join('、') || '等待本机发布'}`));
-        return label;
-      });
-      relayCores.replaceChildren(...(options.length ? options : [element('p', '请先启动至少一个仅监听本机的独立节点。', 'field-hint')]));
-      relayCandidatesKey = optionsKey;
-    }
-    renderRelayPorts();
     byId('v1-relay-install').textContent = status.installed ? '已检测到家庭端 frpc。VPS 端使用启用 TLS 的 frps。' :
       '请在家庭 Router 主机安装 frpc v0.72.0，或为服务设置 HOPWORLD_FRPC，再刷新接入状态。';
     const registered = status.mappings.filter(mapping => mapping.registered).length;
@@ -2194,6 +2392,7 @@
       !status.enabled ? '隧道已停止' : !mapping.local_ready ? '本机节点未就绪，端口或域名变更后需重新保存' :
         mapping.error || (mapping.registered ? 'VPS 已注册' : '等待 VPS 注册，详情见 frpc 日志'),
     ]));
+    if (!relayEditing) paintRelayView(status);
     relaySave.disabled = relayBusy;
     byId('v1-relay-stop').disabled = relayBusy || !status.enabled;
     if (overview?.local_node) renderPublicAccess(overview.local_node);
@@ -2206,7 +2405,11 @@
       const status = await call('/api/v1/relay');
       if (!relayBusy) renderRelay(status);
     } catch (error) {
-      if (showError || !relay) byId('v1-relay-summary').textContent = error.message;
+      if (showError || !relay) {
+        byId('v1-relay-summary').textContent = error.message;
+        const viewStatus = byId('v1-relay-view-status');
+        if (viewStatus && !relayEditing) viewStatus.textContent = error.message;
+      }
     } finally {
       relayLoading = false;
     }
@@ -2221,8 +2424,13 @@
       const status = await call('/api/v1/relay', data);
       renderRelay(status, true);
       await refresh().catch(() => {});
-      relayFeedback.textContent = data.action ? '' : status.mappings.length
+      const savedNote = data.action ? '' : status.mappings.length
         ? '已保存。请在「隧道配置」查看注册状态。' : 'VPS 入口已登记。请先验证域名解析，再启动独立节点。';
+      if (!data.action && relayEditing) setRelayEditing(false, {notice: savedNote});
+      else {
+        relayFeedback.textContent = savedNote;
+        if (data.action && relayEditing) setRelayEditing(false);
+      }
       if (data.action) note('隧道已停止');
     } catch (error) {
       relayFeedback.textContent = error.message;
@@ -2241,12 +2449,25 @@
       .map(input => [input.dataset.portKey, Number(input.value)]));
     void changeRelay({...Object.fromEntries(data), port: Number(data.get('port')), cores: data.getAll('cores'), public_ports});
   });
+  byId('v1-relay-edit').addEventListener('click', () => {
+    setRelayEditing(true, {resetForm: true, focus: true});
+  });
+  byId('v1-relay-setup').addEventListener('click', () => {
+    setRelayEditing(true, {resetForm: true, focus: true});
+  });
+  byId('v1-relay-cancel').addEventListener('click', () => {
+    setRelayEditing(false);
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && relayEditing) setRelayEditing(false);
+  });
   relayCores.addEventListener('change', renderRelayPorts);
   relayForm.elements.domain.addEventListener('input', renderRelayPorts);
   function openRelayPorts() {
     showPublicTab('vps');
-    relayForm.elements.domain.focus();
-    void refreshRelay(true);
+    void refreshRelay(true).then(() => {
+      if (relay) setRelayEditing(true, {resetForm: true, focus: true});
+    });
   }
   byId('v1-relay-configure').addEventListener('click', openRelayPorts);
   byId('v1-configure-port').addEventListener('click', () => {
@@ -2400,7 +2621,6 @@
   const settingsForm = byId('v1-settings-form');
   const settingsFeedback = byId('v1-settings-feedback');
   const basicSettingsFeedback = byId('v1-settings-basic-feedback');
-  const basicSettingsSave = byId('v1-settings-basic-save');
   const settingsRetry = byId('v1-settings-retry');
   const adminEdit = byId('v1-admin-edit');
   const adminDialog = byId('v1-admin-dialog');
@@ -2652,6 +2872,9 @@
     if (page === 'settings') showSettingsTab('maintenance');
     else showMaintenanceOnRoute = true;
   });
+  byId('v1-about-maintenance').addEventListener('click', () => {
+    showMaintenanceOnRoute = true;
+  });
   const securityApi = '/api/v1/security/';
   const securityLabels = {
     NOT_CONFIGURED: '未配置', CONFIGURED_NOT_APPLIED: '已保存，待应用', ACTIVE_UNVERIFIED: '已应用，待验证',
@@ -2807,12 +3030,11 @@
   });
   function readSettingsDraft() {
     const fields = settingsForm.elements;
-    return {name: fields.namedItem('name').value.trim(), timezone: fields.timezone.value,
-      auto_check: fields.auto_check.checked, auto_apply: fields.auto_apply.checked, probe_target: fields.probe_target.value};
+    return {timezone: fields.timezone.value, auto_check: fields.auto_check.checked,
+      auto_apply: fields.auto_apply.checked, probe_target: fields.probe_target.value};
   }
   function fillSettingsDraft(value) {
     const fields = settingsForm.elements;
-    fields.namedItem('name').value = value.name;
     fields.timezone.value = value.timezone;
     fields.auto_check.checked = value.auto_check;
     fields.auto_apply.checked = value.auto_apply;
@@ -2821,11 +3043,10 @@
   }
   function syncSettingsButtons() {
     const draft = readSettingsDraft();
-    const basicDirty = savedSettings && (savedSettings.name !== draft.name || savedSettings.timezone !== draft.timezone);
-    const dirty = basicDirty || (savedSettings && (savedSettings.auto_check !== draft.auto_check ||
-      savedSettings.auto_apply !== draft.auto_apply || savedSettings.probe_target !== draft.probe_target));
+    const dirty = savedSettings && (savedSettings.timezone !== draft.timezone ||
+      savedSettings.auto_check !== draft.auto_check ||
+      savedSettings.auto_apply !== draft.auto_apply || savedSettings.probe_target !== draft.probe_target);
     byId('v1-settings-save').disabled = savingSettings || !dirty;
-    basicSettingsSave.disabled = savingSettings || !basicDirty;
     byId('v1-settings-reset').disabled = !savedSettings || savingSettings;
   }
   function applyConsolePreferences(value) {
@@ -2846,6 +3067,7 @@
       byId('v1-admin-username').textContent = value.admin_username || '—';
       adminEdit.disabled = !value.admin_username;
       applyConsolePreferences(value);
+      byId('v1-settings-name').textContent = value.name || '—';
       fillSettingsDraft(value);
       managementPort.value = value.port || '';
       renderManagementAccess(value.access);
@@ -2854,7 +3076,6 @@
       if (value.host?.startsWith('127.') || ['::1', 'localhost'].includes(value.host)) {
         byId('v1-settings-network-lan').textContent = '管理端仅监听本机';
       }
-      byId('v1-settings-name').disabled = false;
       byId('v1-settings-zone').disabled = false;
       byId('v1-settings-probe-target').disabled = false;
       basicSettingsFeedback.textContent = '';
@@ -2876,26 +3097,17 @@
     event.preventDefault();
     if (!savedSettings || savingSettings) return;
     const draft = readSettingsDraft();
-    if (!draft.name) {
-      showSettingsTab('base');
-      byId('v1-settings-name').focus();
-      basicSettingsFeedback.textContent = '请填写平台名称。';
-      return;
-    }
-    const basicOnly = event.submitter === basicSettingsSave;
-    const feedback = basicOnly ? basicSettingsFeedback : settingsFeedback;
     savingSettings = true;
     syncSettingsButtons();
-    feedback.textContent = '正在保存…';
+    settingsFeedback.textContent = '正在保存…';
     try {
-      const {name, timezone} = draft;
-      const saved = basicOnly ? await call('/api/v1/settings', {name, timezone}) : await persistManagementSettings(draft);
+      const saved = await persistManagementSettings(draft);
       savedSettings = {...savedSettings, ...saved};
       applyConsolePreferences(saved);
       renderDefaultProbeTarget(savedSettings.probe_target);
-      feedback.textContent = basicOnly ? '基本设置已保存' : '设置已保存';
+      settingsFeedback.textContent = '设置已保存';
     } catch (error) {
-      feedback.textContent = error.message;
+      settingsFeedback.textContent = error.message;
     } finally {
       savingSettings = false;
       syncSettingsButtons();
@@ -2965,8 +3177,11 @@
     return /^\d/.test(value) ? 'v' + value : value;
   }
   function renderAppVersion(version) {
+    const text = formatAppVersion(version);
     const label = byId('v1-sidebar-version-label');
-    if (label) label.textContent = formatAppVersion(version);
+    if (label) label.textContent = text;
+    const about = byId('v1-about-version');
+    if (about) about.textContent = text || dash;
   }
   function renderSystem(value) {
     system = value;
@@ -3211,9 +3426,9 @@
   function renderTrafficDashboard(value) {
     const totalRate = Number.isFinite(value.up_bps) && Number.isFinite(value.down_bps) ? value.up_bps + value.down_bps : null;
     metrics('v1-traffic-metrics', [
-      ['实时下载', rate(value.down_bps), '↓'], ['实时上传', rate(value.up_bps), '↑', 'violet'],
-      ['实时总速率', rate(totalRate), '✦', 'cyan'], ['今日流量', bytes(value.today?.total_bytes), '▱', 'violet'],
-      ['本月流量', bytes(value.month?.total_bytes), '▦', 'violet'], ['累计流量', bytes(value.cumulative?.total_bytes), '▤'],
+      ['实时下载', rate(value.down_bps), 'arrow-down'], ['实时上传', rate(value.up_bps), 'arrow-up', 'violet'],
+      ['实时总速率', rate(totalRate), 'activity', 'cyan'], ['今日流量', bytes(value.today?.total_bytes), 'arrow-left-right', 'violet'],
+      ['本月流量', bytes(value.month?.total_bytes), 'calendar', 'violet'], ['累计流量', bytes(value.cumulative?.total_bytes), 'chart-column'],
     ]);
     const today = value.today?.total_bytes;
     const hasTraffic = today > 0;
@@ -3230,7 +3445,7 @@
       mark.setAttribute('aria-hidden', 'true');
       const share = Number.isFinite(total) && hasTraffic ? `${(100 * total / today).toFixed(1)}%` : dash;
       const amount = bytes(total);
-      row.append(mark, element('span', name), element('span', share), element('span', amount));
+      row.append(mark, element('span', id === 'shadowsocks-rust' ? 'Shadowsocks' : name), element('span', share), element('span', amount));
       if (amount === dash) {
         const status = '今日暂无可用采样';
         row.title = status;
@@ -3402,13 +3617,14 @@
       auto.append(knob);
       const ops = element('td');
       const box = element('div', null, 'v1-core-ops');
-      for (const [symbol, label, act] of [['✎', '设置 ', 'edit'], ['↻', '更新 ', 'refresh'], ['×', '删除 ', 'delete']]) {
-        const button = element('button', symbol, 'v1-icon-btn');
+      for (const [name, label, act] of [['pencil', '设置 ', 'edit'], ['refresh-cw', '更新 ', 'refresh'], ['x', '删除 ', 'delete']]) {
+        const button = element('button', null, 'v1-icon-btn');
         button.type = 'button';
         button.setAttribute('aria-label', label + source.name);
         button.dataset.subAct = act;
         button.dataset.subId = source.id;
         if (act === 'refresh') button.disabled = source.enabled === false;
+        setIcon(button, name, 20);
         box.append(button);
       }
       ops.append(box);
@@ -3443,7 +3659,7 @@
       ['异常节点', known.length ? String(bad) : '未测试'],
     ]) facts.append(detailLine(label, value));
     const quick = element('div', null, 'v1-core-quick');
-    for (const [icon, label, act, enabled] of [['⟳', '立即更新', 'refresh', source.enabled !== false], ['⌁', '测试节点', 'probe', true], ['↗', '查看节点', 'nodes', true], ['×', '删除', 'delete', true]]) {
+    for (const [icon, label, act, enabled] of [['refresh-cw', '立即更新', 'refresh', source.enabled !== false], ['gauge', '测试节点', 'probe', true], ['arrow-right', '查看节点', 'nodes', true], ['x', '删除', 'delete', true]]) {
       const button = tile(icon, label, act, enabled);
       button.dataset.subAct = button.dataset.coreAct;
       button.dataset.subId = source.id;
@@ -3451,7 +3667,7 @@
       delete button.dataset.coreId;
       quick.append(button);
     }
-    panel.replaceChildren(head, facts, detailHeading('⚡', '操作'), quick);
+    panel.replaceChildren(head, facts, detailHeading('zap', '操作'), quick);
     const title = element('div', null, 'v1-panel-head');
     title.append(element('h2', '节点预览'), element('button', '查看全部', 'text-button'));
     title.lastChild.type = 'button';
@@ -3636,11 +3852,11 @@
     }
     const quick = element('div', null, 'v1-core-quick');
     quick.append(
-      tile('✎', '编辑节点', 'edit', true),
-      tile('⌁', node.probe?.status === 'testing' ? '测试中…' : '测试连通', 'probe', node.probe?.status !== 'testing'),
-      tile('☰', '查看日志', 'logs', true),
-      tile('⇩', '导出节点', 'export', node.local),
-      tile('▣', '复制节点链接', 'copy-uri', node.local),
+      tile('pencil', '编辑节点', 'edit', true),
+      tile('gauge', node.probe?.status === 'testing' ? '测试中…' : '测试连通', 'probe', node.probe?.status !== 'testing'),
+      tile('scroll-text', '查看日志', 'logs', true),
+      tile('download', '导出节点', 'export', node.local),
+      tile('copy', '复制节点链接', 'copy-uri', node.local),
     );
     quick.querySelectorAll('button').forEach(button => retargetNodeAction(button, node.id));
     const caps = element('div', null, 'v1-chips');
@@ -3648,8 +3864,8 @@
     if (udpProtocols.has(node.protocol)) names.push('QUIC');
     if (node.local && overview?.local_node?.public_host) names.push('统一域名映射');
     for (const name of names) caps.append(element('span', name, 'v1-chip'));
-    panel.replaceChildren(detailHeading('▣', '节点信息'), facts, detailHeading('⚡', '快捷操作'), quick);
-    if (names.length) panel.append(detailHeading('◇', '协议与接入'), caps);
+    panel.replaceChildren(detailHeading('layout-grid', '节点信息'), facts, detailHeading('zap', '快捷操作'), quick);
+    if (names.length) panel.append(detailHeading('shield', '协议与接入'), caps);
   }
   function syncNodeProbeControls(matched) {
     const job = overview?.jobs?.probe;
@@ -3833,10 +4049,9 @@
       enabled.append(knob);
       const ops = element('td');
       const box = element('div', null, 'v1-core-ops');
-      const test = iconButton('⌁', '测试 ' + node.title, 'probe', node.id);
+      const test = nodeIconButton('probe', '测试 ' + node.title, node.id);
       test.disabled = node.probe?.status === 'testing';
-      box.append(iconButton('✎', '编辑 ' + node.title, 'edit', node.id), test, iconButton('☰', '日志 ' + node.title, 'logs', node.id));
-      box.querySelectorAll('button').forEach(button => retargetNodeAction(button, node.id));
+      box.append(nodeIconButton('edit', '编辑 ' + node.title, node.id), test, nodeIconButton('logs', '日志 ' + node.title, node.id));
       ops.append(box);
       const proto = element('td');
       const pill = element('span', protocolName(node.protocol), 'v1-proto');
@@ -4103,7 +4318,10 @@
   function route() {
     closeMenus();
     const requested = location.hash.slice(1);
-    page = requested === 'ikev2-monitor' ? 'public' : Object.hasOwn(pages, requested) ? requested : 'overview';
+    const next = requested === 'ikev2-monitor' ? 'public' : Object.hasOwn(pages, requested) ? requested : 'overview';
+    if (page !== next && (page === 'overview' || next === 'overview')) hideOverviewSecrets();
+    if (page !== next && page === 'public' && relayEditing) setRelayEditing(false);
+    page = next;
     if (page === 'settings') {
       showSettingsTab(showMaintenanceOnRoute ? 'maintenance' : 'base');
       showMaintenanceOnRoute = false;
@@ -4182,7 +4400,8 @@
     renderCharts();
   });
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) scheduleTrafficPoll(0);
+    if (document.hidden) hideOverviewSecrets();
+    else scheduleTrafficPoll(0);
   });
 
   const datesDialog = byId('v1-traffic-dates');

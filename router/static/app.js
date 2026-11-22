@@ -619,6 +619,8 @@ function renderSystemUpdate(status) {
   }[status.state] || '等待检查';
   $('#v1-settings-update-status').textContent = statusText;
   $('#v1-settings-notify-update').textContent = statusText;
+  const aboutStatus = $('#v1-about-update-status');
+  if (aboutStatus) aboutStatus.textContent = statusText;
   if (typeof status.managed === 'boolean') managedUpdate = status.managed;
   if (status.installation) updateInstallation = status.installation;
   const check = $('#v1-settings-check-update');
@@ -631,6 +633,12 @@ function renderSystemUpdate(status) {
   restart.classList.toggle('secondary', managedUpdate);
   if (status.state !== 'checking') manualUpdateCheck = false;
   check.disabled = !managedUpdate || manualUpdateCheck || status.state === 'updating';
+  const aboutCheck = $('#v1-about-check-update');
+  if (aboutCheck) {
+    aboutCheck.disabled = check.disabled;
+    aboutCheck.classList.toggle('primary', managedUpdate);
+    aboutCheck.classList.toggle('secondary', !managedUpdate);
+  }
   const available = status.state === 'available';
   if (status.state === 'failed' && systemUpdateStarted) systemUpdateFailure = status.error || '请检查服务状态后重试。';
   const failed = !!systemUpdateFailure;
@@ -732,7 +740,11 @@ async function requestSystemUpdateCheck() {
   manualUpdateCheck = true;
   systemUpdateFailure = '';
   $('#v1-settings-check-update').disabled = true;
+  const aboutCheck = $('#v1-about-check-update');
+  if (aboutCheck) aboutCheck.disabled = true;
   $('#v1-settings-update-status').textContent = '正在检查 GitHub…';
+  const aboutStatus = $('#v1-about-update-status');
+  if (aboutStatus) aboutStatus.textContent = '正在检查 GitHub…';
   try {
     const status = await call('/api/system/update', {check: true});
     renderSystemUpdate(status);
@@ -749,6 +761,7 @@ $('#system-update-apply').addEventListener('click', () => {
   else void applySystemUpdate();
 });
 $('#v1-settings-check-update').addEventListener('click', requestSystemUpdateCheck);
+$('#v1-about-check-update')?.addEventListener('click', requestSystemUpdateCheck);
 void checkSystemUpdate();
 let noteHideTimer = 0;
 function humanizeApiMessage(text) {
@@ -969,6 +982,8 @@ async function refresh() {
   const { subscription, ikev2Profile } = applyPublicUrls(data);
   const subInput = $('#subscription');
   if (subInput) subInput.value = subscription;
+  const mobileconfig = $('#ikev2-mobileconfig-url');
+  if (mobileconfig) mobileconfig.value = ikev2Profile || '';
   renderMobileConnect(subscription);
   renderPublicSubscription(data);
   const subSummary = $('#subscription-summary');
@@ -1754,7 +1769,36 @@ publicSubscriptionForm.addEventListener('submit', event => {
 publicSubscriptionForm.elements.port.addEventListener('input', renderPublicSubscriptionPortHint);
 publicSubscriptionDisable.addEventListener('click', () => setPublicSubscription(false));
 $('#public-subscription-copy').addEventListener('click', () => copySubscriptionLink($('#public-subscription-url')));
-$('#rotate').onclick=async()=>{if(!confirm('更换后旧订阅地址立即失效，继续吗？'))return;try{await call('/api/rotate',{});await refresh();note('订阅地址已更新');}catch(e){note(e.message,{error:true});}};
+let rotatingPublicSubscription = false;
+async function rotatePublicSubscription() {
+  if (rotatingPublicSubscription) return;
+  rotatingPublicSubscription = true;
+  const buttons = ['public-subscription-rotate', 'rotate'].map(id => $('#' + id)).filter(Boolean);
+  for (const button of buttons) button.disabled = true;
+  try {
+    await call('/api/rotate', {});
+    await refresh();
+    note('订阅地址已更新');
+  } catch (error) {
+    note(error.message, {error: true});
+  } finally {
+    rotatingPublicSubscription = false;
+    for (const button of buttons) button.disabled = false;
+  }
+}
+function confirmRotatePublicSubscription() {
+  if (rotatingPublicSubscription) return;
+  const proceed = () => { void rotatePublicSubscription(); };
+  if (typeof window.hopworldOpenConfirm === 'function') {
+    window.hopworldOpenConfirm('重置', '重置后旧地址立即失效，是否继续？', '重置', proceed);
+    return;
+  }
+  if (!confirm('重置后旧地址立即失效，是否继续？')) return;
+  proceed();
+}
+$('#public-subscription-rotate')?.addEventListener('click', confirmRotatePublicSubscription);
+const legacyRotate = $('#rotate');
+if (legacyRotate) legacyRotate.onclick = confirmRotatePublicSubscription;
 refresh().catch(() => {
   setConnectionLive(false);
   note('当前未连接管理服务。请启动服务后通过本机地址访问。', { error: true, duration: 8000 });

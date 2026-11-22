@@ -11,7 +11,10 @@
   <link rel="stylesheet" href="v1.css">
   <!-- DASHBOARD SCRIPTS -->
   <script src="qrcode.js" defer></script>
+  <script src="v1-icons.js" defer></script>
   <script src="app.js" defer></script>
+  <script src="v1-overview-secret.js" defer></script>
+  <script src="v1-about.js" defer></script>
   <script src="v1.js" defer></script>
 </head>
 <body>
@@ -60,9 +63,7 @@
         </span>
         <time id="v1-clock"></time>
         <button type="button" id="v1-updates-open" class="v1-update-bell" aria-label="更新提醒" aria-haspopup="dialog" aria-controls="v1-update-notices">
-          <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
-            <path d="M18 8a6 6 0 0 0-12 0c0 7-2.5 7-2.5 9h17C20.5 15 18 15 18 8Z" stroke-linejoin="round"></path><path d="M10 20a2 2 0 0 0 4 0" stroke-linecap="round"></path>
-          </svg><span id="v1-updates-count" hidden aria-hidden="true"></span>
+          <svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M10.268 21a2 2 0 0 0 3.464 0" /><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" /></svg><span id="v1-updates-count" hidden aria-hidden="true"></span>
         </button>
         <img class="avatar" src="logo.png" width="34" height="34" alt="" aria-hidden="true">
       </div>
@@ -73,9 +74,7 @@
       <h2 id="v1-update-notices-title">更新提醒</h2>
       <form method="dialog">
         <button class="v1-update-close" type="submit" aria-label="关闭更新提醒" autofocus>
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-            <path d="m6 6 12 12M18 6 6 18"></path>
-          </svg>
+          <svg class="v1-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
         </button>
       </form>
     </header>
@@ -89,17 +88,19 @@
     </div>
   </dialog>
   <aside class="v1-sidebar">
-    <button id="v1-menu-toggle" class="secondary" type="button" aria-controls="v1-navigation" aria-expanded="false" hidden><span aria-hidden="true">☰</span> <span id="v1-menu-label">首页</span></button>
+    <button id="v1-menu-toggle" class="secondary" type="button" aria-controls="v1-navigation" aria-expanded="false" hidden><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 5h16" /><path d="M4 12h16" /><path d="M4 19h16" /></svg></span> <span id="v1-menu-label">首页</span></button>
     <nav id="v1-navigation" aria-label="管理导航">
-      <a href="#overview" data-v1-link="overview"><span aria-hidden="true">⌂</span>首页</a>
-      <a href="#cores" data-v1-link="cores"><span aria-hidden="true">▤</span>内核管理<em id="v1-core-nav-count" hidden aria-label="已安装 0 个">0</em></a>
-      <a href="#nodes" data-v1-link="nodes"><span aria-hidden="true">☷</span>节点管理</a>
-      <a href="#subscriptions" data-v1-link="subscriptions"><span aria-hidden="true">↗</span>订阅管理</a>
-      <a href="#certificates" data-v1-link="certificates"><span aria-hidden="true">◇</span>域名与证书</a>
-      <a href="#public" data-v1-link="public"><span aria-hidden="true">⌁</span>公网接入</a>
-      <a href="#traffic" data-v1-link="traffic"><span aria-hidden="true">▥</span>流量监控</a>
-      <a href="#settings" data-v1-link="settings"><span aria-hidden="true">⚙</span>系统设置</a>
-      <div class="v1-sidebar-version"><div class="v1-sidebar-user"><span class="v1-user-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"/><path d="M5.2 19.4c.9-3.3 3.4-5 6.8-5s5.9 1.7 6.8 5"/></svg></span><span class="v1-admin">管理员</span><button type="button" id="v1-logout">退出</button></div>HopWorld-Router <small id="v1-sidebar-version-label"></small></div>
+      <!-- UI icons: Lucide Static v1.77.0 (ISC). Some icons also derive from Feather (MIT), including info, rss, and server. Full notices: licenses/lucide-LICENSE.txt. -->
+      <a href="#overview" data-v1-link="overview"><svg class="v1-nav-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>首页</a>
+      <a href="#cores" data-v1-link="cores"><svg class="v1-nav-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>内核管理<em id="v1-core-nav-count" hidden aria-label="已安装 0 个">0</em></a>
+      <a href="#nodes" data-v1-link="nodes"><svg class="v1-nav-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg>节点管理</a>
+      <a href="#subscriptions" data-v1-link="subscriptions"><svg class="v1-nav-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>订阅管理</a>
+      <a href="#certificates" data-v1-link="certificates"><svg class="v1-nav-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>域名与证书</a>
+      <a href="#public" data-v1-link="public"><svg class="v1-nav-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>公网接入</a>
+      <a href="#traffic" data-v1-link="traffic"><svg class="v1-nav-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>流量监控</a>
+      <a href="#settings" data-v1-link="settings"><svg class="v1-nav-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg>系统设置</a>
+      <a href="#about" data-v1-link="about"><svg class="v1-nav-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>关于</a>
+      <div class="v1-sidebar-version"><div class="v1-sidebar-user"><span class="v1-user-avatar" aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><circle cx="12" cy="10" r="3" /><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662" /></svg></span><span class="v1-admin">管理员</span><button type="button" id="v1-logout">退出</button></div><div class="v1-sidebar-brand"><span class="v1-sidebar-product">HopWorld-Router</span><small id="v1-sidebar-version-label"></small></div></div>
     </nav>
   </aside>
   <main class="page v1-page">
@@ -112,7 +113,7 @@
         <button type="button" data-traffic-range="hourly" aria-pressed="false">近24小时</button>
         <button type="button" data-traffic-range="daily" aria-pressed="false">近7天</button>
         <button type="button" data-traffic-range="last_30_daily" aria-pressed="false">近30天</button>
-        <button type="button" data-traffic-range="custom" aria-pressed="false" aria-haspopup="dialog">自定义 <span aria-hidden="true">▦</span></button>
+        <button type="button" data-traffic-range="custom" aria-pressed="false" aria-haspopup="dialog">自定义 <span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 2v3" /><path d="M16 2v3" /><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18" /></svg></span></button>
       </div>
     </div>
     <section id="system-update-banner" class="system-update-banner" aria-label="程序更新" role="status" hidden>
@@ -123,27 +124,27 @@
       <div id="v1-overview-metrics" class="v1-metrics"></div>
       <div class="v1-dashboard">
         <div class="v1-stack v1-overview-left">
-        <section class="card v1-overview-cores"><div class="v1-panel-head"><h2>六内核运行状态</h2><a href="#cores">内核管理 →</a></div><ul id="v1-cores-overview" class="v1-core-list"></ul></section>
-        <section class="card v1-overview-resources"><div class="v1-panel-head"><h2>系统资源</h2><a href="#settings">系统设置 →</a></div><div id="v1-overview-system" class="v1-resource-grid"></div></section>
+        <section class="card v1-overview-cores"><div class="v1-panel-head"><h2>六内核运行状态</h2><a href="#cores">内核管理 <svg class="v1-icon v1-panel-link-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></a></div><ul id="v1-cores-overview" class="v1-core-list"></ul></section>
+        <section class="card v1-overview-resources"><div class="v1-panel-head"><h2>系统资源</h2><a href="#settings">系统设置 <svg class="v1-icon v1-panel-link-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></a></div><div id="v1-overview-system" class="v1-resource-grid"></div></section>
         </div>
         <div class="v1-stack v1-overview-center">
-          <section class="card v1-overview-chart"><div class="v1-panel-head"><h2>流量监控</h2><a href="#traffic">查看详情 →</a></div>
+          <section class="card v1-overview-chart"><div class="v1-panel-head"><h2>流量监控</h2><a href="#traffic">查看详情 <svg class="v1-icon v1-panel-link-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></a></div>
             <div class="v1-range" aria-label="流量时间范围"><button class="secondary" data-home-range="live" aria-pressed="true">实时</button><button class="secondary" data-home-range="today" aria-pressed="false">今日</button><button class="secondary" data-home-range="week" aria-pressed="false">近 7 日</button><button class="secondary" data-home-range="month" aria-pressed="false">本月</button></div>
             <canvas id="v1-home-chart" aria-label="上传下载流量" role="img"></canvas><p class="v1-chart-caption" id="v1-home-chart-caption">正在读取样本…</p>
           </section>
-          <section class="card"><div class="v1-panel-head"><h2>节点概览</h2><a href="#nodes">节点管理 →</a></div><div id="v1-overview-nodes" class="v1-mini-metrics"></div></section>
-        <section class="card v1-overview-events"><div class="v1-panel-head"><h2>最近订阅更新</h2><a href="#subscriptions">订阅管理 →</a></div><ul id="v1-overview-events" class="v1-core-list"></ul></section>
+          <section class="card"><div class="v1-panel-head"><h2>节点概览</h2><a href="#nodes">节点管理 <svg class="v1-icon v1-panel-link-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></a></div><div id="v1-overview-nodes" class="v1-mini-metrics"></div></section>
+        <section class="card v1-overview-events"><div class="v1-panel-head"><h2>最近订阅更新</h2><a href="#subscriptions">订阅管理 <svg class="v1-icon v1-panel-link-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></a></div><ul id="v1-overview-events" class="v1-core-list"></ul></section>
         </div>
         <div class="v1-stack v1-overview-right">
-          <section class="card"><div class="v1-panel-head"><h2>域名与证书</h2><a href="#certificates">管理 →</a></div><dl id="v1-overview-cert" class="v1-definitions"></dl></section>
-          <section class="card"><div class="v1-panel-head"><h2>公网接入</h2><a href="#public">查看 →</a></div><dl id="v1-overview-access" class="v1-definitions"></dl></section>
+          <section class="card"><div class="v1-panel-head"><h2>域名与证书</h2><a href="#certificates">管理 <svg class="v1-icon v1-panel-link-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></a></div><dl id="v1-overview-cert" class="v1-definitions"></dl></section>
+          <section class="card"><div class="v1-panel-head"><h2>公网接入</h2><a href="#public">查看 <svg class="v1-icon v1-panel-link-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></a></div><dl id="v1-overview-access" class="v1-definitions"></dl></section>
         <section class="card v1-shortcuts"><h2>快捷操作</h2><div class="v1-shortcut-grid">
-          <button class="secondary" data-v1-action="add-source-open"><span aria-hidden="true">↗</span>添加订阅</button>
-          <button class="secondary" data-v1-action="manual-open"><span aria-hidden="true">⇩</span>导入节点</button>
-          <button class="secondary" data-v1-action="publish-core-open" aria-haspopup="dialog"><span aria-hidden="true">⊕</span>配置发布节点</button>
-          <a href="#certificates"><span aria-hidden="true">◇</span>域名与证书</a>
-          <a href="#public"><span aria-hidden="true">⌁</span>公网接入</a>
-          <a href="#settings"><span aria-hidden="true">⚙</span>系统维护</a>
+          <button class="secondary" data-v1-action="add-source-open"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14" /><path d="M12 5v14" /></svg></span>添加订阅</button>
+          <button class="secondary" data-v1-action="manual-open"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3v12" /><path d="m8 11 4 4 4-4" /><path d="M8 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-4" /></svg></span>导入节点</button>
+          <button class="secondary" data-v1-action="publish-core-open" aria-haspopup="dialog"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M8 12h8" /><path d="M12 8v8" /></svg></span>配置发布节点</button>
+          <a href="#certificates"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /></svg></span>域名与证书</a>
+          <a href="#public"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" /><path d="M2 12h20" /></svg></span>公网接入</a>
+          <a href="#settings"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" /><circle cx="12" cy="12" r="3" /></svg></span>系统维护</a>
         </div></section>
         </div>
 
@@ -563,12 +564,12 @@
             </div>
           </section>
           <div class="v1-sub-tools">
-            <button type="button" class="secondary" data-v1-action="add-source-open"><span aria-hidden="true">＋</span>添加订阅<small>URL / 客户端链接</small></button>
-            <button type="button" class="secondary" data-v1-action="batch-update"><span aria-hidden="true">⟳</span>批量更新<small>更新多个订阅源</small></button>
-            <button type="button" class="secondary" data-v1-action="batch-probe"><span aria-hidden="true">⌁</span>批量测试<small>延迟 / 可用性检测</small></button>
-            <button type="button" class="secondary" disabled><span aria-hidden="true">⧉</span>去重合并<small>尚未接入</small></button>
-            <button type="button" class="secondary" disabled><span aria-hidden="true">▽</span>筛选规则<small>尚未接入</small></button>
-            <button type="button" class="secondary" disabled><span aria-hidden="true">⚙</span>导入设置<small>尚未接入</small></button>
+            <button type="button" class="secondary" data-v1-action="add-source-open"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14" /><path d="M12 5v14" /></svg></span>添加订阅<small>URL / 客户端链接</small></button>
+            <button type="button" class="secondary" data-v1-action="batch-update"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></svg></span>批量更新<small>更新多个订阅源</small></button>
+            <button type="button" class="secondary" data-v1-action="batch-probe"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m12 14 4-4" /><path d="M3.34 19a10 10 0 1 1 17.32 0" /></svg></span>批量测试<small>延迟 / 可用性检测</small></button>
+            <button type="button" class="secondary" disabled><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z" /><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12" /><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17" /></svg></span>去重合并<small>尚未接入</small></button>
+            <button type="button" class="secondary" disabled><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 5h20" /><path d="M6 12h12" /><path d="M9 19h6" /></svg></span>筛选规则<small>尚未接入</small></button>
+            <button type="button" class="secondary" disabled><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" /><circle cx="12" cy="12" r="3" /></svg></span>导入设置<small>尚未接入</small></button>
           </div>
         </div>
         <div class="v1-subs-side">
@@ -661,11 +662,11 @@
             </div>
             <div class="v1-cert-toolbar-actions">
               <label class="sr-only" for="v1-cert-search">搜索域名</label><input id="v1-cert-search" type="search" placeholder="搜索域名…">
-              <button type="button" class="primary" id="v1-bind-domain-open">＋ 绑定域名</button>
-              <button type="button" class="primary" id="acme-open">◇ 申请证书</button>
+              <button type="button" class="primary" id="v1-bind-domain-open"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14" /><path d="M12 5v14" /></svg></span> 绑定域名</button>
+              <button type="button" class="primary" id="acme-open"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /><path d="M9 12h6" /><path d="M12 9v6" /></svg></span> 申请证书</button>
               <button type="button" class="secondary" id="v1-import-cert-open">导入证书</button>
               <details class="v1-cert-batch" id="v1-cert-batch">
-                <summary class="secondary"><span aria-hidden="true">⇧</span> 所选域名操作 <span aria-hidden="true">⌄</span></summary>
+                <summary class="secondary">所选域名操作 <span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6" /></svg></span></summary>
                 <div class="v1-cert-batch-actions">
                   <small id="v1-cert-selection" aria-live="polite">已选 0 个域名</small>
                   <button type="button" data-cert-batch="renew" disabled>续签证书</button>
@@ -684,51 +685,51 @@
             <dl id="v1-ip-certificate-records" class="v1-definitions"></dl>
           </section>
           <div class="v1-cert-lower">
-            <section class="card" id="v1-cert-diagnostics" tabindex="-1"><div class="v1-panel-head"><h2><span aria-hidden="true">▤</span> 证书与续签日志</h2></div><p id="v1-cert-diagnostic" role="status">正在读取…</p><ol id="v1-cert-history"></ol></section>
-            <section class="card"><div class="v1-panel-head"><h2><span aria-hidden="true">▰</span> DNS 与 ACME 集成</h2></div><dl id="v1-cert-integrations" class="v1-definitions"></dl></section>
+            <section class="card" id="v1-cert-diagnostics" tabindex="-1"><div class="v1-panel-head"><h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 12h-5" /><path d="M15 8h-5" /><path d="M19 17V5a2 2 0 0 0-2-2H4" /><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3" /></svg></span> 证书与续签日志</h2></div><p id="v1-cert-diagnostic" role="status">正在读取…</p><ol id="v1-cert-history"></ol></section>
+            <section class="card"><div class="v1-panel-head"><h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M10 22V7a1 1 0 0 0-1-1H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5a1 1 0 0 0-1-1H2" /><rect x="14" y="2" width="8" height="8" rx="1" /></svg></span> DNS 与 ACME 集成</h2></div><dl id="v1-cert-integrations" class="v1-definitions"></dl></section>
           </div>
         </div>
         <aside class="v1-stack">
           <section class="card v1-cert-inspector">
-            <div class="v1-panel-head"><div class="side-heading"><span class="icon-box blue" aria-hidden="true">◎</span><div><h2 id="v1-cert-domain">域名详情</h2><p>域名证书详情与绑定配置</p></div></div><span class="v1-status" id="v1-cert-badge">正在读取</span></div>
+            <div class="v1-panel-head"><div class="side-heading"><span class="icon-box blue" aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="1" /><circle cx="12" cy="12" r="10" /></svg></span><div><h2 id="v1-cert-domain">域名详情</h2><p>域名证书详情与绑定配置</p></div></div><span class="v1-status" id="v1-cert-badge">正在读取</span></div>
             <div class="v1-cert-pills v1-cert-detail-nav" role="group" aria-label="域名详情分组"><button type="button" data-cert-panel="basic" aria-pressed="true">基本信息</button><button type="button" data-cert-panel="dns" aria-pressed="false">DNS 解析</button><button type="button" data-cert-panel="acme" aria-pressed="false">ACME 验证</button><button type="button" data-cert-panel="certificate" aria-pressed="false">证书详情</button></div>
             <dl id="v1-cert-details" class="v1-definitions"></dl>
           </section>
           <section class="card" id="acme-card">
-            <div class="v1-panel-head"><h2><span aria-hidden="true">ϟ</span> 快捷操作</h2></div>
+            <div class="v1-panel-head"><h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z" /></svg></span> 快捷操作</h2></div>
             <div class="v1-cert-quick">
-              <button type="button" id="v1-cert-renew" class="secondary" disabled><span aria-hidden="true">⟳</span>立即续签</button>
-              <button type="button" id="v1-cert-verify" class="secondary" disabled><span aria-hidden="true">◎</span>检查解析</button>
-              <button type="button" id="v1-cert-show-diagnostics" class="secondary" aria-controls="v1-cert-diagnostics"><span aria-hidden="true">▤</span>查看日志</button>
-              <button type="button" id="v1-cert-download" class="secondary" disabled><span aria-hidden="true">⇩</span>下载证书</button>
+              <button type="button" id="v1-cert-renew" class="secondary" disabled><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></svg></span>立即续签</button>
+              <button type="button" id="v1-cert-verify" class="secondary" disabled><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m21 21-4.34-4.34" /><circle cx="11" cy="11" r="8" /></svg></span>检查解析</button>
+              <button type="button" id="v1-cert-show-diagnostics" class="secondary" aria-controls="v1-cert-diagnostics"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 12h-5" /><path d="M15 8h-5" /><path d="M19 17V5a2 2 0 0 0-2-2H4" /><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3" /></svg></span>查看日志</button>
+              <button type="button" id="v1-cert-download" class="secondary" disabled><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 15V3" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5" /></svg></span>下载证书</button>
             </div>
             <p id="acme-card-summary" class="field-hint">正在读取…</p>
           </section>
         </aside>
       </div>
-      <p class="card v1-cert-tip"><strong>ⓘ&ensp;提示</strong> DNS-01 通过 DNS 记录校验，无需开放证书校验入站端口。节点转发端口在公网接入页面查看。</p>
+      <p class="card v1-cert-tip"><strong><svg class="v1-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></svg>&ensp;提示</strong> DNS-01 通过 DNS 记录校验，无需开放证书校验入站端口。节点转发端口在公网接入页面查看。</p>
     </section>
     <section class="v1-view" data-v1-view="public" hidden>
       <div id="v1-public-metrics" class="v1-metrics"></div>
       <div class="v1-public-summary">
         <section class="card v1-public-chain">
-          <div class="v1-panel-head"><h2><span aria-hidden="true">⌁</span> 网络拓扑与链路状态</h2></div>
+          <div class="v1-panel-head"><h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" x2="15.42" y1="13.51" y2="17.49" /><line x1="15.41" x2="8.59" y1="6.51" y2="10.49" /></svg></span> 网络拓扑与链路状态</h2></div>
           <ol class="v1-public-topology" aria-label="当前节点访问路径">
-            <li><span aria-hidden="true">▣</span><strong>外部客户端</strong><small>异地网络</small></li>
-            <li><span aria-hidden="true">◎</span><strong>公网入口</strong><small id="v1-public-entry">—</small></li>
-            <li><span aria-hidden="true">⇄</span><strong>入站链路</strong><small id="v1-public-path">待配置</small></li>
-            <li><span aria-hidden="true">⌁</span><strong>HopWorld-Router</strong><small id="v1-public-host-state">等待读取</small></li>
+            <li><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect width="14" height="20" x="5" y="2" rx="2" ry="2" /><path d="M12 18h.01" /></svg></span><strong>外部客户端</strong><small>异地网络</small></li>
+            <li><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="1" /><circle cx="12" cy="12" r="10" /></svg></span><strong>公网入口</strong><small id="v1-public-entry">—</small></li>
+            <li><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 3 4 7l4 4" /><path d="M4 7h16" /><path d="m16 21 4-4-4-4" /><path d="M20 17H4" /></svg></span><strong>入站链路</strong><small id="v1-public-path">待配置</small></li>
+            <li><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M16.247 7.761a6 6 0 0 1 0 8.478" /><path d="M19.075 4.933a10 10 0 0 1 0 14.134" /><path d="M4.925 19.067a10 10 0 0 1 0-14.134" /><path d="M7.753 16.239a6 6 0 0 1 0-8.478" /><circle cx="12" cy="12" r="2" /></svg></span><strong>HopWorld-Router</strong><small id="v1-public-host-state">等待读取</small></li>
           </ol>
           <ul class="v1-public-steps" id="v1-public-steps" aria-label="链路状态"></ul>
         </section>
         <section class="card">
-          <div class="v1-panel-head"><h2><span aria-hidden="true">◎</span> 接入概览</h2></div>
+          <div class="v1-panel-head"><h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="1" /><circle cx="12" cy="12" r="10" /></svg></span> 接入概览</h2></div>
           <dl id="v1-public-details" class="v1-definitions" tabindex="-1"></dl>
         </section>
         <section class="card">
           <div class="v1-panel-head">
-            <h2><span aria-hidden="true">⌂</span> 家庭网络环境检测</h2>
-            <button type="button" class="text-button" id="v1-public-recheck">⟳ 重新检测</button>
+            <h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21.54 15H17a2 2 0 0 0-2 2v4.54" /><path d="M7 3.34V5a3 3 0 0 0 3 3a2 2 0 0 1 2 2c0 1.1.9 2 2 2a2 2 0 0 0 2-2c0-1.1.9-2 2-2h3.17" /><path d="M11 21.95V18a2 2 0 0 0-2-2a2 2 0 0 1-2-2v-1a2 2 0 0 0-2-2H2.05" /><circle cx="12" cy="12" r="10" /></svg></span> 网络环境检测</h2>
+            <button type="button" class="text-button" id="v1-public-recheck"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></svg></span> 重新检测</button>
           </div>
           <dl id="v1-public-network" class="v1-definitions"></dl>
           <p id="v1-public-check-note" class="field-hint" role="status"></p>
@@ -746,13 +747,13 @@
           </div>
           <div class="v1-actions" id="v1-public-port-actions">
             <div class="v1-menu-anchor">
-              <button type="button" class="secondary" id="v1-public-batch" data-menu-toggle aria-controls="v1-public-batch-menu" aria-expanded="false">批量操作 ⌄</button>
+              <button type="button" class="secondary" id="v1-public-batch" data-menu-toggle aria-controls="v1-public-batch-menu" aria-expanded="false">批量操作 <span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6" /></svg></span></button>
               <div id="v1-public-batch-menu" class="v1-menu-panel" hidden>
                 <button type="button" id="v1-public-copy-selected" disabled>复制所选入口</button>
                 <button type="button" id="v1-public-export-selected" disabled>导出所选端口</button>
               </div>
             </div>
-            <button type="button" class="primary" id="v1-configure-port">＋ 配置端口</button>
+            <button type="button" class="primary" id="v1-configure-port"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14" /><path d="M12 5v14" /></svg></span> 配置端口</button>
           </div>
         </div>
         <section data-public-panel="ports" aria-label="端口映射管理">
@@ -779,7 +780,16 @@
         <section class="v1-public-tab-content" data-public-panel="vps" hidden>
           <h3>自有 VPS 中转</h3>
           <p id="v1-relay-install" class="field-hint">正在检测家庭端 frpc…</p>
-          <form id="v1-relay-form" class="v1-relay-form">
+          <div id="v1-relay-view">
+            <p id="v1-relay-view-status" class="field-hint" role="status">正在读取 VPS 配置…</p>
+            <p id="v1-relay-view-feedback" class="field-hint" role="status" hidden></p>
+            <dl id="v1-relay-view-fields" class="v1-definitions" hidden></dl>
+            <div class="v1-actions" id="v1-relay-view-actions">
+              <button type="button" class="secondary" id="v1-relay-edit" hidden><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" /><path d="m15 5 4 4" /></svg></span> 编辑</button>
+              <button type="button" class="primary" id="v1-relay-setup" hidden><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" /><path d="m15 5 4 4" /></svg></span> 配置 VPS 中转</button>
+            </div>
+          </div>
+          <form id="v1-relay-form" class="v1-relay-form" hidden>
             <label>节点统一域名<input name="domain" placeholder="proxy.example.com" maxlength="253" required></label>
             <label>VPS 控制地址（匹配证书）<input name="server" placeholder="relay.example.com" maxlength="253" required></label>
             <label>VPS 控制端口<input name="port" type="number" min="1" max="65535" value="7000" required></label>
@@ -797,8 +807,9 @@
               <p class="field-hint">默认为本机端口。请将公网端口加入 VPS 的 frps 允许列表和防火墙规则。修改后客户端需刷新订阅。</p>
               <div id="v1-relay-port-fields"></div>
             </fieldset>
-            <div class="v1-relay-wide">
+            <div class="v1-relay-wide v1-relay-form-actions">
               <p id="v1-relay-feedback" class="field-hint" role="status" tabindex="-1"></p>
+              <button type="button" class="secondary" id="v1-relay-cancel">取消</button>
               <button type="submit" class="primary" id="v1-relay-save" disabled>保存 VPS 配置</button>
             </div>
           </form>
@@ -820,6 +831,7 @@
             <input id="public-subscription-url" readonly>
             <button id="public-subscription-copy" type="button" class="secondary">复制地址</button>
             <button type="button" class="secondary" id="public-subscription-qr">扫码导入</button>
+            <button type="button" class="secondary" id="public-subscription-rotate"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg></span> 重置</button>
           </div>
         </section>
         <section class="v1-public-tab-content" data-public-panel="logs" hidden>
@@ -836,7 +848,7 @@
         </section>
       </section>
       <section class="card v1-public-shortcuts" aria-label="常用操作">
-        <h2><span aria-hidden="true">ϟ</span> 常用操作</h2>
+        <h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z" /></svg></span> 常用操作</h2>
         <div class="v1-actions">
           <button type="button" class="secondary" id="v1-public-guide">接入向导</button>
           <button type="button" class="secondary" data-v1-action="publish-core-open" aria-haspopup="dialog">配置接入</button>
@@ -913,7 +925,7 @@
         </form>
       </dialog>
       <section class="card list-card" id="ikev2-monitor" hidden>
-          <div class="card-head"><div class="card-title"><span class="icon-box blue" aria-hidden="true">⌁</span><div><h2>IKEv2 连接监视</h2><p>UDP 500 第一包起显示，含正在连接</p></div></div><span id="ikev2-monitor-count" class="count">0 台在线</span></div>
+          <div class="card-head"><div class="card-title"><span class="icon-box blue" aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M16.247 7.761a6 6 0 0 1 0 8.478" /><path d="M19.075 4.933a10 10 0 0 1 0 14.134" /><path d="M4.925 19.067a10 10 0 0 1 0-14.134" /><path d="M7.753 16.239a6 6 0 0 1 0-8.478" /><circle cx="12" cy="12" r="2" /></svg></span><div><h2>IKEv2 连接监视</h2><p>UDP 500 第一包起显示，含正在连接</p></div></div><span id="ikev2-monitor-count" class="count">0 台在线</span></div>
           <p id="ikev2-monitor-summary" class="field-hint">尚未启用 IKEv2</p>
           <div class="ikev2-table-wrap"><table class="ikev2-table" aria-label="已连接设备"><thead><tr><th>VPN IP</th><th>公网 IP</th><th>本机 ID</th><th>时长</th><th>上行</th><th>下行</th><th>合计</th><th>状态</th></tr></thead><tbody id="ikev2-monitor-body"></tbody></table></div>
           <div id="ikev2-diagnosis" class="ikev2-diagnosis" hidden><p class="ikev2-diagnosis-title">上网诊断</p><ul id="ikev2-diagnosis-list" class="ikev2-diagnosis-list"></ul></div>
@@ -925,7 +937,7 @@
       <div class="v1-traffic-split v1-traffic-primary">
         <section class="card">
           <div class="v1-panel-head">
-            <h2><span aria-hidden="true">⌁</span> <span id="v1-traffic-chart-title">实时流量曲线</span></h2>
+            <h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 3v16a2 2 0 0 0 2 2h16" /><path d="m19 9-5 5-4-4-3 3" /></svg></span> <span id="v1-traffic-chart-title">实时流量曲线</span></h2>
             <div class="v1-traffic-legend" role="group" aria-label="显示流量系列">
               <label><input type="checkbox" value="down_bytes" checked>下载</label>
               <label><input type="checkbox" value="up_bytes" checked>上传</label>
@@ -944,7 +956,7 @@
           <p class="v1-chart-caption" id="v1-traffic-chart-caption">正在读取样本…</p>
         </section>
         <section class="card">
-          <div class="v1-panel-head"><h2><span aria-hidden="true">◎</span> 已采集流量（今日）</h2></div>
+          <div class="v1-panel-head"><h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="1" /><circle cx="12" cy="12" r="10" /></svg></span> 已采集流量（今日）</h2></div>
           <div class="v1-traffic-share">
             <div class="v1-traffic-donut" id="v1-traffic-donut"><div><strong id="v1-traffic-donut-total">—</strong><small>已采集合计</small></div></div>
             <ul id="v1-traffic-cores" class="v1-traffic-core-list" aria-label="今日已采集流量占比"></ul>
@@ -953,19 +965,19 @@
         </section>
       </div>
       <div class="v1-traffic-breakdowns">
-        <section class="card"><div class="v1-panel-head"><h2><span aria-hidden="true">◇</span> 协议流量统计（今日）</h2></div>
+        <section class="card"><div class="v1-panel-head"><h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 12c.552 0 1.005-.449.95-.998a10 10 0 0 0-8.953-8.951c-.55-.055-.998.398-.998.95v8a1 1 0 0 0 1 1z" /><path d="M21.21 15.89A10 10 0 1 1 8 2.83" /></svg></span> 协议流量统计（今日）</h2></div>
           <dl id="v1-traffic-protocols" class="v1-definitions"></dl>
           <p id="v1-traffic-protocol-hint" class="field-hint">只展示可单独归属的协议流量。</p>
         </section>
-        <section class="card"><div class="v1-panel-head"><h2><span aria-hidden="true">▤</span> 流量排行（节点 · 今日）</h2><a href="#nodes">查看节点 →</a></div>
+        <section class="card"><div class="v1-panel-head"><h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11 5h10" /><path d="M11 12h10" /><path d="M11 19h10" /><path d="M4 4h1v5" /><path d="M4 9h2" /><path d="M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02" /></svg></span> 流量排行（节点 · 今日）</h2><a href="#nodes">查看节点 <svg class="v1-icon v1-panel-link-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></a></div>
           <div class="v1-table-wrap"><table class="v1-table v1-traffic-ranking"><thead><tr><th scope="col">#</th><th scope="col">发布端点</th><th scope="col">协议</th><th scope="col">流量</th><th scope="col">占比</th></tr></thead><tbody id="v1-traffic-ranking"></tbody></table></div>
         </section>
-        <section class="card"><div class="v1-panel-head"><h2><span aria-hidden="true">▣</span> 访问来源统计（今日）</h2></div>
+        <section class="card"><div class="v1-panel-head"><h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0" /><circle cx="12" cy="10" r="3" /></svg></span> 访问来源统计（今日）</h2></div>
           <p class="v1-traffic-empty">暂无客户端设备类型数据</p>
         </section>
       </div>
       <div class="v1-traffic-split v1-traffic-week">
-        <section class="card"><div class="v1-panel-head"><h2><span aria-hidden="true">▥</span> 近7天流量趋势</h2><span class="v1-traffic-week-legend"><span>下载</span><span>上传</span></span></div>
+        <section class="card"><div class="v1-panel-head"><h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 3v16a2 2 0 0 0 2 2h16" /><path d="M18 17V9" /><path d="M13 17V5" /><path d="M8 17v-3" /></svg></span> 近7天流量趋势</h2><span class="v1-traffic-week-legend"><span>下载</span><span>上传</span></span></div>
           <canvas id="v1-daily-chart" aria-label="近7天上传下载流量" role="img"></canvas><p class="v1-chart-caption" id="v1-daily-chart-caption"></p>
         </section>
         <section class="card"><div class="v1-panel-head"><h2>近7天统计</h2></div>
@@ -994,7 +1006,7 @@
         </form>
       </dialog>
       <section class="card list-card" id="local-traffic-monitor" hidden>
-          <div class="card-head"><div class="card-title"><span class="icon-box violet" aria-hidden="true">◎</span><div><h2>本地网络节点流量</h2><p>仅统计经过本地网络节点的流量</p></div></div></div>
+          <div class="card-head"><div class="card-title"><span class="icon-box violet" aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="1" /><circle cx="12" cy="12" r="10" /></svg></span><div><h2>本地网络节点流量</h2><p>仅统计经过本地网络节点的流量</p></div></div></div>
           <p id="local-traffic-status" class="field-hint">正在读取流量…</p>
           <div id="local-traffic-values" class="local-traffic-values" hidden>
             <div><span>上行速度</span><strong id="local-traffic-up-rate">—</strong></div>
@@ -1017,13 +1029,13 @@
         </div>
       </section>
       <div class="v1-settings-tabs" id="v1-settings-tabs" role="group" aria-label="系统设置分类">
-        <button type="button" data-settings-tab="base" aria-pressed="true"><span aria-hidden="true">⚙</span>基础设置</button>
-        <button type="button" data-settings-tab="network" aria-pressed="false"><span aria-hidden="true">⌁</span>网络设置</button>
-        <button type="button" data-settings-tab="network-security" aria-pressed="false"><span aria-hidden="true">◇</span>网络安全</button>
-        <button type="button" data-settings-tab="security" aria-pressed="false"><span aria-hidden="true">◇</span>安全与权限</button>
-        <button type="button" data-settings-tab="services" aria-pressed="false"><span aria-hidden="true">▱</span>服务与功能</button>
-        <button type="button" data-settings-tab="alerts" aria-pressed="false"><span aria-hidden="true">♧</span>通知告警</button>
-        <button type="button" data-settings-tab="maintenance" aria-pressed="false"><span aria-hidden="true">↻</span>系统维护</button>
+        <button type="button" data-settings-tab="base" aria-pressed="true"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" /><circle cx="12" cy="12" r="3" /></svg></span>基础设置</button>
+        <button type="button" data-settings-tab="network" aria-pressed="false"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" /><path d="M2 12h20" /></svg></span>网络设置</button>
+        <button type="button" data-settings-tab="network-security" aria-pressed="false"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /><path d="m9 12 2 2 4-4" /></svg></span>网络安全</button>
+        <button type="button" data-settings-tab="security" aria-pressed="false"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg></span>安全与权限</button>
+        <button type="button" data-settings-tab="services" aria-pressed="false"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z" /><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12" /><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17" /></svg></span>服务与功能</button>
+        <button type="button" data-settings-tab="alerts" aria-pressed="false"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M10.268 21a2 2 0 0 0 3.464 0" /><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" /></svg></span>通知告警</button>
+        <button type="button" data-settings-tab="maintenance" aria-pressed="false"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z" /></svg></span>系统维护</button>
       </div>
       <form id="v1-settings-form" novalidate>
         <div class="v1-settings-grid">
@@ -1065,12 +1077,11 @@
             <details><summary>最近操作</summary><dl class="v1-definitions" id="v1-security-events"></dl></details>
           </section>
           <section class="card v1-basic-settings" data-settings-card="base">
-            <div class="v1-panel-head v1-basic-settings-head">
-              <h2><span aria-hidden="true">⚙</span> 基本设置</h2>
-              <button type="submit" id="v1-settings-basic-save" class="primary" disabled>保存基本设置</button>
+            <div class="v1-panel-head">
+              <h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" /><circle cx="12" cy="12" r="3" /></svg></span> 基本设置</h2>
             </div>
             <div class="v1-settings-fields">
-              <label for="v1-settings-name">平台名称</label><input id="v1-settings-name" name="name" maxlength="40" required disabled>
+              <span>平台名称</span><output id="v1-settings-name">—</output>
               <label for="v1-settings-zone">时钟显示时区</label><select id="v1-settings-zone" name="timezone" disabled>
                 <option value="browser">跟随浏览器</option><option value="Asia/Shanghai">UTC+08:00 北京、上海、香港</option><option value="UTC">UTC</option>
                 <option value="Asia/Tokyo">东京</option><option value="Europe/London">伦敦</option><option value="America/Los_Angeles">洛杉矶</option>
@@ -1092,7 +1103,7 @@
             </div>
           </section>
           <section class="card" data-settings-card="security">
-            <div class="v1-panel-head"><h2><span aria-hidden="true">♙</span> 管理员与安全</h2></div>
+            <div class="v1-panel-head"><h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m14.305 19.53.923-.382" /><path d="m15.228 16.852-.923-.383" /><path d="m16.852 15.228-.383-.923" /><path d="m16.852 20.772-.383.924" /><path d="m19.148 15.228.383-.923" /><path d="m19.53 21.696-.382-.924" /><path d="M2 21a8 8 0 0 1 10.434-7.62" /><path d="m20.772 16.852.924-.383" /><path d="m20.772 19.148.924.383" /><circle cx="10" cy="8" r="5" /><circle cx="18" cy="18" r="3" /></svg></span> 管理员与安全</h2></div>
             <dl class="v1-definitions v1-settings-fields">
               <div><dt>管理员账号</dt><dd id="v1-admin-username">等待读取</dd></div>
               <div><dt>认证方式</dt><dd>浏览器登录会话，API 支持 Basic</dd></div>
@@ -1104,7 +1115,7 @@
             </div>
           </section>
           <section class="card" data-settings-card="network services">
-            <div class="v1-panel-head"><h2><span aria-hidden="true">⌁</span> 网络与代理</h2></div>
+            <div class="v1-panel-head"><h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" /><path d="M2 12h20" /></svg></span> 网络与代理</h2></div>
             <div class="v1-settings-fields v1-network-fields">
               <span>发布出口与地址族</span>
               <div class="v1-network-options"><button type="button" data-v1-action="publish-core-open" aria-haspopup="dialog">按内核配置</button></div>
@@ -1125,7 +1136,7 @@
             </div>
           </section>
           <section class="card" data-settings-card="services">
-            <div class="v1-panel-head"><h2><span aria-hidden="true">▥</span> 资源与限额</h2></div>
+            <div class="v1-panel-head"><h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m12 14 4-4" /><path d="M3.34 19a10 10 0 1 1 17.32 0" /></svg></span> 资源与限额</h2></div>
             <dl class="v1-definitions" id="v1-settings-resources"></dl>
             <div class="v1-settings-services v1-actions v1-settings-actions">
               <a class="secondary" href="#cores">内核管理与安装</a>
@@ -1133,7 +1144,7 @@
             </div>
           </section>
           <section class="card" data-settings-card="alerts">
-            <div class="v1-panel-head"><h2><span aria-hidden="true">♧</span> 通知与告警</h2></div>
+            <div class="v1-panel-head"><h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M10.268 21a2 2 0 0 0 3.464 0" /><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" /></svg></span> 通知与告警</h2></div>
             <dl class="v1-definitions">
               <div><dt>站内更新通知</dt><dd id="v1-settings-notify-update">等待检查</dd></div>
               <div><dt>域名证书</dt><dd id="v1-settings-notify-cert">等待读取</dd></div>
@@ -1142,7 +1153,7 @@
             <div class="v1-actions v1-settings-actions"><a class="secondary" href="#certificates">查看证书状态</a></div>
           </section>
           <section class="card" data-settings-card="maintenance">
-            <div class="v1-panel-head"><h2><span aria-hidden="true">↻</span> 更新与维护</h2></div>
+            <div class="v1-panel-head"><h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z" /></svg></span> 更新与维护</h2></div>
             <div class="v1-settings-fields">
               <span>当前版本</span><output id="v1-settings-version">—</output>
               <label for="update-auto-check" data-managed-update>自动检测更新</label><input class="v1-settings-switch" id="update-auto-check" type="checkbox" role="switch" name="auto_check" data-managed-update checked>
@@ -1165,7 +1176,7 @@
             <p id="v1-update-policy-feedback" role="status"></p>
           </section>
           <section class="card" data-settings-card="maintenance">
-            <div class="v1-panel-head"><h2><span aria-hidden="true">⇩</span> 备份与恢复</h2></div>
+            <div class="v1-panel-head"><h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect width="20" height="5" x="2" y="3" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></svg></span> 备份与恢复</h2></div>
             <dl class="v1-definitions">
               <div><dt>数据库快照</dt><dd>设置、订阅、节点与流量记录。用 <code>python -m router.database_backup</code> 停服恢复。</dd></div>
               <div><dt>加密备份</dt><dd>通过 <code>python -m router.backup_archive</code> 备份数据库、证书与私钥，再恢复到新数据目录。</dd></div>
@@ -1174,7 +1185,7 @@
             <div class="v1-actions v1-settings-actions"><button type="button" class="secondary" id="v1-settings-backup">下载数据库快照</button></div>
           </section>
           <section class="card" data-settings-card="maintenance">
-            <div class="v1-panel-head"><h2><span aria-hidden="true">▤</span> 日志与调试</h2></div>
+            <div class="v1-panel-head"><h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 12h-5" /><path d="M15 8h-5" /><path d="M19 17V5a2 2 0 0 0-2-2H4" /><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3" /></svg></span> 日志与调试</h2></div>
             <dl class="v1-definitions">
               <div><dt>系统日志</dt><dd>由部署服务管理</dd></div>
             </dl>
@@ -1186,13 +1197,13 @@
             </div>
           </section>
           <section class="card" data-settings-card="maintenance">
-            <div class="v1-panel-head"><h2><span aria-hidden="true">ⓘ</span> 系统信息</h2></div>
+            <div class="v1-panel-head"><h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></svg></span> 系统信息</h2></div>
             <dl id="v1-system-details" class="v1-definitions"></dl>
           </section>
         </div>
         <div class="v1-settings-footer v1-actions">
           <span id="v1-settings-feedback" role="status"></span>
-          <button type="button" class="secondary" id="v1-settings-reset" disabled>↻ 重置为默认</button>
+          <button type="button" class="secondary" id="v1-settings-reset" disabled><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg></span> 重置为默认</button>
           <button type="submit" class="primary" id="v1-settings-save" disabled>保存设置</button>
         </div>
       </form>
@@ -1221,17 +1232,50 @@
         </form>
       </dialog>
     </section>
+    <section class="v1-view" data-v1-view="about" hidden>
+      <section class="card v1-about-hero">
+        <img src="logo.png" width="72" height="72" alt="">
+        <div>
+          <h2>HopWorld-Router</h2>
+          <p class="v1-about-intro">HopWorld-Router 是面向服务器的多协议网络接入与节点管理平台，用于汇总订阅与手动节点、发布本机网络节点，并管理代理内核、证书与公网接入。</p>
+        </div>
+      </section>
+      <section class="card v1-about-version">
+        <div class="v1-panel-head"><h2>版本信息</h2></div>
+        <div class="v1-about-version-row">
+          <span>应用版本</span><output id="v1-about-version">—</output>
+        </div>
+        <div class="v1-actions v1-about-version-actions">
+          <button type="button" class="secondary" id="v1-about-check-update" disabled>检测更新</button>
+          <a href="#settings" class="secondary" id="v1-about-maintenance">组件与管理更新</a>
+        </div>
+        <p class="field-hint" id="v1-about-update-status" role="status"></p>
+      </section>
+      <section class="card v1-about-support">
+        <div class="v1-panel-head"><h2>支持开发</h2></div>
+        <p>如果你愿意支持 HopWorld-Router 的持续开发，可以通过以下方式自愿捐赠。捐赠完全自愿，不作为使用本软件的条件。</p>
+        <div id="v1-about-support-cards" class="v1-about-support-cards"></div>
+        <p class="v1-about-legal">自愿支持仅用于项目开发，与是否提供、开通或使用代理服务无关，也不构成付费代理或优待条件。</p>
+      </section>
+      <dialog id="v1-about-qr-dialog" class="v1-dialog v1-about-qr-dialog" aria-labelledby="v1-about-qr-title">
+        <header>
+          <h2 id="v1-about-qr-title">二维码</h2>
+          <button type="button" class="text-button" id="v1-about-qr-close">关闭</button>
+        </header>
+        <div id="v1-about-qr-preview" class="v1-about-qr-preview"></div>
+      </dialog>
+    </section>
     <footer><span>HopWorld Router</span><span>让连接管理更简单</span></footer>
   </main>
   <div id="toast-host" class="toast-host" aria-hidden="true">
-    <p id="message" class="message" role="status" aria-live="polite" hidden><button type="button" id="toast-stop" class="toast-icon" hidden aria-label="停止下载">×</button><span id="message-text"></span><button type="button" id="toast-pause" class="toast-icon" hidden aria-label="暂停下载">❚❚</button></p>
+    <p id="message" class="message" role="status" aria-live="polite" hidden><button type="button" id="toast-stop" class="toast-icon" hidden aria-label="停止下载"><svg class="v1-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></button><span id="message-text"></span><button type="button" id="toast-pause" class="toast-icon" hidden aria-label="暂停下载"><svg class="v1-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="14" y="3" width="5" height="18" rx="1" /><rect x="5" y="3" width="5" height="18" rx="1" /></svg></button></p>
   </div>
   <div id="local-node-notice-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="local-node-notice-title">
     <button type="button" class="modal-backdrop" data-modal-close="local-node-notice" aria-label="关闭"></button>
     <div class="modal-panel card notice-panel">
       <div class="modal-panel-head">
         <button type="button" class="modal-close text-button" data-modal-close="local-node-notice" aria-label="关闭">关闭</button>
-        <div class="side-heading"><div class="icon-box violet" aria-hidden="true">◎</div><div><h2 id="local-node-notice-title">本地网络节点尚未启用</h2><p>启用后可将本地节点加入统一订阅</p></div></div>
+        <div class="side-heading"><div class="icon-box violet" aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="1" /><circle cx="12" cy="12" r="10" /></svg></div><div><h2 id="local-node-notice-title">本地网络节点尚未启用</h2><p>启用后可将本地节点加入统一订阅</p></div></div>
       </div>
       <div class="modal-panel-body">
         <p class="notice-lead">当前未开启 <strong>本地网络节点</strong>，客户端订阅中不会出现本机出口。</p>
@@ -1250,7 +1294,7 @@
     <div class="modal-panel card">
       <div class="modal-panel-head">
         <button type="button" class="modal-close text-button" data-modal-close="local-node" aria-label="关闭">关闭</button>
-        <div class="side-heading"><div class="icon-box violet" aria-hidden="true">◎</div><div><h2 id="local-node-modal-title">本地网络节点</h2></div></div>
+        <div class="side-heading"><div class="icon-box violet" aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="1" /><circle cx="12" cy="12" r="10" /></svg></div><div><h2 id="local-node-modal-title">本地网络节点</h2></div></div>
       </div>
       <div class="modal-panel-body"><form id="local-form" class="stacked-form">
         <label for="local-name">节点名称</label>
@@ -1331,7 +1375,7 @@
   <div id="acme-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="acme-modal-title">
     <button type="button" class="modal-backdrop" data-modal-close="acme" aria-label="关闭"></button>
     <div class="modal-panel card">
-      <div class="modal-panel-head"><button type="button" class="modal-close text-button" data-modal-close="acme" aria-label="关闭">关闭</button><div class="side-heading"><div class="icon-box blue" aria-hidden="true">◇</div><div><h2 id="acme-modal-title">SSL 证书</h2><p>为公网域名、IPv4 或 IPv6 申请 HTTPS 证书</p></div></div></div>
+      <div class="modal-panel-head"><button type="button" class="modal-close text-button" data-modal-close="acme" aria-label="关闭">关闭</button><div class="side-heading"><div class="icon-box blue" aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /><path d="M9 12h6" /><path d="M12 9v6" /></svg></div><div><h2 id="acme-modal-title">SSL 证书</h2><p>为公网域名、IPv4 或 IPv6 申请 HTTPS 证书</p></div></div></div>
       <div class="modal-panel-body"><form id="acme-form" class="stacked-form">
         <label for="acme-subject">证书类型</label>
         <select id="acme-subject"><option value="domain">域名</option><option value="ipv4">公网 IPv4</option><option value="ipv6">公网 IPv6</option></select>
@@ -1364,7 +1408,7 @@
     <div class="modal-panel card modal-panel-wide">
       <div class="modal-panel-head">
         <button type="button" class="modal-close text-button" data-modal-close="ikev2" aria-label="关闭">关闭</button>
-        <div class="side-heading"><div class="icon-box blue" aria-hidden="true">⌁</div><div><h2 id="ikev2-modal-title">系统 VPN（IKEv2）</h2><p>无证书 PSK，供 iPhone 设置直接连接</p></div></div>
+        <div class="side-heading"><div class="icon-box blue" aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M16.247 7.761a6 6 0 0 1 0 8.478" /><path d="M19.075 4.933a10 10 0 0 1 0 14.134" /><path d="M4.925 19.067a10 10 0 0 1 0-14.134" /><path d="M7.753 16.239a6 6 0 0 1 0-8.478" /><circle cx="12" cy="12" r="2" /></svg></div><div><h2 id="ikev2-modal-title">系统 VPN（IKEv2）</h2><p>无证书 PSK，供 iPhone 设置直接连接</p></div></div>
       </div>
       <div class="modal-panel-body"><form id="ikev2-form"><label for="ikev2-host">公网地址</label><input id="ikev2-host" maxlength="253" required placeholder="例如：8.8.8.8"><label for="ikev2-remote-id">Remote ID</label><input id="ikev2-remote-id" maxlength="64" required value="hopworld.ikev2"><p class="field-hint">未启用时可直接填写后点「启用」；已启用后为只读展示，点「编辑」后再保存（手机需重装描述文件）。</p><p id="ikev2-status" class="field-hint">尚未启用</p><p id="ikev2-health" class="field-hint" hidden></p><p class="field-hint"><a href="#ikev2-monitor">↑ 在主栏查看已连接设备与无网诊断</a></p><label for="ikev2-psk">共享密钥</label><p class="field-hint">8–32 位字母或数字；首次「启用」留空则自动生成。</p><div class="input-row has-field"><input id="ikev2-psk" class="is-readonly" maxlength="32" autocomplete="off" readonly placeholder="启用后显示"><button id="ikev2-copy-psk" class="secondary" type="button">复制</button></div><p class="field-hint">iPhone 安装描述文件与手填说明在侧栏「设置」。</p><div class="form-actions" id="ikev2-actions"><button id="ikev2-toggle" type="button" class="primary">启用</button><button id="ikev2-edit" class="secondary" type="button" hidden>编辑</button><button id="ikev2-save" class="secondary" type="button" hidden>保存</button><button id="ikev2-cancel" class="secondary" type="button" hidden>取消</button><button id="ikev2-rotate" class="secondary span-2" type="button">随机密钥</button></div></form></div>
     </div>
@@ -1374,7 +1418,7 @@
     <div class="modal-panel card">
       <div class="modal-panel-head">
         <button type="button" class="modal-close text-button" data-modal-close="ikev2-settings" aria-label="关闭">关闭</button>
-        <div class="side-heading"><div class="icon-box blue" aria-hidden="true">⌁</div><div><h2 id="ikev2-settings-modal-title">iPhone 连接设置</h2><p>蜂窝推荐描述文件；也可手动添加 VPN</p></div></div>
+        <div class="side-heading"><div class="icon-box blue" aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect width="14" height="20" x="5" y="2" rx="2" ry="2" /><path d="M12 18h.01" /></svg></div><div><h2 id="ikev2-settings-modal-title">iPhone 连接设置</h2><p>蜂窝推荐描述文件；也可手动添加 VPN</p></div></div>
       </div>
       <div class="modal-panel-body"><p id="ikev2-settings-disabled-hint" class="field-hint" hidden>请先在侧栏点「配置」启用 IKEv2，再安装描述文件。</p>
       <div id="ikev2-settings-profile" hidden>
@@ -1396,7 +1440,7 @@
     <div class="modal-panel card">
       <div class="modal-panel-head">
         <button type="button" class="modal-close text-button" data-modal-close="manual" aria-label="关闭">关闭</button>
-        <div class="side-heading"><div class="icon-box cyan" aria-hidden="true">⌁</div><div><h2 id="manual-modal-title">手动导入节点</h2><p>粘贴已有的节点链接</p></div></div>
+        <div class="side-heading"><div class="icon-box cyan" aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3v12" /><path d="m8 11 4 4 4-4" /><path d="M8 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-4" /></svg></div><div><h2 id="manual-modal-title">手动导入节点</h2><p>粘贴已有的节点链接</p></div></div>
       </div>
       <div class="modal-panel-body"><form id="manual"><label for="links">节点链接</label><textarea id="links" rows="6" required placeholder="每行粘贴一个节点链接"></textarea><label for="v1-node-file">或读取文本文件</label><input type="file" id="v1-node-file" accept=".txt,text/plain"><p class="field-hint">支持 VLESS、VMess、Trojan 等链接</p><button type="submit" class="primary full">导入节点</button></form></div>
     </div>
@@ -1406,12 +1450,12 @@
     <div class="modal-panel card modal-panel-wide">
       <div class="modal-panel-head">
         <button type="button" class="modal-close text-button" data-modal-close="subscription" aria-label="关闭">关闭</button>
-        <div class="side-heading"><div class="icon-box blue" aria-hidden="true">↗</div><div><h2 id="subscription-modal-title">公网订阅</h2><p>复制链接或扫码导入客户端</p></div></div>
+        <div class="side-heading"><div class="icon-box blue" aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 11a9 9 0 0 1 9 9" /><path d="M4 4a16 16 0 0 1 16 16" /><circle cx="5" cy="19" r="1" /></svg></div><div><h2 id="subscription-modal-title">公网订阅</h2><p>复制链接或扫码导入客户端</p></div></div>
       </div>
       <div class="modal-panel-body">
         <label for="subscription">公网 HTTPS 订阅地址</label>
-        <div class="input-row has-field"><input id="subscription" readonly placeholder="发布后生成"><button id="copy-modal" class="secondary" type="button">复制</button></div>
-        <div class="address-footer"><p class="hint">地址含访问密钥，仅分享给信任设备。</p><button id="rotate" class="text-button" type="button">更换密钥 <span aria-hidden="true">↗</span></button></div>
+        <div class="input-row has-field"><input id="subscription" readonly placeholder="发布后生成"><button id="copy-modal" class="secondary" type="button">复制</button><button id="rotate" class="secondary" type="button"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg></span> 重置</button></div>
+        <p class="hint">地址含访问密钥，仅分享给信任设备。</p>
         <div class="mobile-connect" aria-label="手机连接方式">
           <div class="mobile-connect-head"><h3>导入方式</h3><p>扫码或粘贴订阅链接到客户端。</p></div>
           <div class="mobile-connect-body">
@@ -1431,9 +1475,9 @@
     <div class="modal-panel card">
       <div class="modal-panel-head">
         <button type="button" class="modal-close text-button" data-modal-close="add-source" aria-label="关闭">关闭</button>
-        <div class="side-heading"><div class="icon-box blue" aria-hidden="true">＋</div><div><h2 id="add-source-modal-title">添加上游订阅</h2><p>添加一个订阅来源</p></div></div>
+        <div class="side-heading"><div class="icon-box blue" aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14" /><path d="M12 5v14" /></svg></div><div><h2 id="add-source-modal-title">添加上游订阅</h2><p>添加一个订阅来源</p></div></div>
       </div>
-      <div class="modal-panel-body"><form id="add"><label for="name">订阅名称</label><input id="name" maxlength="100" required placeholder="例如：我的订阅"><label for="url">订阅地址</label><input id="url" type="url" required placeholder="https://…"><p class="field-hint">支持 HTTPS、Base64 及部分 Clash YAML 订阅</p><button type="submit" class="primary full">添加并更新 <span aria-hidden="true">→</span></button></form></div>
+      <div class="modal-panel-body"><form id="add"><label for="name">订阅名称</label><input id="name" maxlength="100" required placeholder="例如：我的订阅"><label for="url">订阅地址</label><input id="url" type="url" required placeholder="https://…"><p class="field-hint">支持 HTTPS、Base64 及部分 Clash YAML 订阅</p><button type="submit" class="primary full">添加并更新 <span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></span></button></form></div>
     </div>
   </div>
   <div id="source-settings-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="source-settings-title">
