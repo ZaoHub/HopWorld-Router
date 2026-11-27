@@ -41,6 +41,7 @@ class CoreInstallTests(unittest.TestCase):
         self.assertEqual(_asset('xray-core', 'v26.11.9', 'Darwin', 'arm64')[0], 'Xray-macos-arm64-v8a.zip')
         self.assertEqual(_asset('sing-box', 'v1.14.4', 'Linux', 'x86_64')[0], 'sing-box-1.14.4-linux-amd64.tar.gz')
         self.assertEqual(_asset('mihomo', 'v1.19.34', 'Linux', 'aarch64')[0], 'mihomo-linux-arm64-v1.19.34.gz')
+        self.assertEqual(_asset('mihomo', 'v1.19.34', 'Linux', 'x86_64')[0], 'mihomo-linux-amd64-v1-v1.19.34.gz')
         self.assertEqual(_asset('hysteria2', 'app/v2.14.0', 'Darwin', 'arm64')[0], 'hysteria-darwin-arm64')
         self.assertEqual(
             _asset('shadowsocks-rust', 'v1.25.0', 'Linux', 'x86_64')[0],
