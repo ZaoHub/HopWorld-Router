@@ -79,7 +79,10 @@ def _asset(core_id, tag, system, machine):
         target = {'darwin': 'darwin', 'linux': 'linux'}[os_name] + '-' + arch
         return f'sing-box-{version}-{target}.tar.gz', 'tar', 'sing-box'
     if core_id == 'mihomo':
-        target = {'darwin': 'darwin', 'linux': 'linux'}[os_name] + '-' + arch
+        target = f'{os_name}-{arch}'
+        if (os_name, arch) == ('linux', 'amd64'):
+            # The generic upstream Linux amd64 package requires the v3 instruction set.
+            target += '-v1'
         return f'mihomo-{target}-{tag}.gz', 'gz', 'mihomo'
     if core_id == 'hysteria2':
         target = {'darwin': 'darwin', 'linux': 'linux'}[os_name] + '-' + arch
