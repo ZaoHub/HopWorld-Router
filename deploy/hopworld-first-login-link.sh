@@ -66,7 +66,22 @@ map $hopworld_setup_allowed $hopworld_setup_origin {
     1 https://127.0.0.1;
 }
 """
-    site.write_text(maps.replace("PUBLIC_HOST", host) + text)
+    text = maps.replace("PUBLIC_HOST", host) + text
+
+if "map $uri $hopworld_setup_path {" not in text:
+    # Setup sessions need the same scope for the page and its password-change assets.
+    for source in ("$cookie_hopworld_first_setup", "$remote_addr"):
+        key = source + "|$request_method|$http_origin|$uri"
+        text = text.replace(key, key.removesuffix("$uri") + "$hopworld_setup_path")
+    text = """map $uri $hopworld_setup_path {
+    default $uri;
+    /style.css /;
+    /v1.css /;
+    /first-login.js /;
+}
+""" + text
+if site.read_text() != text:
+    site.write_text(text)
 print(host)
 PYTHON
 )
