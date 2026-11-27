@@ -11,6 +11,11 @@ if [[ -z "$LINEAGE" || ! -d "$LINEAGE" ]]; then
 fi
 
 domain="$(basename "$LINEAGE")"
+# Public-admin install uses lineage hopworld-public-admin-<host>; cache under <host>
+# so Router public subscription can reuse the same certificate.
+if [[ "$domain" == hopworld-public-admin-* ]]; then
+  domain="${domain#hopworld-public-admin-}"
+fi
 dest="$DATA/certs/$domain"
 if [[ -L "$DATA/certs" || -L "$dest" || -L "$dest/fullchain.pem" || -L "$dest/privkey.pem" ]]; then
   echo "证书目标位置不能是符号链接" >&2

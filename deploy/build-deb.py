@@ -38,6 +38,7 @@ def build(version, output):
                     and not any(part.startswith('.') or part == '__pycache__' for part in relative.parts)):
                 install(source, app / relative)
         install(ROOT / 'deploy/hopworld-acme-dns-hook.sh', app / 'deploy/hopworld-acme-dns-hook.sh', 0o755)
+        install(ROOT / 'deploy/hopworld-install-runtime.sh', app / 'deploy/hopworld-install-runtime.sh', 0o755)
         install(ROOT / 'deploy/hopworld-router-check.sh', stage / 'usr/bin/hopworld-router-check', 0o755)
         install(ROOT / 'deploy/hopworld-router-uninstall', stage / 'usr/bin/hopworld-router-uninstall', 0o755)
         install(DEBIAN / 'hopworld-package-update.py', app / 'deploy/hopworld-package-update.py')

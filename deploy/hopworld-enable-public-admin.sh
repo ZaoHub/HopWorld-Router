@@ -79,8 +79,18 @@ open_public_admin_ports() (
 )
 
 if [[ ${EUID} != 0 || $# != 1 ]] || ! command -v apt-get >/dev/null; then
-    echo '用法：在 Ubuntu 或 Debian 上以 root 执行 bash hopworld-enable-public-admin.sh 公网IPv4或域名' >&2
+    echo '用法：在 Ubuntu 或 Debian 上以 root 执行 bash hopworld-enable-public-admin.sh 公网IPv4或域名 / --firewall-only' >&2
     exit 2
+fi
+
+if [[ "$1" == --firewall-only ]]; then
+    echo '检测到已配置的公网 HTTPS 后台，等待确认是否放行 TCP 80、443…'
+    if ! open_public_admin_ports; then
+        echo '防火墙配置未完成，请检查主机防火墙和云安全组的 TCP 80、443 入站规则。' >&2
+    fi
+    echo 'HopWorld Router 管理服务已就绪。'
+    hopworld-router-check --instructions
+    exit
 fi
 
 host=$(python3 - "$1" <<'PYTHON'
@@ -186,9 +196,19 @@ certificate_args=(-d "$host")
 if [[ "$host" =~ ^[0-9.]+$ ]]; then
     certificate_args=(--preferred-profile shortlived --ip-address "$host")
 fi
+here=$(cd "$(dirname "$0")" && pwd)
 /snap/bin/certbot certonly --non-interactive --agree-tos --register-unsafely-without-email \
     --keep-until-expiring --webroot --webroot-path "$webroot" --cert-name "$cert_name" \
     --deploy-hook 'systemctl reload nginx' "${certificate_args[@]}"
+
+# Seed Router's cert cache so「启用公网订阅」can reuse this HTTPS certificate on TCP 9443.
+data_dir=/var/lib/hopworld-router
+if [[ -f "$settings" ]]; then
+    data_dir=$(awk -F= '/^[[:space:]]*HOPWORLD_DATA=/{value=$2} END{print value}' "$settings")
+    data_dir=${data_dir:-/var/lib/hopworld-router}
+fi
+RENEWED_LINEAGE="$cert_dir" HOPWORLD_DATA="$data_dir" bash "$here/hopworld-certbot-renew-hook.sh"
+bash "$here/hopworld-install-certbot-renew-hook.sh"
 
 write_http "return 308 https://$host\$request_uri;" > "$site"
 cat >> "$site" <<NGINX
