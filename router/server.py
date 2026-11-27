@@ -1073,12 +1073,15 @@ class Store:
             else:
                 original_links = [link] if (link := source_service.link(settings)) else []
             names = {parts.scheme: parts.fragment for parts in map(urlsplit, original_links)}
+            if source.get('public_host_ipv6'):
+                names = {scheme: quote(unquote(name).removesuffix(' · IPv4').removesuffix(' · IPv6'))
+                         for scheme, name in names.items()}
             if legacy and protocol not in names:
                 suffix = {'hysteria2': 'Hysteria2' if core_id == 'sing-box' else '原生 Hysteria2',
                           'tuic': 'TUIC'}[protocol]
                 names[protocol] = quote(_protocol_label(source['name'], suffix))
             shared = ('public_host', 'address_family', 'public_listener', 'address_mode', 'ddns',
-                      'detected_host', 'egress', 'upstream_id')
+                      'public_host_ipv6', 'detected_host', 'detected_ipv6', 'egress', 'upstream_id')
             merge = (previous_target.get('enabled') and protocol not in publisher_ports(target, previous_target)
                      and all((new_target.get(key) or '') == (previous_target.get(key) or '') for key in shared))
             if merge:
@@ -1099,9 +1102,9 @@ class Store:
                 new_target['uuid'] = source['uuid']
             profile_credentials(new_target)
             prepared = self._independent_config(target_id, new_target)
-            if original := next((link for link in original_links if urlsplit(link).scheme == protocol), ''):
-                if original not in prepared[1]:
-                    raise ValueError('目标内核无法保留原节点的连接参数')
+            originals = {link for link in original_links if urlsplit(link).scheme == protocol}
+            if not originals.issubset(prepared[1]):
+                raise ValueError('目标内核无法保留原节点的连接参数')
 
             remaining = publisher_ports(core_id, source)
             del remaining[protocol]
@@ -1214,13 +1217,13 @@ class Store:
         ):
             raise ValueError('订阅地址与所选类型不匹配')
         dual_ip = automatic and family == 'dual'
-        if dual_ip and core_id != 'xray-core':
-            raise ValueError('此内核的自动公网 IP 模式请选择 IPv4 或 IPv6')
         if ddns and (address_mode != 'domain' or '.' not in host):
             raise ValueError('DDNS 需要完整域名')
         tls_mode = data.get('tls_mode', 'automatic')
         if tls_mode not in ('automatic', 'ip_acme') or tls_mode == 'ip_acme' and (core_id != 'hysteria2' or not automatic):
             raise ValueError('公网 IP 证书仅用于 Hysteria 2 自动公网 IP 模式')
+        if dual_ip and tls_mode == 'ip_acme':
+            raise ValueError('公网 IP 证书模式只支持单地址族，双栈请选择自动 TLS 证书')
         ip_certificate = {'tls_mode': tls_mode, 'ip_certificate_email': '', 'ip_certificate_expires': 0,
                           'ip_certificate_pending': False}
         certificate_host = ''

@@ -1124,7 +1124,7 @@
         : domain ? 'TLS 证书须与所选域名匹配。' : 'TLS 证书须与所填 IP 匹配。';
       byId('v1-core-profile-cert-link').hidden = mode === 'auto_ip' && (publicIPCertificate || profileCertificate.ready || localHysteriaCertificate);
     }
-    const dualAllowed = domain || (mode === 'auto_ip' && profileCore?.id === 'xray-core');
+    const dualAllowed = domain || (mode === 'auto_ip' && !publicIPCertificate);
     byId('v1-core-dual').disabled = !dualAllowed;
     if (!dualAllowed && fields.address_family.value === 'dual') fields.address_family.value = 'ipv4';
     byId('v1-core-address-host').hidden = mode !== 'fixed_ip';
@@ -1141,6 +1141,7 @@
     addressCheck.textContent = '检查公网 IP';
     byId('v1-core-address-hint').textContent = domain
       ? (profileDomains.length ? '地址族沿用域名绑定设置。' : '暂无已绑定域名，请先完成绑定。')
+      : publicIPCertificate ? '公网 IP 证书只支持单地址族，双栈请选择自动 TLS 证书。'
       : mode === 'auto_ip' ? 'Router 会定期检测公网 IP。地址变化后客户端需刷新订阅。'
       : '现有手动 IP 可继续使用，也可改为自动获取。';
     void showProfileIpReadiness(fields.address_family.value, publicIPCertificate);

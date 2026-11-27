@@ -567,6 +567,49 @@ class ServerTests(unittest.TestCase):
             self.assertIn('IPv6', self.store.independent_profile_view('xray-core')['address_error'])
             apply.assert_called_once()
 
+    def test_other_cores_publish_dual_addresses_with_matching_ports_and_tls(self):
+        public = {4: '8.8.8.8', 6: '2606:4700::1111'}
+        domain = 'node.example.test'
+        self.store.save_acme_settings({**self.store.acme_settings(), 'domain': domain})
+        for index, (core_id, protocols) in enumerate({
+            'mihomo': ('ss',), 'shadowsocks-rust': ('ss',),
+            'hysteria2': ('hysteria2',), 'tuic-server': ('tuic',), 'sing-box': ('hysteria2', 'tuic'),
+        }.items()):
+            with self.subTest(core_id=core_id):
+                links = []
+                core = self.store.independent[core_id]
+                has_tls = core_id in ('hysteria2', 'tuic-server', 'sing-box')
+                port = 20000 + index * 10
+                profile = {'public_host': '', 'port': port, 'public_listener': True, 'egress': 'direct',
+                           'upstream_id': '', 'address_mode': 'auto_ip', 'address_family': 'dual'}
+
+                def apply(profile_id, saved):
+                    _, uris, _ = self.store._independent_config(profile_id, saved)
+                    links.extend(uris)
+
+                with patch.object(self.store, '_detect_dual_public_ip', side_effect=public.get), \
+                     patch.object(self.store, '_quic_certificate', return_value=('/fixture/cert', '/fixture/key')), \
+                     patch.object(self.store, '_apply_independent_profile', side_effect=apply), \
+                     patch.object(core, 'locate', return_value='/fixture/core'), patch.object(core, 'links', return_value=links):
+                    self.store.start_independent_core(core_id, profile)
+                    saved = self.store.independent_profiles()[core_id]
+                    self.assertEqual(saved['detected_ipv6'], public[6])
+                    endpoints = self.store.independent_endpoints({core_id: saved})
+                    for protocol in protocols:
+                        variants = [link for link in links if urlsplit(link).scheme == protocol]
+                        exported = [urlsplit(self.store._published_link(link, endpoints[node_id(link)])) for link in variants]
+                        self.assertEqual([parts.hostname for parts in exported], list(public.values()))
+                        self.assertEqual(len({parts.port for parts in exported}), 1)
+                        self.assertEqual(len({parts.username for parts in exported}), 1)
+                        if has_tls:
+                            self.assertEqual([parse_qs(parts.query).get('sni') for parts in exported], [[domain], [domain]])
+
+    def test_dual_automatic_public_ip_rejects_single_address_certificate_mode(self):
+        profile = {'public_host': '', 'port': 8442, 'public_listener': True, 'egress': 'direct',
+                   'upstream_id': '', 'address_mode': 'auto_ip', 'address_family': 'dual', 'tls_mode': 'ip_acme'}
+        with self.assertRaisesRegex(ValueError, '公网 IP 证书模式只支持单地址族'):
+            self.store.start_independent_core('hysteria2', profile)
+
     def test_dual_address_check_uses_only_public_interface_fallback(self):
         path = '/api/v1/cores/address-check'
         with patch('router.server.detect_public_ip', side_effect=ValueError('unavailable')), \
