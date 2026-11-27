@@ -532,6 +532,53 @@ class ServerTests(unittest.TestCase):
             apply.assert_called_once()
             self.assertEqual([call.args[0] for call in detect.call_args_list], [6, 6, 6])
 
+    def test_xray_automatic_dual_stack_publishes_two_independent_addresses(self):
+        addresses = {4: '8.8.8.8', 6: '2606:4700::1111'}
+        def observe(version, **kwargs):
+            if addresses[version] is None:
+                raise ValueError('offline')
+            return addresses[version]
+        core = self.store.independent['xray-core']
+        profile = {'public_host': '', 'port': 8443, 'public_listener': True, 'egress': 'direct',
+                   'upstream_id': '', 'address_mode': 'auto_ip', 'address_family': 'dual'}
+        generated = []
+        with patch('router.server.detect_public_ip', side_effect=observe), \
+             patch('router.server.local_route_address', return_value=''), \
+             patch.object(self.store.xray, 'generate_keys', return_value=('private', 'public')), \
+             patch.object(core, 'locate', return_value='/fixture/xray'), \
+             patch.object(core, 'apply_profile',
+                          side_effect=lambda config, links, cert, **kwargs: generated.extend(links)) as apply, \
+             patch.object(core, 'links', side_effect=lambda: generated):
+            check = self.request('/api/v1/cores/address-check', {'mode': 'auto_ip', 'family': 'dual'})
+            self.assertEqual(json.load(check), {'ipv4': addresses[4], 'ipv6': addresses[6]})
+            start = self.request('/api/v1/cores/start', {'id': 'xray-core', 'profile': profile})
+            self.assertTrue(json.load(start)['ok'])
+            self.assertEqual(apply.call_args.kwargs['bind'], '::')
+            self.assertEqual([urlsplit(link).hostname for link in generated], list(addresses.values()))
+            ids = [node_id(link) for link in generated]
+            addresses.update({4: '8.8.4.4', 6: '2606:4700::1001'})
+            self.store.sync_independent_addresses()
+            self.assertEqual([urlsplit(self.store.node_link(key)).hostname for key in ids], list(addresses.values()))
+            self.assertEqual([urlsplit(link).hostname for link in decode_subscription(self.store.subscription().encode())],
+                             list(addresses.values()))
+            addresses[6] = None
+            self.store.sync_independent_addresses()
+            self.assertEqual(urlsplit(self.store.node_link(ids[1])).hostname, '2606:4700::1001')
+            self.assertIn('IPv6', self.store.independent_profile_view('xray-core')['address_error'])
+            apply.assert_called_once()
+
+    def test_dual_address_check_uses_only_public_interface_fallback(self):
+        path = '/api/v1/cores/address-check'
+        with patch('router.server.detect_public_ip', side_effect=ValueError('unavailable')), \
+             patch('router.server.local_route_address', side_effect={4: '8.8.8.8', 6: '2606:4700::1111'}.get):
+            result = self.request(path, {'mode': 'auto_ip', 'family': 'dual'})
+            self.assertEqual(json.load(result), {'ipv4': '8.8.8.8', 'ipv6': '2606:4700::1111'})
+        with patch('router.server.detect_public_ip', side_effect=ValueError('unavailable')), \
+             patch('router.server.local_route_address', return_value='192.168.1.20'):
+            with self.assertRaises(HTTPError) as result:
+                self.request(path, {'mode': 'auto_ip', 'family': 'dual'})
+            self.assertEqual(result.exception.code, 400)
+
     def test_dual_stack_ddns_updates_each_record_family_and_retains_last_address(self):
         profile = {'enabled': True, 'public_host': 'entry.example.test', 'ddns': True, 'address_family': 'dual'}
         self.store._save_independent_profiles({'xray-core': profile})
