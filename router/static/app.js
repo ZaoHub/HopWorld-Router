@@ -603,6 +603,44 @@ let manualUpdateCheck = false;
 let managedUpdate = true;
 let updateInstallation = 'project';
 const updateWaitLimit = 12 * 60 * 1000;
+function renderRuntimeUpdate(runtime) {
+  if (!runtime) return;
+  const apt = runtime.apt_version || '—';
+  const running = runtime.running_version || apt;
+  const commit = runtime.running_commit ? String(runtime.running_commit).slice(0, 7) : '—';
+  const health = $('#v1-update-health');
+  if ($('#v1-update-apt-version')) $('#v1-update-apt-version').textContent = apt.startsWith('V') || apt === '—' ? apt : `V${apt}`;
+  if ($('#v1-update-running-version')) {
+    $('#v1-update-running-version').textContent = running.startsWith('V') || running === '—' ? running : `V${running}`;
+  }
+  if ($('#v1-update-running-commit')) $('#v1-update-running-commit').textContent = `Commit: ${commit}`;
+  if ($('#v1-update-install-kind')) {
+    $('#v1-update-install-kind').textContent = runtime.installation === 'package' ? 'APT 安装' : 'Git / 源码安装';
+  }
+  if (health) {
+    const ok = runtime.health === 'ok';
+    health.dataset.state = ok ? 'ok' : (runtime.migrated ? 'pending' : 'pending');
+    health.textContent = ok ? '运行正常' : (runtime.migrated ? '运行时待校验' : '待迁移独立运行时');
+  }
+  const migrate = $('#v1-update-migrate');
+  if (migrate) migrate.hidden = !!runtime.migrated;
+  const channel = $('#v1-update-channel');
+  if (channel && (runtime.channel === 'stable' || runtime.channel === 'development')) channel.value = runtime.channel;
+  const box = $('#v1-update-releases');
+  if (box) {
+    const releases = Array.isArray(runtime.releases) ? runtime.releases.filter(item => !item.active) : [];
+    box.hidden = !releases.length || !$('#v1-update-releases').dataset.open;
+    box.replaceChildren(...releases.slice(0, 8).map(item => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'secondary';
+      button.dataset.rollbackId = item.id;
+      button.textContent = `回滚到 ${item.id}${item.commit ? ' · ' + String(item.commit).slice(0, 7) : ''}`;
+      return button;
+    }));
+  }
+}
+
 function renderSystemUpdate(status) {
   const banner = $('#system-update-banner');
   const title = $('#system-update-title');
@@ -623,6 +661,7 @@ function renderSystemUpdate(status) {
   if (aboutStatus) aboutStatus.textContent = statusText;
   if (typeof status.managed === 'boolean') managedUpdate = status.managed;
   if (status.installation) updateInstallation = status.installation;
+  renderRuntimeUpdate(status.runtime);
   const check = $('#v1-settings-check-update');
   const restart = $('#v1-settings-restart');
   $('#v1-settings-update-channel').textContent = status.channel || 'GitHub Releases';
@@ -761,6 +800,76 @@ $('#system-update-apply').addEventListener('click', () => {
   else void applySystemUpdate();
 });
 $('#v1-settings-check-update').addEventListener('click', requestSystemUpdateCheck);
+async function requestFileUpdateCheck() {
+  const status = $('#v1-update-files-status');
+  const diff = $('#v1-update-diff');
+  const list = $('#v1-update-diff-list');
+  const button = $('#v1-update-check-files');
+  button.disabled = true;
+  status.textContent = '正在检查 GitHub main 文件差异…';
+  diff.hidden = false;
+  try {
+    const result = await call('/api/v1/updates/runtime', {action: 'check-files'});
+    const incremental = result.incremental || {};
+    const files = Array.isArray(incremental.changed_files) ? incremental.changed_files : [];
+    list.replaceChildren(...files.map(name => {
+      const item = document.createElement('li');
+      item.textContent = name;
+      return item;
+    }));
+    status.textContent = incremental.error || incremental.note
+      || (files.length ? `发现 ${files.length} 个可增量文件` : '没有可增量的文件变更');
+  } catch (error) {
+    list.replaceChildren();
+    status.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+$('#v1-update-check-files')?.addEventListener('click', () => void requestFileUpdateCheck());
+$('#v1-update-settings-open')?.addEventListener('click', () => {
+  const panel = $('#v1-update-settings-panel');
+  panel.hidden = !panel.hidden;
+});
+$('#v1-update-history-open')?.addEventListener('click', () => {
+  location.hash = '#settings';
+  $('#v1-updates-open')?.click();
+});
+$('#v1-update-rollback-open')?.addEventListener('click', () => {
+  const box = $('#v1-update-releases');
+  box.dataset.open = box.dataset.open === '1' ? '' : '1';
+  box.hidden = box.dataset.open !== '1' || !box.children.length;
+  if (box.hidden) note(box.children.length ? '已收起回滚列表' : '暂无可以回滚的运行版本');
+});
+$('#v1-update-releases')?.addEventListener('click', async event => {
+  const id = event.target.closest('[data-rollback-id]')?.dataset.rollbackId;
+  if (!id || !confirm(`确认回滚到 ${id}？服务将重启。`)) return;
+  try {
+    const result = await call('/api/v1/updates/runtime', {action: 'rollback', id});
+    renderRuntimeUpdate(result.runtime);
+    note('已切换运行版本，请按需重启 Router');
+  } catch (error) {
+    note(error.message, {error: true});
+  }
+});
+$('#v1-update-channel')?.addEventListener('change', async event => {
+  try {
+    const result = await call('/api/v1/updates/runtime', {action: 'channel', channel: event.target.value});
+    renderRuntimeUpdate(result.runtime);
+    note(event.target.value === 'development' ? '已切换到开发通道（不会自动应用未签名产物）' : '已切换到正式通道');
+  } catch (error) {
+    note(error.message, {error: true});
+  }
+});
+$('#v1-update-migrate')?.addEventListener('click', async () => {
+  try {
+    const result = await call('/api/v1/updates/runtime', {action: 'migrate'});
+    renderRuntimeUpdate(result.runtime);
+    note('已迁移到独立运行时目录');
+  } catch (error) {
+    note(error.message, {error: true});
+  }
+});
 $('#v1-about-check-update')?.addEventListener('click', requestSystemUpdateCheck);
 void checkSystemUpdate();
 let noteHideTimer = 0;

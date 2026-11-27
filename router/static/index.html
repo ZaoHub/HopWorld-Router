@@ -2,20 +2,45 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
+  <script>
+    (function () {
+      try {
+        var html = document.documentElement;
+        var allowed = {'default': 1, 'neon-fusion': 1};
+        var theme = localStorage.getItem('hopworld-v1-theme');
+        if (theme && allowed[theme] && theme !== 'default') html.setAttribute('data-theme', theme);
+        if (theme === 'neon-fusion') {
+          var prefs = {};
+          try { prefs = JSON.parse(localStorage.getItem('hopworld-v1-theme-neon-fusion') || '{}') || {}; }
+          catch (err) { prefs = {}; }
+          var mode = prefs.motionMode;
+          if (mode !== 'full' && mode !== 'off' && mode !== 'subtle') mode = 'subtle';
+          var ambient = prefs.ambientEffectsEnabled !== false;
+          var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+          if (mode === 'off' || reduced) { if (reduced && mode !== 'off') mode = 'off'; ambient = false; }
+          if (mode === 'off') ambient = false;
+          html.setAttribute('data-nf-motion', mode);
+          html.setAttribute('data-nf-ambient', ambient ? 'on' : 'off');
+        }
+      } catch (e) {}
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>HopWorld Router · V1</title>
   <link rel="icon" href="logo.png" type="image/png">
   <link rel="apple-touch-icon" href="logo.png">
   <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="v1.css?v=xray-dual">
+  <link rel="stylesheet" href="v1.css">
+  <link rel="stylesheet" href="v1-theme-neon-fusion.css">
   <!-- DASHBOARD SCRIPTS -->
   <script src="qrcode.js" defer></script>
   <script src="v1-icons.js" defer></script>
   <script src="app.js" defer></script>
   <script src="v1-overview-secret.js" defer></script>
   <script src="v1-about.js" defer></script>
-  <script src="v1.js?v=core-dual" defer></script>
+  <script src="v1-theme.js" defer></script>
+  <script src="v1.js" defer></script>
 </head>
 <body>
   <dialog id="first-login-dialog" class="v1-dialog" aria-labelledby="first-login-title" aria-describedby="first-login-description">
@@ -138,7 +163,7 @@
         <div class="v1-stack v1-overview-right">
           <section class="card"><div class="v1-panel-head"><h2>域名与证书</h2><a href="#certificates">管理 <svg class="v1-icon v1-panel-link-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></a></div><dl id="v1-overview-cert" class="v1-definitions"></dl></section>
           <section class="card"><div class="v1-panel-head"><h2>公网接入</h2><a href="#public">查看 <svg class="v1-icon v1-panel-link-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></a></div><dl id="v1-overview-access" class="v1-definitions"></dl></section>
-        <section class="card v1-shortcuts"><h2>快捷操作</h2><div class="v1-shortcut-grid">
+        <section class="card v1-shortcuts"><h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z" /></svg></span> 快捷操作</h2><div class="v1-shortcut-grid">
           <button class="secondary" data-v1-action="add-source-open"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14" /><path d="M12 5v14" /></svg></span>添加订阅</button>
           <button class="secondary" data-v1-action="manual-open"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3v12" /><path d="m8 11 4 4 4-4" /><path d="M8 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-4" /></svg></span>导入节点</button>
           <button class="secondary" data-v1-action="publish-core-open" aria-haspopup="dialog"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M8 12h8" /><path d="M12 8v8" /></svg></span>配置发布节点</button>
@@ -265,12 +290,10 @@
           </div>
           <p id="v1-core-profile-legacy" class="field-hint" hidden></p>
           <div class="v1-core-profile-field">
-            <fieldset class="v1-core-profile-options">
-              <legend>订阅地址类型</legend>
-              <label><input type="radio" name="address_mode" value="domain" checked><span>域名</span></label>
-              <label><input type="radio" name="address_mode" value="auto_ip"><span>自动获取公网 IP</span></label>
-              <label id="v1-core-fixed-ip-option" hidden><input type="radio" name="address_mode" value="fixed_ip"><span>手动 IP（旧配置）</span></label>
-            </fieldset>
+            <label for="v1-core-address-mode">订阅地址类型</label>
+            <select id="v1-core-address-mode" name="address_mode">
+              <option value="domain">域名</option><option value="auto_ip">自动获取公网 IP</option><option value="fixed_ip">手动 IP（旧配置）</option>
+            </select>
             <div id="v1-core-address-host">
               <label for="v1-core-profile-host">订阅 IP</label>
               <input id="v1-core-profile-host" name="public_host" maxlength="253" placeholder="请输入 IP 地址">
@@ -280,12 +303,10 @@
               <select id="v1-core-domain-choice" name="bound_domain"></select>
               <a id="v1-core-bind-link" href="#certificates">前往域名与证书绑定</a>
             </div>
-            <fieldset class="v1-core-profile-options" id="v1-core-address-family">
-              <legend>地址族</legend>
-              <label><input type="radio" name="address_family" value="ipv4" checked><span>IPv4</span></label>
-              <label><input type="radio" name="address_family" value="ipv6"><span>IPv6</span></label>
-              <label><input type="radio" name="address_family" value="dual" id="v1-core-dual"><span>IPv4 + IPv6</span></label>
-            </fieldset>
+            <label for="v1-core-address-family">地址族</label>
+            <select id="v1-core-address-family" name="address_family">
+              <option value="ipv4">IPv4</option><option value="ipv6">IPv6</option><option value="dual">IPv4 + IPv6</option>
+            </select>
             <label class="v1-core-profile-check" id="v1-core-address-ddns">
               <input name="ddns" type="checkbox"><span>动态 IP 自动更新 DNS（DDNS）</span>
             </label>
@@ -1041,6 +1062,31 @@
         <button type="button" data-settings-tab="alerts" aria-pressed="false"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M10.268 21a2 2 0 0 0 3.464 0" /><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" /></svg></span>通知告警</button>
         <button type="button" data-settings-tab="maintenance" aria-pressed="false"><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z" /></svg></span>系统维护</button>
       </div>
+      <section class="card v1-appearance-settings" id="v1-appearance-settings" data-settings-card="base">
+        <div class="v1-panel-head">
+          <h2>外观</h2>
+        </div>
+        <div class="v1-settings-fields">
+          <label for="v1-theme-select">界面主题</label>
+          <select id="v1-theme-select" autocomplete="off">
+            <option value="default">默认</option>
+            <option value="neon-fusion">霓虹幻彩 · Neon Fusion</option>
+          </select>
+        </div>
+        <div id="v1-theme-motion-fields" hidden>
+          <div class="v1-settings-fields">
+            <label for="v1-theme-motion">动效强度</label>
+            <select id="v1-theme-motion" autocomplete="off">
+              <option value="subtle">轻柔（推荐）</option>
+              <option value="full">完整</option>
+              <option value="off">关闭</option>
+            </select>
+            <label for="v1-theme-ambient" id="v1-theme-ambient-label">环境光效</label>
+            <input class="v1-settings-switch" id="v1-theme-ambient" type="checkbox" role="switch" checked aria-describedby="v1-theme-motion-hint">
+          </div>
+        </div>
+        <p class="field-hint" id="v1-theme-motion-hint">仅改变管理后台的外观与动效，不会修改配置或中断当前操作。选择会保存在本机浏览器中。系统「减少动态效果」会降低动效；选择关闭后不会被系统偏好重新打开。</p>
+      </section>
       <form id="v1-settings-form" novalidate>
         <div class="v1-settings-grid">
           <section class="card v1-network-security" data-settings-card="network-security" hidden>
@@ -1156,22 +1202,69 @@
             </dl>
             <div class="v1-actions v1-settings-actions"><a class="secondary" href="#certificates">查看证书状态</a></div>
           </section>
-          <section class="card" data-settings-card="maintenance">
-            <div class="v1-panel-head"><h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z" /></svg></span> 更新与维护</h2></div>
-            <div class="v1-settings-fields">
+          <section class="card v1-update-center" data-settings-card="maintenance">
+            <div class="v1-panel-head v1-update-center-head">
+              <h2><span aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z" /></svg></span> 系统更新中心</h2>
+              <span class="v1-update-health" id="v1-update-health" data-state="pending">读取中</span>
+            </div>
+            <div class="v1-update-version-grid">
+              <article class="v1-update-version-card">
+                <h3>当前整包版本</h3>
+                <p class="v1-update-version-value" id="v1-update-apt-version">—</p>
+                <p class="field-hint" id="v1-update-install-kind">—</p>
+              </article>
+              <article class="v1-update-version-card">
+                <h3>当前运行版本</h3>
+                <p class="v1-update-version-value" id="v1-update-running-version">—</p>
+                <p class="field-hint" id="v1-update-running-commit">Commit: —</p>
+              </article>
+            </div>
+            <div class="v1-update-actions-grid">
+              <article class="v1-update-action-card">
+                <div>
+                  <h3>整包版本更新</h3>
+                  <p class="field-hint">从 GitHub Releases 或 APT 软件源获取正式版本</p>
+                </div>
+                <button type="button" class="secondary" id="v1-settings-check-update" aria-describedby="v1-settings-update-status" disabled>检查版本</button>
+              </article>
+              <article class="v1-update-action-card">
+                <div>
+                  <h3>按文件增量更新</h3>
+                  <p class="field-hint">检测 GitHub Main 最新提交与本地文件差异</p>
+                </div>
+                <button type="button" class="secondary" id="v1-update-check-files" aria-describedby="v1-update-files-status">检查文件</button>
+              </article>
+            </div>
+            <details class="v1-update-diff" id="v1-update-diff" hidden>
+              <summary>文件差异预览</summary>
+              <ul id="v1-update-diff-list"></ul>
+              <p class="field-hint" id="v1-update-files-status" role="status"></p>
+            </details>
+            <nav class="v1-update-footer" aria-label="更新中心功能">
+              <button type="button" class="secondary" id="v1-update-history-open">更新记录</button>
+              <button type="button" class="secondary" id="v1-update-rollback-open">版本回滚</button>
+              <button type="button" class="secondary" id="v1-update-settings-open">更新设置</button>
+            </nav>
+            <div class="v1-settings-fields" id="v1-update-settings-panel" hidden>
               <span>当前版本</span><output id="v1-settings-version">—</output>
               <label for="update-auto-check" data-managed-update>自动检测更新</label><input class="v1-settings-switch" id="update-auto-check" type="checkbox" role="switch" name="auto_check" data-managed-update checked>
               <label for="update-auto-apply" data-managed-update>自动更新</label><input class="v1-settings-switch" id="update-auto-apply" type="checkbox" role="switch" name="auto_apply" data-managed-update checked>
               <span>更新通道</span><output id="v1-settings-update-channel">—</output>
+              <label for="v1-update-channel">跟踪通道</label>
+              <select id="v1-update-channel">
+                <option value="stable">正式 · Releases</option>
+                <option value="development">开发 · main（需确认）</option>
+              </select>
             </div>
             <div class="v1-actions v1-settings-actions v1-settings-update-actions">
-              <button type="button" class="secondary" id="v1-settings-check-update" aria-describedby="v1-settings-update-status" disabled>检查更新</button>
               <button type="button" class="secondary" id="v1-settings-restart" aria-describedby="v1-settings-restart-status" disabled>重启 Router</button>
+              <button type="button" class="secondary" id="v1-update-migrate" hidden>迁移到独立运行时</button>
             </div>
             <div class="v1-settings-update-feedback">
               <p class="field-hint" id="v1-settings-update-status" role="status">正在读取更新通道…</p>
               <p class="field-hint" id="v1-settings-restart-status" role="status"></p>
             </div>
+            <div id="v1-update-releases" class="v1-update-releases" hidden></div>
           </section>
           <section class="card v1-update-policies" data-settings-card="maintenance">
             <div class="v1-panel-head"><h2>软件包与内核更新</h2></div>

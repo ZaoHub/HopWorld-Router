@@ -2,11 +2,35 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
+  <script>
+    (function () {
+      try {
+        var html = document.documentElement;
+        var allowed = {'default': 1, 'neon-fusion': 1};
+        var theme = localStorage.getItem('hopworld-v1-theme');
+        if (theme && allowed[theme] && theme !== 'default') html.setAttribute('data-theme', theme);
+        if (theme === 'neon-fusion') {
+          var prefs = {};
+          try { prefs = JSON.parse(localStorage.getItem('hopworld-v1-theme-neon-fusion') || '{}') || {}; }
+          catch (err) { prefs = {}; }
+          var mode = prefs.motionMode;
+          if (mode !== 'full' && mode !== 'off' && mode !== 'subtle') mode = 'subtle';
+          var ambient = prefs.ambientEffectsEnabled !== false;
+          var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+          if (mode === 'off' || reduced) { if (reduced && mode !== 'off') mode = 'off'; ambient = false; }
+          if (mode === 'off') ambient = false;
+          html.setAttribute('data-nf-motion', mode);
+          html.setAttribute('data-nf-ambient', ambient ? 'on' : 'off');
+        }
+      } catch (e) {}
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>管理员登录 · HopWorld-Router</title>
   <link rel="icon" href="/logo.png">
   <link rel="stylesheet" href="/login.css">
+  <link rel="stylesheet" href="/v1-theme-neon-fusion.css">
   <script src="/login.js" defer></script>
 </head>
 <body>

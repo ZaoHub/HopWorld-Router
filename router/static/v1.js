@@ -23,6 +23,7 @@
   let nodeFilter = 'all';
   let nodePageIndex = 0;
   let selectedNodeId = null;
+  let nodeDomainSecretNodeId = null;
   const nodeChecks = new Set();
   let nodeProbePending = false;
   let probeProgressHideTimer;
@@ -111,6 +112,7 @@
       card.append(mark, details);
       return card;
     });
+    if (window.hopworldTheme?.motion?.applyMetricCards?.(box, cards, entries)) return;
     if (id === 'v1-overview-metrics' && cards.length) {
       const lead = element('div', null, 'v1-overview-metrics-lead');
       const last = cards[cards.length - 1];
@@ -125,7 +127,7 @@
   const overviewSecretIcons = overviewSecretApi?.ICONS || {};
   function fallbackOverviewSecrets() {
     const mask = '********';
-    const placeholders = new Set(['', '—', '–', '-', '未配置', '待配置', '未获取', '待检测', '待签发', '无']);
+    const placeholders = new Set(['', '—', '–', '-', '未配置', '待配置', '未获取', '待检测', '待签发', '无', '未设置', '原始地址']);
     const values = new Map();
     const snapshot = id => {
       const value = values.get(id) || '';
@@ -136,6 +138,7 @@
     return {
       setValue(id, value) { values.set(id, value == null ? '' : String(value)); return snapshot(id); },
       toggle(id) { return snapshot(id); },
+      conceal(id) { return snapshot(id); },
       hideAll() {},
       snapshot,
     };
@@ -152,10 +155,10 @@
     const snap = overviewSecrets.snapshot(id);
     const view = secretViewState(label, snap);
     const valueNode = element('span', view.text, 'v1-overview-secret-value');
-    dd.replaceChildren(valueNode);
     dd.removeAttribute('title');
     if (!view.button) {
       dd.classList.remove('v1-overview-secret');
+      dd.replaceChildren(valueNode);
       return;
     }
     dd.classList.add('v1-overview-secret');
@@ -165,7 +168,8 @@
     button.setAttribute('aria-pressed', view.button.ariaPressed);
     button.innerHTML = overviewSecretIcons[view.button.icon] || '';
     button.addEventListener('click', () => overviewSecrets.toggle(id));
-    dd.append(button);
+    if (dd.dataset.overviewSecretBefore === 'true') dd.replaceChildren(button, valueNode);
+    else dd.replaceChildren(valueNode, button);
   }
   function paintOverviewSecrets() {
     for (const dd of document.querySelectorAll('[data-overview-secret]')) {
@@ -279,6 +283,7 @@
     const description = {running: '公网订阅已启动', error: '公网订阅启动异常',
       stopped: '公网订阅未启动', unknown: '公网订阅状态未知'}[state];
     status.dataset.state = state;
+    window.hopworldTheme?.motion?.noteStatus?.(status, state);
     status.dataset.iconOnly = String(!text);
     label.hidden = !text;
     if (label.textContent !== text) label.textContent = text;
@@ -291,6 +296,7 @@
     renderGlobalProbe(data, wasProbing);
     byId('v1-health').textContent = '服务在线';
     byId('v1-health').parentElement.dataset.ready = 'true';
+    window.hopworldTheme?.motion?.noteStatus?.(byId('v1-health').parentElement, 'online');
     renderSubscriptionIndicator(data.public_subscription);
     const {nodes, sources} = data;
     const local = data.local_node || {};
@@ -511,10 +517,16 @@
     bar.append(fill);
     return bar;
   }
-  function detailLine(name, value) {
+  function detailLine(name, value, secret) {
     const item = element('div');
     const dd = element('dd');
-    if (value instanceof Node) dd.append(value);
+    if (secret?.id) {
+      dd.dataset.overviewSecret = secret.id;
+      dd.dataset.overviewSecretName = secret.label || name;
+      if (secret.before) dd.dataset.overviewSecretBefore = 'true';
+      overviewSecrets.setValue(secret.id, value ?? '');
+      paintOverviewSecret(dd, secret.id);
+    } else if (value instanceof Node) dd.append(value);
     else dd.textContent = value ?? dash;
     item.append(element('dt', name), dd);
     return item;
@@ -718,18 +730,23 @@
   }
   function placeMenu(toggle, panel) {
     if (!toggle.closest('.v1-node-tools')) return;
+    // Keep absolute under .v1-menu. Fixed + viewport coords break when a
+    // theme ancestor (backdrop-filter / transform) becomes the fixed containing block.
+    clearMenuPosition(panel);
     const rect = toggle.getBoundingClientRect();
+    const menu = toggle.closest('.v1-menu');
+    const menuRect = menu?.getBoundingClientRect() || rect;
     const viewport = document.documentElement.clientWidth;
     const width = Math.max(220, Math.round(rect.width));
-    panel.style.position = 'fixed';
-    panel.style.top = `${Math.round(rect.bottom + 6)}px`;
-    panel.style.bottom = 'auto';
     panel.style.minWidth = `${width}px`;
-    let left = Math.round(rect.right - width);
-    if (left < 8) left = 8;
-    if (left + width > viewport - 8) left = Math.max(8, viewport - width - 8);
-    panel.style.left = `${left}px`;
+    const rightAlignedLeft = menuRect.right - width;
+    if (rightAlignedLeft >= 8 && menuRect.right <= viewport - 8) {
+      panel.style.left = 'auto';
+      panel.style.right = '0';
+      return;
+    }
     panel.style.right = 'auto';
+    panel.style.left = '0';
   }
   function closeMenus() {
     for (const panel of document.querySelectorAll('.v1-menu-panel')) {
@@ -737,11 +754,74 @@
       clearMenuPosition(panel);
       panel.parentElement?.querySelector('[data-menu-toggle]')?.setAttribute('aria-expanded', 'false');
     }
+    const filterMenu = byId('v1-filter-select-menu');
+    if (filterMenu) {
+      filterMenu.hidden = true;
+      filterMenu.replaceChildren();
+      delete filterMenu.dataset.selectId;
+    }
+    for (const select of document.querySelectorAll('.v1-node-filters select[aria-expanded="true"]')) {
+      select.setAttribute('aria-expanded', 'false');
+    }
+  }
+  function filterSelectMenuHost() {
+    return document.querySelector('.v1-node-filters');
+  }
+  function ensureFilterSelectMenu() {
+    let panel = byId('v1-filter-select-menu');
+    if (panel) return panel;
+    panel = element('div', null, 'v1-menu-panel');
+    panel.id = 'v1-filter-select-menu';
+    panel.setAttribute('role', 'listbox');
+    panel.hidden = true;
+    return panel;
+  }
+  function placeFilterSelectMenu(select, panel) {
+    const host = filterSelectMenuHost();
+    if (!host || !select || !panel) return;
+    if (panel.parentElement !== host) host.append(panel);
+    clearMenuPosition(panel);
+    const sr = select.getBoundingClientRect();
+    const hr = host.getBoundingClientRect();
+    const width = Math.max(Math.round(sr.width), 160);
+    panel.style.position = 'absolute';
+    panel.style.top = `${Math.round(sr.bottom - hr.top + 6)}px`;
+    panel.style.left = `${Math.round(sr.left - hr.left)}px`;
+    panel.style.right = 'auto';
+    panel.style.minWidth = `${width}px`;
+    panel.style.zIndex = '50';
+  }
+  function openFilterSelectMenu(select) {
+    if (document.documentElement.dataset.theme !== 'neon-fusion') return false;
+    if (!select || !select.closest('.v1-node-filters')) return false;
+    const panel = ensureFilterSelectMenu();
+    const already = !panel.hidden && panel.dataset.selectId === select.id;
+    closeMenus();
+    if (already) return true;
+    panel.replaceChildren(...[...select.options].map(option => {
+      const item = element('button', option.textContent, null);
+      item.type = 'button';
+      item.setAttribute('role', 'option');
+      item.dataset.value = option.value;
+      if (option.disabled) item.disabled = true;
+      if (option.selected) item.setAttribute('aria-selected', 'true');
+      return item;
+    }));
+    panel.dataset.selectId = select.id;
+    panel.hidden = false;
+    select.setAttribute('aria-expanded', 'true');
+    placeFilterSelectMenu(select, panel);
+    return true;
   }
   function syncOpenMenus() {
     for (const toggle of document.querySelectorAll('[data-menu-toggle][aria-expanded="true"]')) {
       const panel = byId(toggle.getAttribute('aria-controls'));
       if (panel && !panel.hidden) placeMenu(toggle, panel);
+    }
+    const filterMenu = byId('v1-filter-select-menu');
+    if (filterMenu && !filterMenu.hidden && filterMenu.dataset.selectId) {
+      const select = byId(filterMenu.dataset.selectId);
+      if (select) placeFilterSelectMenu(select, filterMenu);
     }
   }
   window.addEventListener('resize', syncOpenMenus);
@@ -1124,14 +1204,13 @@
         : domain ? 'TLS 证书须与所选域名匹配。' : 'TLS 证书须与所填 IP 匹配。';
       byId('v1-core-profile-cert-link').hidden = mode === 'auto_ip' && (publicIPCertificate || profileCertificate.ready || localHysteriaCertificate);
     }
-    const dualAllowed = domain || (mode === 'auto_ip' && !publicIPCertificate);
-    byId('v1-core-dual').disabled = !dualAllowed;
-    if (!dualAllowed && fields.address_family.value === 'dual') fields.address_family.value = 'ipv4';
+    fields.address_family.options[2].disabled = !domain;
+    if (!domain && fields.address_family.value === 'dual') fields.address_family.value = 'ipv4';
     byId('v1-core-address-host').hidden = mode !== 'fixed_ip';
     fields.public_host.required = mode === 'fixed_ip';
     byId('v1-core-bound-domain').hidden = !domain;
     fields.bound_domain.required = domain;
-    byId('v1-core-address-family').disabled = domain;
+    fields.address_family.disabled = domain;
     if (domain) {
       const selected = profileDomains.find(item => item.host === fields.bound_domain.value);
       fields.address_family.value = selected?.family || 'ipv4';
@@ -1141,7 +1220,6 @@
     addressCheck.textContent = '检查公网 IP';
     byId('v1-core-address-hint').textContent = domain
       ? (profileDomains.length ? '地址族沿用域名绑定设置。' : '暂无已绑定域名，请先完成绑定。')
-      : publicIPCertificate ? '公网 IP 证书只支持单地址族，双栈请选择自动 TLS 证书。'
       : mode === 'auto_ip' ? 'Router 会定期检测公网 IP。地址变化后客户端需刷新订阅。'
       : '现有手动 IP 可继续使用，也可改为自动获取。';
     void showProfileIpReadiness(fields.address_family.value, publicIPCertificate);
@@ -1171,7 +1249,7 @@
       const fields = profileForm.elements;
       profileCertificate = {required: saved.certificate_required, domain: saved.certificate_domain,
         ready: saved.certificate_ready, family: saved.address_family, expires: saved.ip_certificate_expires};
-      byId('v1-core-fixed-ip-option').hidden = saved.address_mode !== 'fixed_ip';
+      fields.address_mode.options[2].hidden = saved.address_mode !== 'fixed_ip';
       fields.address_mode.value = saved.address_mode;
       fields.address_family.value = saved.address_family;
       fields.tls_mode.value = saved.tls_mode || 'automatic';
@@ -1184,7 +1262,6 @@
       fields.bound_domain.value = profileDomains.some(item => item.host === saved.public_host) ? saved.public_host : '';
       addressResult.textContent = [
         saved.detected_host && `当前订阅地址 ${saved.detected_host}`,
-        saved.detected_ipv6 && `IPv6 ${saved.detected_ipv6}`,
         saved.ddns_ipv4 && `上次更新 A ${saved.ddns_ipv4}`,
         saved.ddns_ipv6 && `上次更新 AAAA ${saved.ddns_ipv6}`,
         saved.address_error,
@@ -1235,12 +1312,13 @@
 
   profileMode.addEventListener('change', syncProfileEgress);
   profileForm.elements.tls_mode.addEventListener('change', syncProfileAddress);
-  profileForm.addEventListener('change', event => {
-    if (!['address_mode', 'address_family', 'ddns', 'bound_domain'].includes(event.target.name)) return;
-    addressResult.textContent = '';
-    syncProfileAddress();
-    syncProfileSubmit();
-  });
+  for (const name of ['address_mode', 'address_family', 'ddns', 'bound_domain']) {
+    profileForm.elements[name].addEventListener('change', () => {
+      addressResult.textContent = '';
+      syncProfileAddress();
+      syncProfileSubmit();
+    });
+  }
   addressCheck.addEventListener('click', async () => {
     const fields = profileForm.elements;
     const family = fields.address_family.value;
@@ -1251,8 +1329,7 @@
     addressResult.textContent = '正在检查地址…';
     try {
       const result = await call('/api/v1/cores/address-check', {mode: 'auto_ip', family});
-      const addresses = family === 'dual' ? `${result.ipv4} · ${result.ipv6}` : result.address;
-      if (current()) addressResult.textContent = `检测到公网地址 ${addresses} · 入站待验证`;
+      if (current()) addressResult.textContent = `检测到公网地址 ${result.address} · 入站待验证`;
     } catch (error) {
       if (current()) addressResult.textContent = error.message;
     } finally {
@@ -3206,19 +3283,15 @@
     }));
     const usage = item => item?.total_bytes ? `${bytes(item.used_bytes)} / ${bytes(item.total_bytes)}` : dash;
     const resources = [
-      ['CPU', value.cpu_percent, `${value.cpu_count ?? dash} 核`, '#57dd78'],
-      ['内存', value.memory?.total_bytes ? 100 * value.memory.used_bytes / value.memory.total_bytes : null, usage(value.memory), '#37d9ba'],
-      ['磁盘', value.disk?.total_bytes ? 100 * value.disk.used_bytes / value.disk.total_bytes : null, usage(value.disk), '#42aaff'],
+      ['CPU', value.cpu_percent, `${value.cpu_count ?? dash} 核`, themeColor('--v1-resource-cpu', '#57dd78')],
+      ['内存', value.memory?.total_bytes ? 100 * value.memory.used_bytes / value.memory.total_bytes : null, usage(value.memory), themeColor('--v1-resource-memory', '#37d9ba')],
+      ['磁盘', value.disk?.total_bytes ? 100 * value.disk.used_bytes / value.disk.total_bytes : null, usage(value.disk), themeColor('--v1-resource-disk', '#42aaff')],
     ];
-    byId('v1-overview-system').replaceChildren(...resources.map(([label, percent, noteText, color]) => {
-      const cell = element('div', null, 'v1-resource');
-      const ring = element('div', null, 'v1-resource-ring');
-      const dial = element('canvas');
-      dial.width = dial.height = 176;
-      dial.setAttribute('aria-hidden', 'true');
+    function paintResourceRing(dial, percent, color) {
       const context = dial.getContext('2d');
+      context.clearRect(0, 0, 176, 176);
       context.lineWidth = 13;
-      context.strokeStyle = '#304156';
+      context.strokeStyle = themeColor('--v1-resource-track', '#304156');
       context.beginPath();
       context.arc(88, 88, 77, 0, 2 * Math.PI);
       context.stroke();
@@ -3226,13 +3299,47 @@
         context.beginPath();
         context.strokeStyle = color;
         context.lineCap = 'round';
-        context.arc(88, 88, 77, -.5 * Math.PI, (Math.min(percent,100) / 50 - .5) * Math.PI);
+        context.arc(88, 88, 77, -.5 * Math.PI, (Math.min(percent, 100) / 50 - .5) * Math.PI);
         context.stroke();
       }
-      ring.append(dial, element('strong', Number.isFinite(percent) ? Math.round(percent) + '%' : dash));
-      cell.append(element('span', label), ring, element('small', noteText));
-      return cell;
-    }));
+    }
+    function applyResourceRing(dial, percent, color) {
+      const motion = window.hopworldTheme && window.hopworldTheme.motion;
+      if (motion && typeof motion.animateResourceRing === 'function') {
+        motion.animateResourceRing(dial, percent, color, (value, paintColor) => {
+          paintResourceRing(dial, value, paintColor);
+        });
+        return;
+      }
+      paintResourceRing(dial, percent, color);
+    }
+    const systemBox = byId('v1-overview-system');
+    const existingCells = [...systemBox.querySelectorAll('.v1-resource')];
+    const sameLayout = existingCells.length === resources.length
+      && resources.every((item, index) => existingCells[index]?.querySelector('span')?.textContent === item[0]);
+    if (sameLayout) {
+      resources.forEach(([label, percent, noteText, color], index) => {
+        const cell = existingCells[index];
+        const dial = cell.querySelector('canvas');
+        const strong = cell.querySelector('strong');
+        const note = cell.querySelector('small');
+        applyResourceRing(dial, percent, color);
+        window.hopworldTheme?.motion?.animateMetricText?.(strong, Number.isFinite(percent) ? Math.round(percent) + '%' : dash);
+        if (note) note.textContent = noteText;
+      });
+    } else {
+      systemBox.replaceChildren(...resources.map(([label, percent, noteText, color]) => {
+        const cell = element('div', null, 'v1-resource');
+        const ring = element('div', null, 'v1-resource-ring');
+        const dial = element('canvas');
+        dial.width = dial.height = 176;
+        dial.setAttribute('aria-hidden', 'true');
+        applyResourceRing(dial, percent, color);
+        ring.append(dial, element('strong', Number.isFinite(percent) ? Math.round(percent) + '%' : dash));
+        cell.append(element('span', label), ring, element('small', noteText));
+        return cell;
+      }));
+    }
     const formatUsage = item => item?.total_bytes
       ? `${bytes(item.total_bytes)}（已用 ${bytes(item.used_bytes)}，${Math.round(100 * item.used_bytes / item.total_bytes)}%）` : dash;
     definitions('v1-system-details', [
@@ -3250,11 +3357,33 @@
     renderAppVersion(value.version);
     renderOverview();
   }
-  const trafficSeries = [
-    ['down_bytes', '下载', '#2597fc'],
-    ['up_bytes', '上传', '#35db87'],
-    ['total_bytes', '总流量', '#b477fc'],
-  ];
+  function themeColor(name, fallback) {
+    try {
+      const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      if (value) return value;
+    } catch (error) {}
+    return fallback;
+  }
+  function trafficSeries() {
+    return [
+      ['down_bytes', '下载', themeColor('--v1-chart-down', '#2597fc')],
+      ['up_bytes', '上传', themeColor('--v1-chart-up', '#35db87')],
+      ['total_bytes', '总流量', themeColor('--v1-chart-total', '#b477fc')],
+    ];
+  }
+  function chartAllowsGlow() {
+    return document.documentElement.getAttribute('data-theme') === 'neon-fusion'
+      && !(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }
+  function setChartGlow(ctx, color, on) {
+    if (on && chartAllowsGlow()) {
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 6;
+    } else {
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+    }
+  }
   const chartLabel = sample => sample.date?.slice(5) || (sample.timestamp
     ? new Date(sample.timestamp * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '');
 
@@ -3263,18 +3392,24 @@
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
     if (!width || !height) return;
+    const motion = window.hopworldTheme && window.hopworldTheme.motion;
+    if (motion && typeof motion.watchCanvas === 'function') motion.watchCanvas(canvas);
+    const displaySamples = live && motion && typeof motion.liveChartSamples === 'function'
+      ? motion.liveChartSamples(id, samples, () => { chart(id, samples, axisFormat, live, options); })
+      : samples;
     const scale = window.devicePixelRatio || 1;
     canvas.width = width * scale;
     canvas.height = height * scale;
     const ctx = canvas.getContext('2d');
     ctx.scale(scale, scale);
+    const seriesSamples = displaySamples || samples;
     const measured = samples.filter(s => Number.isFinite(s.total_bytes));
     const caption = byId(id + '-caption');
     caption.textContent = measured.length
       ? options.caption || '蓝色为下行，绿色为上行。未采样时段留空。'
       : options.empty || '暂无流量采样。';
     if (!measured.length && !options.grid) return;
-    const series = options.series || trafficSeries.slice(0, 2);
+    const series = options.series || trafficSeries().slice(0, 2);
     const peak = Math.max(4, ...measured.map(sample => sample.total_bytes));
     const unit = 10 ** Math.floor(Math.log10(peak / 4));
     const max = Math.ceil(peak / (4 * unit)) * 4 * unit;
@@ -3285,8 +3420,8 @@
     const step = w / Math.max(1, samples.length);
     const pointX = index => left + step * (index + .5);
     ctx.font = '11px system-ui';
-    ctx.fillStyle = '#aebed3';
-    ctx.strokeStyle = '#24374b';
+    ctx.fillStyle = themeColor('--v1-chart-axis', '#aebed3');
+    ctx.strokeStyle = themeColor('--v1-chart-grid', '#24374b');
     for (let i = 0; i <= 4; i++) {
       const y = 10 + h * i / 4;
       if (measured.length) ctx.fillText(axisFormat(Math.round(max * (1 - i / 4))), 2, y + 3);
@@ -3295,7 +3430,7 @@
       ctx.lineTo(width - 5, y);
       ctx.stroke();
     }
-    if (!live) samples.forEach((sample, index) => {
+    if (!live) seriesSamples.forEach((sample, index) => {
       if (!Number.isFinite(sample.total_bytes)) return;
       const bar = Math.min(54, step * .7);
       let offset = bottom;
@@ -3303,8 +3438,10 @@
         if (key === 'total_bytes') continue;
         const size = h * sample[key] / max;
         ctx.fillStyle = color;
+        setChartGlow(ctx, color, true);
         offset -= size;
         ctx.fillRect(pointX(index) - bar / 2, offset, bar, size);
+        setChartGlow(ctx, color, false);
       }
     });
     for (const [key, , color] of series) {
@@ -3317,7 +3454,9 @@
         for (const point of points.slice(1)) ctx.lineTo(...point);
         ctx.strokeStyle = color;
         ctx.lineWidth = 2;
+        setChartGlow(ctx, color, true);
         ctx.stroke();
+        setChartGlow(ctx, color, false);
         if (options.fill && key !== 'total_bytes' && points.length > 1) {
           ctx.lineTo(points.at(-1)[0], bottom);
           ctx.lineTo(points[0][0], bottom);
@@ -3331,10 +3470,12 @@
         ctx.beginPath();
         ctx.arc(...points.at(-1), 2.5, 0, Math.PI * 2);
         ctx.fillStyle = color;
+        setChartGlow(ctx, color, true);
         ctx.fill();
+        setChartGlow(ctx, color, false);
         points = [];
       }
-      samples.forEach((sample, index) => {
+      seriesSamples.forEach((sample, index) => {
         if (Number.isFinite(sample[key])) points.push([pointX(index), bottom - h * sample[key] / max]);
         else strokeSegment();
       });
@@ -3395,7 +3536,7 @@
     const live = trafficRange === 'live';
     const [title, timing] = trafficRanges[trafficRange];
     const formatter = live ? rate : bytes;
-    const series = trafficSeries.filter(([key]) => seriesToggles.some(control => control.value === key && control.checked));
+    const series = trafficSeries().filter(([key]) => seriesToggles.some(control => control.value === key && control.checked));
     const approximate = samples.some(item => item.estimated);
     byId('v1-traffic-chart-title').textContent = title;
     trafficCanvas.setAttribute('aria-label', title + '。聚焦后使用左右方向键查看数据。');
@@ -3501,6 +3642,7 @@
     ]);
   }
 
+  document.addEventListener('hopworld-theme-change', () => { renderCharts(); });
   function renderCharts() {
     if (page === 'overview') {
       const series = {live: liveSamples, today: traffic?.today_hourly, week: traffic?.daily, month: traffic?.month_daily};
@@ -3813,9 +3955,15 @@
     const panel = byId('v1-node-detail');
     if (!current || !panel) return;
     if (!node) {
+      nodeDomainSecretNodeId = null;
+      overviewSecrets.conceal?.('node-detail-domain', false);
       current.replaceChildren(element('p', '在左侧选择一个节点。'));
       panel.replaceChildren(element('p', '选择节点后，这里显示域名、端口和出口。'));
       return;
+    }
+    if (nodeDomainSecretNodeId !== node.id) {
+      overviewSecrets.conceal?.('node-detail-domain', false);
+      nodeDomainSecretNodeId = node.id;
     }
     const [label, state] = nodeState(node);
     const head = element('div', null, 'v1-node-current-body');
@@ -3833,7 +3981,7 @@
     facts.append(
       detailLine('节点类型', kindLabel),
       detailLine('协议类型', protocolName(node.protocol)),
-      detailLine('统一域名', nodeDomain(node)),
+      detailLine('统一域名', nodeDomain(node), {id: 'node-detail-domain', label: '统一域名', before: true}),
       detailLine('入口端口', port === dash ? dash : transport + '  ' + port),
       detailLine('上游出口', nodeUpstream(node)),
       detailLine('连通性', nodeProbeText(node.probe)),
@@ -4322,7 +4470,7 @@
     closeMenus();
     const requested = location.hash.slice(1);
     const next = requested === 'ikev2-monitor' ? 'public' : Object.hasOwn(pages, requested) ? requested : 'overview';
-    if (page !== next && (page === 'overview' || next === 'overview')) hideOverviewSecrets();
+    if (page !== next && (page === 'overview' || next === 'overview' || page === 'nodes' || next === 'nodes')) hideOverviewSecrets();
     if (page !== next && page === 'public' && relayEditing) setRelayEditing(false);
     page = next;
     if (page === 'settings') {
@@ -4526,7 +4674,10 @@
   byId('v1-node-query').addEventListener('input', () => { nodePageIndex = 0; renderNodes(); });
   byId('v1-sub-query').addEventListener('input', () => renderSubscriptions());
   for (const id of ['v1-node-protocol', 'v1-node-source', 'v1-node-connectivity', 'v1-node-sub-options']) {
-    byId(id).addEventListener('change', () => { nodePageIndex = 0; renderNodes(); });
+    const select = byId(id);
+    select.addEventListener('change', () => { nodePageIndex = 0; renderNodes(); });
+    select.setAttribute('aria-haspopup', 'listbox');
+    select.setAttribute('aria-expanded', 'false');
   }
   byId('v1-core-check-all').addEventListener('change', () => {
     const on = byId('v1-core-check-all').checked;
@@ -4597,7 +4748,29 @@
       }
       return;
     }
-    if (!event.target.closest('.v1-menu')) closeMenus();
+    if (!event.target.closest('.v1-menu, .v1-node-filters select, #v1-filter-select-menu')) closeMenus();
+  });
+  document.addEventListener('mousedown', event => {
+    if (document.documentElement.dataset.theme !== 'neon-fusion') return;
+    const select = event.target.closest('.v1-node-filters select');
+    if (!select) return;
+    event.preventDefault();
+    select.focus({preventScroll: true});
+    openFilterSelectMenu(select);
+  }, true);
+  document.addEventListener('click', event => {
+    const option = event.target.closest('#v1-filter-select-menu [role="option"]');
+    if (!option || option.disabled) return;
+    const panel = byId('v1-filter-select-menu');
+    const select = panel?.dataset.selectId ? byId(panel.dataset.selectId) : null;
+    if (!select) return;
+    const next = option.dataset.value ?? '';
+    if (select.value !== next) {
+      select.value = next;
+      select.dispatchEvent(new Event('change', {bubbles: true}));
+    }
+    closeMenus();
+    select.focus({preventScroll: true});
   });
   const hoverTitles = new WeakMap();
   document.addEventListener('pointerover', event => {
@@ -4610,12 +4783,21 @@
     }
   });
   document.addEventListener('keydown', event => {
-    if (event.key !== 'Escape') return;
-    closeMenus();
-    const probe = byId('v1-global-probe');
-    if (probe.open) {
-      probe.open = false;
-      if (probe.contains(document.activeElement)) probe.querySelector('summary').focus();
+    if (event.key === 'Escape') {
+      closeMenus();
+      const probe = byId('v1-global-probe');
+      if (probe.open) {
+        probe.open = false;
+        if (probe.contains(document.activeElement)) probe.querySelector('summary').focus();
+      }
+      return;
+    }
+    if (document.documentElement.dataset.theme !== 'neon-fusion') return;
+    const select = event.target.closest?.('.v1-node-filters select') || (event.target.matches?.('.v1-node-filters select') ? event.target : null);
+    if (!select || select !== document.activeElement) return;
+    if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      openFilterSelectMenu(select);
     }
   });
   const clock = () => { byId('v1-clock').textContent = new Date().toLocaleString('zh-CN', {hour12: false, timeZone: settingsClockZone}); };
@@ -4623,6 +4805,9 @@
   setInterval(clock, 1000);
   route();
   renderOverview();
+  if (byId('v1-health')?.parentElement?.dataset.ready !== 'true') {
+    window.hopworldTheme?.motion?.noteStatus?.(byId('v1-health').parentElement, 'connecting');
+  }
   void loadSystem();
   void loadManagementSettings();
   setInterval(() => { if (!document.hidden) void loadSystem(); }, 30000);
