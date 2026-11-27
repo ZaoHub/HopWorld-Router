@@ -1124,13 +1124,14 @@
         : domain ? 'TLS 证书须与所选域名匹配。' : 'TLS 证书须与所填 IP 匹配。';
       byId('v1-core-profile-cert-link').hidden = mode === 'auto_ip' && (publicIPCertificate || profileCertificate.ready || localHysteriaCertificate);
     }
-    fields.address_family.options[2].disabled = !domain;
-    if (!domain && fields.address_family.value === 'dual') fields.address_family.value = 'ipv4';
+    const dualAllowed = domain || (mode === 'auto_ip' && profileCore?.id === 'xray-core');
+    byId('v1-core-dual').disabled = !dualAllowed;
+    if (!dualAllowed && fields.address_family.value === 'dual') fields.address_family.value = 'ipv4';
     byId('v1-core-address-host').hidden = mode !== 'fixed_ip';
     fields.public_host.required = mode === 'fixed_ip';
     byId('v1-core-bound-domain').hidden = !domain;
     fields.bound_domain.required = domain;
-    fields.address_family.disabled = domain;
+    byId('v1-core-address-family').disabled = domain;
     if (domain) {
       const selected = profileDomains.find(item => item.host === fields.bound_domain.value);
       fields.address_family.value = selected?.family || 'ipv4';
@@ -1169,7 +1170,7 @@
       const fields = profileForm.elements;
       profileCertificate = {required: saved.certificate_required, domain: saved.certificate_domain,
         ready: saved.certificate_ready, family: saved.address_family, expires: saved.ip_certificate_expires};
-      fields.address_mode.options[2].hidden = saved.address_mode !== 'fixed_ip';
+      byId('v1-core-fixed-ip-option').hidden = saved.address_mode !== 'fixed_ip';
       fields.address_mode.value = saved.address_mode;
       fields.address_family.value = saved.address_family;
       fields.tls_mode.value = saved.tls_mode || 'automatic';
@@ -1182,6 +1183,7 @@
       fields.bound_domain.value = profileDomains.some(item => item.host === saved.public_host) ? saved.public_host : '';
       addressResult.textContent = [
         saved.detected_host && `当前订阅地址 ${saved.detected_host}`,
+        saved.detected_ipv6 && `IPv6 ${saved.detected_ipv6}`,
         saved.ddns_ipv4 && `上次更新 A ${saved.ddns_ipv4}`,
         saved.ddns_ipv6 && `上次更新 AAAA ${saved.ddns_ipv6}`,
         saved.address_error,
@@ -1232,13 +1234,12 @@
 
   profileMode.addEventListener('change', syncProfileEgress);
   profileForm.elements.tls_mode.addEventListener('change', syncProfileAddress);
-  for (const name of ['address_mode', 'address_family', 'ddns', 'bound_domain']) {
-    profileForm.elements[name].addEventListener('change', () => {
-      addressResult.textContent = '';
-      syncProfileAddress();
-      syncProfileSubmit();
-    });
-  }
+  profileForm.addEventListener('change', event => {
+    if (!['address_mode', 'address_family', 'ddns', 'bound_domain'].includes(event.target.name)) return;
+    addressResult.textContent = '';
+    syncProfileAddress();
+    syncProfileSubmit();
+  });
   addressCheck.addEventListener('click', async () => {
     const fields = profileForm.elements;
     const family = fields.address_family.value;
@@ -1249,7 +1250,8 @@
     addressResult.textContent = '正在检查地址…';
     try {
       const result = await call('/api/v1/cores/address-check', {mode: 'auto_ip', family});
-      if (current()) addressResult.textContent = `检测到公网地址 ${result.address} · 入站待验证`;
+      const addresses = family === 'dual' ? `${result.ipv4} · ${result.ipv6}` : result.address;
+      if (current()) addressResult.textContent = `检测到公网地址 ${addresses} · 入站待验证`;
     } catch (error) {
       if (current()) addressResult.textContent = error.message;
     } finally {

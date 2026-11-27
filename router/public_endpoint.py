@@ -63,7 +63,7 @@ def is_ip_host(host):
         return False
 
 
-def direct_address_status(version):
+def local_route_address(version):
     family = socket.AF_INET6 if version == 6 else socket.AF_INET
     local = ''
     try:
@@ -72,6 +72,11 @@ def direct_address_status(version):
             local = route.getsockname()[0].split('%', 1)[0]
     except OSError:
         pass
+    return local
+
+
+def direct_address_status(version):
+    local = local_route_address(version)
     public = ''
     try:
         detected = ipaddress.ip_address(detect_public_ip(version, timeout=2, direct=True))

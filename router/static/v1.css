@@ -1035,3 +1035,37 @@ div.v1-settings-fields { display: grid; grid-template-columns: minmax(100px,34%)
   .v1-about-hero { align-items: center; }
   .v1-about-version-actions > :is(button, a) { min-height: 44px; }
 }
+
+.v1-core-profile-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.v1-core-profile-options legend { margin-bottom: 8px; }
+.v1-core-profile-options label { position: relative; margin: 0; }
+.v1-core-profile-options input[type="radio"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.v1-core-profile-options span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 6px 12px;
+  border: 1px solid #314865;
+  border-radius: 8px;
+  background: #0c1725;
+  color: #e8f1ff;
+  cursor: pointer;
+}
+.v1-core-profile-options input:checked + span { border-color: #72bff8; background: #18324a; }
+.v1-core-profile-options input:focus-visible + span { outline: 2px solid #72bff8; outline-offset: 2px; }
+.v1-core-profile-options input:disabled + span { opacity: .55; cursor: default; }

@@ -11,7 +11,7 @@ import tempfile
 import uuid
 from functools import lru_cache
 from pathlib import Path
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, unquote, urlsplit
 
 from router.acme import HYSTERIA_CERTIFICATE_NAME
 from router.core_process import CoreProcess
@@ -88,6 +88,16 @@ def render_publisher(core_id, profile, certificate=None, proxy=None, *, certific
         parts = urlsplit(link)
         if parts.scheme in names:
             links[index] = parts._replace(fragment=names[parts.scheme]).geturl()
+    if (core_id == 'xray-core' and profile.get('address_mode') == 'auto_ip'
+            and profile.get('address_family') == 'dual' and (ipv6 := profile.get('public_host_ipv6'))):
+        parts = urlsplit(links[0])
+        credentials, _, _ = parts.netloc.rpartition('@')
+        name = unquote(parts.fragment)
+        links = [
+            parts._replace(fragment=quote(f'{name} · IPv4')).geturl(),
+            parts._replace(netloc=f'{credentials}@[{ipv6}]:{parts.port}',
+                           fragment=quote(f'{name} · IPv6')).geturl(),
+        ]
     return config, links
 
 

@@ -8,14 +8,14 @@
   <link rel="icon" href="logo.png" type="image/png">
   <link rel="apple-touch-icon" href="logo.png">
   <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="v1.css">
+  <link rel="stylesheet" href="v1.css?v=xray-dual">
   <!-- DASHBOARD SCRIPTS -->
   <script src="qrcode.js" defer></script>
   <script src="v1-icons.js" defer></script>
   <script src="app.js" defer></script>
   <script src="v1-overview-secret.js" defer></script>
   <script src="v1-about.js" defer></script>
-  <script src="v1.js" defer></script>
+  <script src="v1.js?v=xray-dual" defer></script>
 </head>
 <body>
   <dialog id="first-login-dialog" class="v1-dialog" aria-labelledby="first-login-title" aria-describedby="first-login-description">
@@ -265,10 +265,12 @@
           </div>
           <p id="v1-core-profile-legacy" class="field-hint" hidden></p>
           <div class="v1-core-profile-field">
-            <label for="v1-core-address-mode">订阅地址类型</label>
-            <select id="v1-core-address-mode" name="address_mode">
-              <option value="domain">域名</option><option value="auto_ip">自动获取公网 IP</option><option value="fixed_ip">手动 IP（旧配置）</option>
-            </select>
+            <fieldset class="v1-core-profile-options">
+              <legend>订阅地址类型</legend>
+              <label><input type="radio" name="address_mode" value="domain" checked><span>域名</span></label>
+              <label><input type="radio" name="address_mode" value="auto_ip"><span>自动获取公网 IP</span></label>
+              <label id="v1-core-fixed-ip-option" hidden><input type="radio" name="address_mode" value="fixed_ip"><span>手动 IP（旧配置）</span></label>
+            </fieldset>
             <div id="v1-core-address-host">
               <label for="v1-core-profile-host">订阅 IP</label>
               <input id="v1-core-profile-host" name="public_host" maxlength="253" placeholder="请输入 IP 地址">
@@ -278,10 +280,12 @@
               <select id="v1-core-domain-choice" name="bound_domain"></select>
               <a id="v1-core-bind-link" href="#certificates">前往域名与证书绑定</a>
             </div>
-            <label for="v1-core-address-family">地址族</label>
-            <select id="v1-core-address-family" name="address_family">
-              <option value="ipv4">IPv4</option><option value="ipv6">IPv6</option><option value="dual">IPv4 + IPv6</option>
-            </select>
+            <fieldset class="v1-core-profile-options" id="v1-core-address-family">
+              <legend>地址族</legend>
+              <label><input type="radio" name="address_family" value="ipv4" checked><span>IPv4</span></label>
+              <label><input type="radio" name="address_family" value="ipv6"><span>IPv6</span></label>
+              <label><input type="radio" name="address_family" value="dual" id="v1-core-dual"><span>IPv4 + IPv6</span></label>
+            </fieldset>
             <label class="v1-core-profile-check" id="v1-core-address-ddns">
               <input name="ddns" type="checkbox"><span>动态 IP 自动更新 DNS（DDNS）</span>
             </label>
