@@ -88,16 +88,19 @@ def render_publisher(core_id, profile, certificate=None, proxy=None, *, certific
         parts = urlsplit(link)
         if parts.scheme in names:
             links[index] = parts._replace(fragment=names[parts.scheme]).geturl()
-    if (core_id == 'xray-core' and profile.get('address_mode') == 'auto_ip'
-            and profile.get('address_family') == 'dual' and (ipv6 := profile.get('public_host_ipv6'))):
-        parts = urlsplit(links[0])
-        credentials, _, _ = parts.netloc.rpartition('@')
-        name = unquote(parts.fragment)
-        links = [
-            parts._replace(fragment=quote(f'{name} · IPv4')).geturl(),
-            parts._replace(netloc=f'{credentials}@[{ipv6}]:{parts.port}',
-                           fragment=quote(f'{name} · IPv6')).geturl(),
-        ]
+    if (profile.get('address_mode') == 'auto_ip' and profile.get('address_family') == 'dual'
+            and (ipv6 := profile.get('public_host_ipv6'))):
+        variants = []
+        for link in links:
+            parts = urlsplit(link)
+            credentials, separator, _ = parts.netloc.rpartition('@')
+            name = unquote(parts.fragment)
+            variants.extend((
+                parts._replace(fragment=quote(f'{name} · IPv4')).geturl(),
+                parts._replace(netloc=f'{credentials}{separator}[{ipv6}]:{parts.port}',
+                               fragment=quote(f'{name} · IPv6')).geturl(),
+            ))
+        links = variants
     return config, links
 
 
