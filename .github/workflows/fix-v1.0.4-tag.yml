@@ -1,0 +1,19 @@
+name: Correct the v1.0.4 release tag
+on:
+  push:
+    branches: [codex/fix-v1.0.4-tag]
+permissions:
+  contents: write
+jobs:
+  update-tag:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Point the new release tag at its merged source
+        shell: bash
+        run: |
+          ref="repos/$GITHUB_REPOSITORY/git/refs/tags/v1.0.4"
+          test "$(gh api "$ref" --jq '.object.sha')" = 8cc67c87ae6e078eb5c0801585f6343346a4af34
+          gh api --method PATCH "$ref" -f sha=f06fecbeeb14cb7ab71de21acdf4e33cb3c37961 -F force=false --jq '.object.sha'
+          test "$(gh api "$ref" --jq '.object.sha')" = f06fecbeeb14cb7ab71de21acdf4e33cb3c37961
