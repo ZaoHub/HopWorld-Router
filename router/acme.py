@@ -105,6 +105,48 @@ def letsencrypt_live(domain):
     return Path(f'/etc/letsencrypt/live/{domain}')
 
 
+PUBLIC_ADMIN_CERT_PREFIX = 'hopworld-public-admin-'
+
+
+def management_https_host():
+    return os.environ.get('HOPWORLD_MANAGEMENT_HTTPS_HOST', '').strip().lower().rstrip('.')
+
+
+def ensure_management_https_certificate(data_dir, host=None, *, validate=True):
+    """Reuse the public-admin Nginx certificate for Router HTTPS listeners.
+
+    Install writes lineage hopworld-public-admin-<host>; hopworld-router usually
+    cannot read /etc/letsencrypt, so prefer the data-dir cache seeded by root.
+    """
+    host = (host or management_https_host()).strip().lower().rstrip('.')
+    if not host:
+        raise ValueError('未配置公网 HTTPS 管理地址')
+    data_dir = Path(data_dir).resolve()
+    cert_out, key_out = cert_paths(data_dir, host)
+    alt = cert_paths(data_dir, PUBLIC_ADMIN_CERT_PREFIX + host)
+    for live in (letsencrypt_live(PUBLIC_ADMIN_CERT_PREFIX + host), letsencrypt_live(host)):
+        try:
+            if live.is_dir():
+                _sync_live_certificate(live, cert_out, key_out)
+                break
+        except (OSError, ValueError, PermissionError):
+            continue
+    if (not cert_out.is_file() or not key_out.is_file()) and all(path.is_file() for path in alt):
+        try:
+            _sync_live_certificate(alt[0].parent, cert_out, key_out)
+        except (OSError, ValueError, PermissionError):
+            pass
+    if not cert_out.is_file() or not key_out.is_file():
+        raise ValueError('公网管理 HTTPS 证书尚未同步到 Router')
+    expires = days_until_expiry(cert_out)
+    if expires is None or expires <= 0:
+        raise ValueError('公网管理 HTTPS 证书已过期')
+    if validate:
+        # leaf=None: require a publicly trusted chain covering the management host.
+        _validate_imported_certificate(cert_out, key_out, None, host)
+    return host, cert_out, key_out
+
+
 def days_until_expiry(cert_path):
     if not Path(cert_path).is_file():
         return None

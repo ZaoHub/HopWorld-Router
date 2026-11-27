@@ -7,7 +7,8 @@ import time
 import unicodedata
 from pathlib import Path
 
-from router.acme import HYSTERIA_CERTIFICATE_NAME, cert_paths, ip_certificate_paths, validate_ip_certificate
+from router.acme import (HYSTERIA_CERTIFICATE_NAME, cert_paths, ensure_management_https_certificate,
+                         ip_certificate_paths, management_https_host, validate_ip_certificate)
 from router.local_node import validate_public_host
 from router.management_access import ManagementHTTPServer, ManagementTLS
 from router.public_endpoint import is_ip_host
@@ -69,6 +70,11 @@ class PublicSubscription:
         domain = acme.get('domain')
         if domain and domain != HYSTERIA_CERTIFICATE_NAME and acme.get('certificate_valid'):
             choices[domain] = 'domain'
+        try:
+            host, _, _ = ensure_management_https_certificate(self.store.data_dir, validate=False)
+            choices.setdefault(host, 'ip' if is_ip_host(host) else 'domain')
+        except ValueError:
+            pass
 
         records = [(record.get('address'), record.get('expires', 0)) for record in self.store.ip_certificates().values()]
         hysteria = self.store.independent_profiles().get('hysteria2', {})
@@ -89,6 +95,13 @@ class PublicSubscription:
                 'hysteria_local': all(path.is_file() for path in local_cert)}
 
     def _certificate(self, domain):
+        managed = management_https_host()
+        if domain and managed and domain == managed:
+            try:
+                _, cert, key = ensure_management_https_certificate(self.store.data_dir, domain)
+                return ManagementTLS(self.store, domain=domain, paths=(cert, key))
+            except ValueError:
+                pass
         if domain and is_ip_host(domain):
             paths = tuple(map(Path, ip_certificate_paths(self.store.data_dir, domain)))
             try:

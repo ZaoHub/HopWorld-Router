@@ -28,7 +28,7 @@ from urllib.request import HTTPRedirectHandler, HTTPSHandler, ProxyHandler, Requ
 from router.subscription import MAX_SUBSCRIPTION_BYTES, decode_subscription, encode_subscription, parse_subscription, upstream_node_id, vmess_fields
 from router.probe import HYSTERIA_SCHEMES, LIGHT_CLIENT_SCHEMES, TARGETS, TEST_URL, UnsupportedNode, outbound, probe, probe_light
 from router.local_proxy_discovery import discover
-from router import autostart, system_update
+from router import autostart, incremental_update, runtime_layout, system_update
 from router.database_backup import data_lock, snapshot
 from router.node_export import EXPORT_FORMATS, export_client_config
 from router.network_security import API as SECURITY_API, NetworkSecurity
@@ -43,7 +43,7 @@ from router.local_node import (
     DEFAULT_LOCAL_PORT, DEFAULT_NODE_NAME, LOCAL_EGRESS_SOCKS_PORT, native_hysteria_port,
     _protocol_label, quic_ports, validate_node_name, validate_public_host,
 )
-from router.public_endpoint import detect_public_host, detect_public_ip, direct_address_status, is_ip_host, local_route_address
+from router.public_endpoint import detect_public_host, detect_public_ip, direct_address_status, is_ip_host
 from router.ddns import publish_ddns
 from router.acme import (ACME_KEY, CERTIFICATE_PEM, HYSTERIA_CERTIFICATE_NAME, IP_CERTIFICATES_KEY, SHORTLIVED_RENEW_SECONDS,
                          cert_paths, days_until_expiry,
@@ -732,9 +732,7 @@ class Store:
                 for link in self.publisher_runtime(profile_id).links():
                     parts = urlsplit(link)
                     endpoint = {
-                        'core_id': core_id, 'public_host': profile.get(
-                            'detected_ipv6' if profile.get('public_host_ipv6') and ':' in (parts.hostname or '') else 'detected_host'
-                        ) or parts.hostname, 'port': parts.port,
+                        'core_id': core_id, 'public_host': profile.get('detected_host') or parts.hostname, 'port': parts.port,
                         'protocol': parts.scheme, 'egress': profile['egress'],
                         'bind': publisher_bind(profile),
                     }
@@ -772,7 +770,6 @@ class Store:
                 default_mode = 'fixed_ip'
         return {
             'public_host': host, 'detected_host': profile.get('detected_host', ''),
-            'detected_ipv6': profile.get('detected_ipv6', ''),
             'address_mode': profile.get('address_mode', default_mode),
             'address_family': profile.get('address_family', 'ipv6' if ':' in host else 'ipv4'),
             'ddns': profile.get('ddns', False), 'address_error': profile.get('address_error', ''),
@@ -1073,15 +1070,12 @@ class Store:
             else:
                 original_links = [link] if (link := source_service.link(settings)) else []
             names = {parts.scheme: parts.fragment for parts in map(urlsplit, original_links)}
-            if source.get('public_host_ipv6'):
-                names = {scheme: quote(unquote(name).removesuffix(' · IPv4').removesuffix(' · IPv6'))
-                         for scheme, name in names.items()}
             if legacy and protocol not in names:
                 suffix = {'hysteria2': 'Hysteria2' if core_id == 'sing-box' else '原生 Hysteria2',
                           'tuic': 'TUIC'}[protocol]
                 names[protocol] = quote(_protocol_label(source['name'], suffix))
             shared = ('public_host', 'address_family', 'public_listener', 'address_mode', 'ddns',
-                      'public_host_ipv6', 'detected_host', 'detected_ipv6', 'egress', 'upstream_id')
+                      'detected_host', 'egress', 'upstream_id')
             merge = (previous_target.get('enabled') and protocol not in publisher_ports(target, previous_target)
                      and all((new_target.get(key) or '') == (previous_target.get(key) or '') for key in shared))
             if merge:
@@ -1102,9 +1096,9 @@ class Store:
                 new_target['uuid'] = source['uuid']
             profile_credentials(new_target)
             prepared = self._independent_config(target_id, new_target)
-            originals = {link for link in original_links if urlsplit(link).scheme == protocol}
-            if not originals.issubset(prepared[1]):
-                raise ValueError('目标内核无法保留原节点的连接参数')
+            if original := next((link for link in original_links if urlsplit(link).scheme == protocol), ''):
+                if original not in prepared[1]:
+                    raise ValueError('目标内核无法保留原节点的连接参数')
 
             remaining = publisher_ports(core_id, source)
             del remaining[protocol]
@@ -1216,14 +1210,13 @@ class Store:
             not is_ip_host(host) or (':' in host) != (family == 'ipv6') or family == 'dual'
         ):
             raise ValueError('订阅地址与所选类型不匹配')
-        dual_ip = automatic and family == 'dual'
+        if automatic and family == 'dual':
+            raise ValueError('自动获取公网 IP 时请选择 IPv4 或 IPv6')
         if ddns and (address_mode != 'domain' or '.' not in host):
             raise ValueError('DDNS 需要完整域名')
         tls_mode = data.get('tls_mode', 'automatic')
         if tls_mode not in ('automatic', 'ip_acme') or tls_mode == 'ip_acme' and (core_id != 'hysteria2' or not automatic):
             raise ValueError('公网 IP 证书仅用于 Hysteria 2 自动公网 IP 模式')
-        if dual_ip and tls_mode == 'ip_acme':
-            raise ValueError('公网 IP 证书模式只支持单地址族，双栈请选择自动 TLS 证书')
         ip_certificate = {'tls_mode': tls_mode, 'ip_certificate_email': '', 'ip_certificate_expires': 0,
                           'ip_certificate_pending': False}
         certificate_host = ''
@@ -1234,11 +1227,7 @@ class Store:
                 if core_id != 'hysteria2':
                     raise ValueError('自动公网 IP 模式需要有效的 TLS 域名证书。订阅使用公网 IP，证书域名用于校验连接。')
                 certificate_host = ''
-        if dual_ip:
-            detected, detected_ipv6 = (self._detect_dual_public_ip(version) for version in (4, 6))
-        else:
-            detected = self._detect_direct_public_ip(6 if family == 'ipv6' else 4) if automatic else ''
-            detected_ipv6 = ''
+        detected = self._detect_direct_public_ip(6 if family == 'ipv6' else 4) if automatic else ''
         if tls_mode == 'ip_acme':
             email = validate_acme_email(data.get('ip_certificate_email'))
             service = self.independent[core_id]
@@ -1270,12 +1259,6 @@ class Store:
             profile = {**previous, **data, **ip_certificate, 'public_host': host, 'enabled': True, 'address_mode': address_mode,
                        'address_family': family, 'ddns': ddns, 'detected_host': detected, 'address_error': '',
                        'upstream_id': upstream_id if mode == 'fixed' else ''}
-            if dual_ip:
-                profile['public_host_ipv6'] = previous.get('public_host_ipv6') or detected_ipv6
-                profile['detected_ipv6'] = detected_ipv6
-            else:
-                profile.pop('public_host_ipv6', None)
-                profile.pop('detected_ipv6', None)
             if port != previous.get('port'):
                 if profile.get('quic_protocols') == ['tuic']:
                     profile['tuic_port'] = port
@@ -1327,23 +1310,6 @@ class Store:
         if host.version != version or not host.is_global or host.is_multicast:
             raise ValueError(f'未检测到公网 IPv{version} 地址')
         return str(host)
-
-    @staticmethod
-    def _dual_local_address(version):
-        address = local_route_address(version)
-        if address:
-            host = ipaddress.ip_address(address)
-            if host.version == version and host.is_global and not host.is_multicast and not host.is_reserved:
-                return str(host)
-        return None
-
-    def _detect_dual_public_ip(self, version):
-        try:
-            return self._detect_direct_public_ip(version)
-        except ValueError:
-            if address := self._dual_local_address(version):
-                return address
-            raise
 
     def _domain_binding_target(self, host, family, relay=None):
         if family not in ('ipv4', 'ipv6', 'dual', 'ipv4_first'):
@@ -1495,9 +1461,6 @@ class Store:
                 observed[version] = None
         if not active:
             return
-        local = {}
-        if any(profile.get('public_host_ipv6') for profile in active.values()):
-            local = {version: self._dual_local_address(version) for version, address in observed.items() if not address}
         with self._local_lock:
             current = self.independent_profiles()
             updates = {}
@@ -1505,10 +1468,7 @@ class Store:
                 if current.get(key) != profile:
                     continue
                 versions = families[profile['address_family']]
-                detected = observed
-                if profile.get('public_host_ipv6'):
-                    detected = {version: observed[version] or local.get(version) for version in versions}
-                missing = [f'IPv{version}' for version in versions if not detected[version]]
+                missing = [f'IPv{version}' for version in versions if not observed[version]]
                 update = {'address_error': f'暂未检测到 {"、".join(missing)}，保留上次地址' if missing else ''}
                 if profile.get('ddns'):
                     changed = {f'ipv{version}': observed[version] for version in versions
@@ -1521,11 +1481,6 @@ class Store:
                             update['address_error'] = 'DDNS 更新失败，请检查 DNS 提供方配置'
                         else:
                             update.update({f'ddns_{family}': host for family, host in changed.items()})
-                elif profile.get('public_host_ipv6'):
-                    if detected[4]:
-                        update['detected_host'] = detected[4]
-                    if detected[6]:
-                        update['detected_ipv6'] = detected[6]
                 elif not missing:
                     update['detected_host'] = observed[versions[0]]
                 if any(profile.get(field) != value for field, value in update.items()):
@@ -3062,7 +3017,7 @@ def make_handler(store, password, public_subscription=None, *, request_restart=N
             if not self.management_permitted(): return
             if path == '/login':
                 return self.login_page()
-            if path in ('/login.css', '/login.js'):
+            if path in ('/login.css', '/login.js', '/v1-theme-neon-fusion.css'):
                 filename = path[1:]
                 content_type = 'text/css' if filename.endswith('.css') else 'application/javascript'
                 return self.reply(200, (STATIC / filename).read_bytes(), content_type + '; charset=utf-8')
@@ -3179,6 +3134,7 @@ def make_handler(store, password, public_subscription=None, *, request_restart=N
             if path == '/v1-overview-secret.js': return self.reply(200, (STATIC / 'v1-overview-secret.js').read_bytes(), 'application/javascript; charset=utf-8')
             if path == '/v1-about.js': return self.reply(200, (STATIC / 'v1-about.js').read_bytes(), 'application/javascript; charset=utf-8')
             if path == '/v1.css': return self.reply(200, (STATIC / 'v1.css').read_bytes(), 'text/css; charset=utf-8')
+            if path == '/v1-theme.js': return self.reply(200, (STATIC / 'v1-theme.js').read_bytes(), 'application/javascript; charset=utf-8')
             if path == '/app.js': return self.reply(200, (STATIC / 'app.js').read_bytes(), 'application/javascript; charset=utf-8')
             if path == '/qrcode.js': return self.reply(200, (STATIC / 'qrcode.js').read_bytes(), 'application/javascript; charset=utf-8')
             if path == '/style.css': return self.reply(200, (STATIC / 'style.css').read_bytes(), 'text/css; charset=utf-8')
@@ -3255,10 +3211,18 @@ def make_handler(store, password, public_subscription=None, *, request_restart=N
                 if status['installation'] == 'package':
                     status.update(auto_check=store.updates.preferences()['package'],
                                   auto_apply=store.updates.preferences()['package'])
+                status['runtime'] = runtime_layout.status()
+                status['incremental'] = {
+                    'state': 'idle', 'changed_files': [], 'channel': status['runtime'].get('channel', 'stable'),
+                    'note': '',
+                }
                 return self.json(200, status)
+            if path == '/api/v1/updates/runtime':
+                return self.json(200, runtime_layout.status())
             if path == '/api/v1/updates':
                 return self.json(200, {**store.updates.history(), 'preferences': store.updates.preferences(),
                                        'installation': system_update.current_target(),
+                                       'runtime': runtime_layout.status(),
                                        'components': [row[:2] for row in CORES]})
             if path == '/api/local/dns-hints':
                 if not self.authorized():
@@ -3368,9 +3332,6 @@ def make_handler(store, password, public_subscription=None, *, request_restart=N
                     if family not in ('ipv4', 'ipv6', 'dual', 'ipv4_first'):
                         raise ValueError('请选择地址族')
                     if data.get('mode') == 'auto_ip':
-                        if family == 'dual':
-                            return self.json(200, {'ipv4': store._detect_dual_public_ip(4),
-                                                   'ipv6': store._detect_dual_public_ip(6)})
                         if family not in ('ipv4', 'ipv6'):
                             raise ValueError('自动获取公网 IP 时请选择 IPv4 或 IPv6')
                         return self.json(200, {'address': store._detect_direct_public_ip(6 if family == 'ipv6' else 4)})
@@ -3642,6 +3603,22 @@ def make_handler(store, password, public_subscription=None, *, request_restart=N
                         raise ValueError('更新请求不能包含参数')
                     store.updates.start_project()
                     return self.json(200, {'ok': True})
+                elif path == '/api/v1/updates/runtime':
+                    action = data.get('action')
+                    if action == 'migrate':
+                        return self.json(200, {'ok': True, 'runtime': runtime_layout.migrate_from_seed(
+                            package_version=os.environ.get('HOPWORLD_PACKAGE_VERSION', ''),
+                            commit=os.environ.get('HOPWORLD_SOURCE_COMMIT', ''),
+                        )})
+                    if action == 'channel':
+                        return self.json(200, {'ok': True, 'runtime': runtime_layout.set_channel(data.get('channel'))})
+                    if action == 'rollback':
+                        return self.json(200, {'ok': True, 'runtime': runtime_layout.rollback_to(data.get('id', ''))})
+                    if action == 'check-files':
+                        return self.json(200, {'ok': True, 'incremental': incremental_update.check()})
+                    if action == 'apply-files':
+                        incremental_update.apply()
+                    raise ValueError('运行时更新操作无效')
                 elif path == '/api/ikev2':
                     return self.json(200, {'ok': True, 'ikev2': store.configure_ikev2(
                         bool(data.get('enabled')), data.get('public_host'), data.get('remote_id'),
