@@ -5,8 +5,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from router.acme import (_run_certbot, cert_paths, days_until_expiry, ensure_ip_certificate, ip_certificate_paths,
-                         materialize_certs, renew_certificate, stage_certificate, sync_certificate, validate_acme_email)
+from router.acme import (_run_certbot, cert_paths, days_until_expiry, ensure_ip_certificate,
+                         ensure_management_https_certificate, ip_certificate_paths, materialize_certs,
+                         renew_certificate, stage_certificate, sync_certificate, validate_acme_email)
 
 
 class AcmeTests(unittest.TestCase):
@@ -20,6 +21,27 @@ class AcmeTests(unittest.TestCase):
             key.write_bytes(b'cached key')
             with patch('router.acme.letsencrypt_live', return_value=Mock(is_dir=Mock(side_effect=PermissionError))):
                 self.assertEqual(materialize_certs(data, domain), (cert, key))
+
+    @unittest.skipUnless(shutil.which('openssl'), 'OpenSSL required for management HTTPS fixture')
+    def test_management_https_certificate_reuses_public_admin_lineage_cache(self):
+        host = '203.0.113.10'
+        with tempfile.TemporaryDirectory() as temporary, patch.dict('os.environ', {
+            'HOPWORLD_MANAGEMENT_HTTPS_HOST': host,
+        }):
+            data = Path(temporary)
+            live = data / 'live' / f'hopworld-public-admin-{host}'
+            live.mkdir(parents=True)
+            subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '2',
+                            '-subj', f'/CN={host}', '-addext', f'subjectAltName=IP:{host}',
+                            '-out', str(live / 'fullchain.pem'), '-keyout', str(live / 'privkey.pem')],
+                           check=True, capture_output=True)
+            with patch('router.acme.letsencrypt_live', side_effect=lambda name: live if name.endswith(host) else Mock(is_dir=Mock(return_value=False))), \
+                 patch('router.acme._validate_imported_certificate'):
+                found, cert, key = ensure_management_https_certificate(data, validate=True)
+            self.assertEqual(found, host)
+            self.assertTrue(cert.is_file())
+            self.assertTrue(key.is_file())
+            self.assertEqual(cert.parent.name, host)
 
     def test_ip_certificate_reports_connection_failure_from_certbot_stdout(self):
         command = ['certbot', 'certonly', '--ip-address', '8.8.8.8']
