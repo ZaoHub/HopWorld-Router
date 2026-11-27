@@ -170,7 +170,7 @@ Ubuntu／Debian 测试环境可从源码构建带 SHA-256 校验文件的 `.deb`
 在使用 systemd 的 VPS 上，以 root 执行。服务器需有 `curl` 并能访问 GitHub：
 
 ```bash
-( set -o pipefail; curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/v1.0.3/deploy/install.sh | bash )
+( set -o pipefail; curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/v1.0.4/deploy/install.sh | bash )
 ```
 
 - **Ubuntu 22.04+、Debian 12+**：校验 Release 的 `.deb`，由 APT 安装并启动后台。
@@ -179,13 +179,17 @@ Ubuntu／Debian 测试环境可从源码构建带 SHA-256 校验文件的 `.deb`
 
 ### 同时启用本地和外网后台
 
-Ubuntu 22.04+ 或 Debian 12+ 上，放行公网 TCP 80 和 443，然后把以下示例 IP 换成服务器的公网 IPv4 或已解析到该服务器的域名：
+在 Ubuntu 22.04+ 或 Debian 12+ 上，通过 SSH 以 root 执行下方命令。把示例 IP 换成服务器的公网 IPv4 或已解析到该服务器的域名：
 
 ```bash
-( set -o pipefail; curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/main/deploy/install.sh | bash -s -- --public-admin 203.0.113.10 )
+( set -o pipefail; curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/v1.0.4/deploy/install.sh | bash -s -- --public-admin 203.0.113.10 )
 ```
 
-安装继续保留服务器本机的 `http://127.0.0.1:8080/`，并通过 Nginx 和 Certbot 配置可直接打开的公网 HTTPS 地址。安装完成会分别打印两条地址。首次管理员密码通过本地地址或 SSH 隧道设置。已安装的服务器可以直接运行 `deploy/hopworld-enable-public-admin.sh 公网IPv4或域名`。
+申请证书前，脚本会分别询问是否通过 UFW 或运行中的 firewalld 放行 TCP 80 和 443。每项输入 `Y` 才会添加规则，输入 `N` 或直接回车会跳过该项。没有交互终端时会跳过防火墙修改。如果服务器或上游防火墙仍拦截 TCP 80，证书申请可能失败。
+
+UFW 未启用时，脚本会另外询问是否为当前 SSH 来源和实际服务端端口添加规则并启用 UFW。只有在收到确认且成功添加 SSH 和已选网页端口规则后才会启用。使用 sudo 提权时，需保留 `SSH_CONNECTION` 才能识别当前连接。云安全组与 NAT 转发需在对应平台确认公网 TCP 80、443 可达。端口表中的订阅、节点、FRP 和 VPN 端口按对应功能的实际配置放行。
+
+安装继续保留服务器本机的 `http://127.0.0.1:8080/`，并通过 Nginx 和 Certbot 配置可直接打开的公网 HTTPS 地址。端口确认、所选防火墙规则的处理和 HTTPS 就绪检查结束后，安装脚本才会在当前 SSH 终端打印完成提示和两条管理地址。首次管理员密码通过本地地址或 SSH 隧道设置。已安装的服务器可以直接运行 `deploy/hopworld-enable-public-admin.sh 公网IPv4或域名`。
 
 旧系统安装的程序位于 `/opt/hopworld-router-legacy`，数据位于 `/var/lib/hopworld-router`。旧系统后续升级时，以 root 执行目标 GitHub Release 公布的一键命令。升级切换前备份数据库。已有其他方式安装时，先备份并完成迁移。版本同步流程见 [V1 版本发布与更新](docs/V1版本发布与更新.md)。
 
