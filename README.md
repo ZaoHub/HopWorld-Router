@@ -189,7 +189,13 @@ Ubuntu／Debian 测试环境可从源码构建带 SHA-256 校验文件的 `.deb`
 
 UFW 未启用时，脚本会另外询问是否为当前 SSH 来源和实际服务端端口添加规则并启用 UFW。只有在收到确认且成功添加 SSH 和已选网页端口规则后才会启用。使用 sudo 提权时，需保留 `SSH_CONNECTION` 才能识别当前连接。云安全组与 NAT 转发需在对应平台确认公网 TCP 80、443 可达。端口表中的订阅、节点、FRP 和 VPN 端口按对应功能的实际配置放行。
 
-安装继续保留服务器本机的 `http://127.0.0.1:8080/`，并通过 Nginx 和 Certbot 配置可直接打开的公网 HTTPS 地址。端口确认、所选防火墙规则的处理和 HTTPS 就绪检查结束后，安装脚本才会在当前 SSH 终端打印完成提示和两条管理地址。首次管理员密码通过本地地址或 SSH 隧道设置。已安装的服务器可以直接运行 `deploy/hopworld-enable-public-admin.sh 公网IPv4或域名`。
+安装继续保留服务器本机的 `http://127.0.0.1:8080/`，并通过 Nginx 和 Certbot 配置可直接打开的公网 HTTPS 地址。端口确认、所选防火墙规则的处理和 HTTPS 就绪检查结束后，安装脚本才会在当前 SSH 终端打印完成提示和两条管理地址。首次管理员密码通过本地地址或 SSH 隧道设置。首次也可从公网 HTTPS 完成。登录服务器后执行下面的命令生成 30 分钟内有效的首次设置链接，在链接对应的浏览器窗口用 `admin / admin` 登录并按弹窗设置新密码。日常从公网管理地址登录。已安装的服务器可以直接运行 `deploy/hopworld-enable-public-admin.sh 公网IPv4或域名`。
+
+在服务器上生成公网首次设置链接：
+
+```bash
+( set -o pipefail; curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/main/deploy/hopworld-first-login-link.sh | bash )
+```
 
 旧系统安装的程序位于 `/opt/hopworld-router-legacy`，数据位于 `/var/lib/hopworld-router`。旧系统后续升级时，以 root 执行目标 GitHub Release 公布的一键命令。升级切换前备份数据库。已有其他方式安装时，先备份并完成迁移。版本同步流程见 [V1 版本发布与更新](docs/V1版本发布与更新.md)。
 
