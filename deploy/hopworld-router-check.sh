@@ -51,13 +51,47 @@ esac
 url="http://$host:$port"
 https_host=$(setting HOPWORLD_MANAGEMENT_HTTPS_HOST)
 
+# SSH_CONNECTION reports the server-side address and may contain a private address behind NAT.
+read -r _ _ ssh_host ssh_port _ <<< "${SSH_CONNECTION:-}"
+if [[ -n "${HOPWORLD_SSH_HOST:-}" ]]; then
+    ssh_host=$HOPWORLD_SSH_HOST
+elif [[ -n "$ssh_host" ]] && command -v python3 >/dev/null 2>&1; then
+    if ! python3 -c '
+import ipaddress
+import sys
+address = ipaddress.ip_address(sys.argv[1])
+sys.exit(not (address.is_global and not address.is_multicast and not address.is_reserved))
+' "$ssh_host" 2>/dev/null; then
+        ssh_host=
+    fi
+else
+    ssh_host=
+fi
+if ! [[ "$ssh_host" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ || ( "$ssh_host" =~ ^[0-9a-fA-F:]+$ && "$ssh_host" == *:* ) ]]; then
+    ssh_host=
+fi
+ssh_port=${HOPWORLD_SSH_PORT:-$ssh_port}
+if ! [[ "$ssh_port" =~ ^[0-9]{1,5}$ ]] || (( 10#$ssh_port < 1 || 10#$ssh_port > 65535 )); then
+    ssh_port=22
+fi
+ssh_port=$((10#$ssh_port))
+ssh_user=${SUDO_USER:-$(id -un)}
+if ! [[ "$ssh_user" =~ ^[a-zA-Z_][a-zA-Z0-9_.-]*$ ]]; then ssh_user=用户名; fi
+
 printf '\n%s\n' 'HopWorld Router 管理与排障'
 if [[ "$https_host" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]; then
-    printf '已配置的公网管理地址： https://%s/ （TCP 443）\n' "$https_host"
+    printf '已配置的公网 HTTPS 管理地址：https://%s/ （TCP 443，外网连通性需另行确认）\n' "$https_host"
+else
+    printf '%s\n' '公网访问方式：SSH 隧道。当前未配置可直接打开的公网 HTTPS 管理地址。'
 fi
-printf '服务器基础管理地址： %s/ （切换过管理端口时用于恢复）\n' "$url"
-printf '在自己的电脑建立 SSH 隧道： ssh -N -L 18080:%s:%s 用户名@服务器地址\n' "$host" "$port"
-printf '%s\n' '隧道连接后打开：http://127.0.0.1:18080/ 。SSH 使用自定义端口时，在命令中加 -p 对应端口。'
+if [[ -n "$ssh_host" ]]; then
+    ssh_endpoint=$ssh_host
+    if [[ "$ssh_host" == *:* ]]; then ssh_endpoint="[$ssh_host]"; fi
+    printf '远程 SSH 入口：%s:%s （有 NAT 或端口映射时请使用实际公网入口）\n' "$ssh_endpoint" "$ssh_port"
+fi
+printf '在自己的电脑建立 SSH 隧道： ssh -N -p %s -L 18080:%s:%s %s@%s\n'     "$ssh_port" "$host" "$port" "$ssh_user" "${ssh_host:-服务器公网IP或域名}"
+printf '%s\n' '隧道连接后在这台电脑打开：http://127.0.0.1:18080/'
+printf '服务器本机基础地址：%s/ （切换过管理端口时用于恢复）\n' "$url"
 printf '%s\n' '新安装默认账号：admin' '新安装默认密码：admin' '首次通过本机或 SSH 隧道打开时，请设置至少 6 个字符的新密码。' \
     '' '网页打不开时，在服务器终端执行：' \
     '  查看服务： sudo systemctl status hopworld-router.service --no-pager -l' \
