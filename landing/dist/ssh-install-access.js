@@ -167,6 +167,8 @@ async function consume(response, target, fingerprintKey) {
           updateConnection('SSH 登录成功', 'success');
           rememberFingerprint(fingerprintKey, target.fingerprint);
           updateStatus('安装完成，后台已就绪。', 'success');
+          const host = target.host.includes(':') ? `[${target.host}]` : target.host;
+          byId('access-endpoint').textContent = `${host}:${target.port}`;
           byId('access-command').textContent =
             `ssh -N -p ${target.port} -L 18080:127.0.0.1:8080 ${target.username}@${target.host}`;
           access.hidden = false;

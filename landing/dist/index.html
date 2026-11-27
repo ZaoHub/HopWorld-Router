@@ -7,7 +7,7 @@
   <title>安装 HopWorld-Router</title>
   <link rel="icon" href="logo.png" type="image/png">
   <link rel="stylesheet" href="site.css">
-  <script src="ssh-install-inline.js" defer></script>
+  <script src="ssh-install-access.js" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -91,7 +91,9 @@
             <p id="installation-status" role="status" class="run-status"></p>
             <pre id="installation-log" aria-label="安装输出" tabindex="0" hidden></pre>
             <div id="access" hidden>
-              <p>在自己的终端运行下面的命令，保持连接后打开 <a href="http://127.0.0.1:18080/">管理后台</a>。</p>
+              <h3>从外网访问管理后台</h3>
+              <p>远程 SSH 入口 <strong id="access-endpoint"></strong></p>
+              <p>在自己的电脑运行下面的命令，保持终端连接，然后打开 <a href="http://127.0.0.1:18080/">本机转发后的管理后台</a>。</p>
               <code class="access-command" id="access-command"></code>
               <button type="button" class="button secondary" id="copy-access">复制 SSH 命令</button>
             </div>

@@ -241,6 +241,8 @@ rsync -a --exclude .venv --exclude data --exclude __pycache__ ./ root@服务器:
 
 ### 打开管理页
 
+安装提示会区分服务器本机地址、远程 SSH 入口和已配置的公网 HTTPS 管理地址。若 SSH 经过公网端口映射，可在运行检查命令时用 `HOPWORLD_SSH_HOST` 和 `HOPWORLD_SSH_PORT` 指定实际的公网入口。
+
 管理端口不要写入云厂商安全组，也不要在本机防火墙放行。在你自己的电脑上：
 
 ```sh
