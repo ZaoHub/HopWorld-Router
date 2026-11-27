@@ -177,6 +177,16 @@ Ubuntu／Debian 测试环境可从源码构建带 SHA-256 校验文件的 `.deb`
 - **Ubuntu 18.04、CentOS 7**：在 x86_64 或 ARM64 上安装后台与独立 Python 3.11 环境，保留系统 Python，由 systemd 启动后台。内核、证书和透明网关功能依赖各自的系统工具及内核能力。
 - 按[端口与安全组](#v1-部署端口与安全组)配置入站，再按下方「打开管理页」使用 SSH 隧道。首次用 `admin / admin` 登录，进入后台后在弹窗里设置新密码。只有 FTP 的共享主机需要换用有 root 终端的服务器。
 
+### 同时启用本地和外网后台
+
+Ubuntu 22.04+ 或 Debian 12+ 上，放行公网 TCP 80 和 443，然后把以下示例 IP 换成服务器的公网 IPv4 或已解析到该服务器的域名：
+
+```bash
+( set -o pipefail; curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/main/deploy/install.sh | bash -s -- --public-admin 203.0.113.10 )
+```
+
+安装继续保留服务器本机的 `http://127.0.0.1:8080/`，并通过 Nginx 和 Certbot 配置可直接打开的公网 HTTPS 地址。安装完成会分别打印两条地址。首次管理员密码通过本地地址或 SSH 隧道设置。已安装的服务器可以直接运行 `deploy/hopworld-enable-public-admin.sh 公网IPv4或域名`。
+
 旧系统安装的程序位于 `/opt/hopworld-router-legacy`，数据位于 `/var/lib/hopworld-router`。旧系统后续升级时，以 root 执行目标 GitHub Release 公布的一键命令。升级切换前备份数据库。已有其他方式安装时，先备份并完成迁移。版本同步流程见 [V1 版本发布与更新](docs/V1版本发布与更新.md)。
 
 ### 全新 Linux 服务器

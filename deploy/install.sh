@@ -2,7 +2,14 @@
 set -euo pipefail
 
 main() (
-  local version=1.0.3
+  local version=1.0.3 public_admin_host=''
+  if (( $# > 0 )); then
+    if [[ $# != 2 || $1 != --public-admin ]]; then
+      echo '用法：bash install.sh [--public-admin 公网IPv4或域名]' >&2
+      exit 2
+    fi
+    public_admin_host=$2
+  fi
   if [[ "$EUID" != 0 || "$(uname -s)" != Linux || ! -d /run/systemd/system ]]; then
     echo '请在使用 systemd 的 Linux 服务器上以 root 运行。' >&2
     exit 1
@@ -10,6 +17,10 @@ main() (
   . /etc/os-release
   case "$ID:$VERSION_ID" in
     ubuntu:18.04|centos:7)
+      if [[ -n "$public_admin_host" ]]; then
+        echo '--public-admin 需要 Ubuntu 22.04+ 或 Debian 12+。旧系统可以安装本地后台。' >&2
+        exit 2
+      fi
       curl -fsSL "https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/v$version/deploy/install-legacy.sh" |
         bash -s -- "$version"
       exit
@@ -38,6 +49,13 @@ main() (
   curl --noproxy '*' --fail --silent --show-error --output /dev/null \
     --retry 5 --retry-connrefused --retry-all-errors --max-time 5 http://127.0.0.1:8080/health/ready
   echo 'V1 管理服务已就绪。'
+  if [[ -n "$public_admin_host" ]]; then
+    curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/main/deploy/hopworld-enable-public-admin.sh |
+      bash -s -- "$public_admin_host"
+  else
+    echo '本地管理地址：http://127.0.0.1:8080/'
+    echo '外网管理入口可通过 --public-admin 公网IPv4或域名配置。'
+  fi
 )
 
 main "$@"
