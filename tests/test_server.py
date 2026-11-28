@@ -172,6 +172,28 @@ class ServerTests(unittest.TestCase):
                 choices = json.load(self.request('/api/status'))['public_subscription_tls']['certificates']
         self.assertEqual(choices, [{'host': host, 'type': 'domain'}])
 
+    @unittest.skipUnless(shutil.which('openssl'), 'OpenSSL required for management HTTPS fixture')
+    def test_installation_ip_certificate_is_visible_and_available_for_subscription(self):
+        host = '8.8.8.8'
+        cert, key = cert_paths(self.store.data_dir, host)
+        cert.parent.mkdir(parents=True)
+        with patch.dict(os.environ, {'HOPWORLD_MANAGEMENT_HTTPS_HOST': host}), \
+             patch('router.acme.letsencrypt_live', return_value=Mock(is_dir=Mock(return_value=False))):
+            status = json.load(self.request('/api/status'))
+            self.assertEqual(status['management_ip_certificate']['host'], host)
+            self.assertIsNone(status['management_ip_certificate']['days_left'])
+            self.assertEqual(status['public_subscription_tls']['certificates'], [])
+            subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '2',
+                            '-subj', f'/CN={host}', '-addext', f'subjectAltName=IP:{host}',
+                            '-out', str(cert), '-keyout', str(key)], check=True, capture_output=True)
+            status = json.load(self.request('/api/status'))
+        record = status['management_ip_certificate']
+        self.assertEqual(set(record), {'host', 'days_left', 'error'})
+        self.assertEqual(record['host'], host)
+        self.assertGreater(record['days_left'], 0)
+        self.assertEqual(status['ip_certificates'], {})
+        self.assertEqual(status['public_subscription_tls']['certificates'], [{'host': host, 'type': 'ip'}])
+
     def test_public_subscription_topbar_labels_validate_and_persist(self):
         path = '/api/v1/public-subscription/topbar'
         defaults = json.load(self.request('/api/status'))['public_subscription']['topbar_labels']

@@ -326,8 +326,9 @@ def status(root=None):
     state = read_state(root)
     current = resolve_current(root)
     meta = runtime_meta(current) if current else {}
-    apt = state.get('apt_version') or os.environ.get('HOPWORLD_PACKAGE_VERSION') or ''
-    installation = 'package' if os.environ.get('HOPWORLD_PACKAGE_VERSION') else 'project'
+    installed_package = os.environ.get('HOPWORLD_PACKAGE_VERSION', '').strip()
+    apt = installed_package or state.get('apt_version') or ''
+    installation = 'package' if installed_package else 'project'
     running_id = current.name if current else state.get('running_id', '')
     running_commit = meta.get('commit') or state.get('running_commit', '')
     healthy = bool(current and (current / 'router').is_dir())
@@ -347,7 +348,7 @@ def status(root=None):
         'apt_version': apt or VERSION,
         'running_id': running_id,
         'running_commit': running_commit,
-        'running_version': meta.get('package_version') or apt or VERSION,
+        'running_version': meta.get('package_version') or VERSION,
         'last_good': state.get('last_good') or '',
         'health': 'ok' if healthy else 'pending',
         'releases': list_releases(root),

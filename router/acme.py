@@ -112,15 +112,8 @@ def management_https_host():
     return os.environ.get('HOPWORLD_MANAGEMENT_HTTPS_HOST', '').strip().lower().rstrip('.')
 
 
-def ensure_management_https_certificate(data_dir, host=None, *, validate=True):
-    """Reuse the public-admin Nginx certificate for Router HTTPS listeners.
-
-    Install writes lineage hopworld-public-admin-<host>; hopworld-router usually
-    cannot read /etc/letsencrypt, so prefer the data-dir cache seeded by root.
-    """
-    host = (host or management_https_host()).strip().lower().rstrip('.')
-    if not host:
-        raise ValueError('未配置公网 HTTPS 管理地址')
+def _management_https_certificate_paths(data_dir, host):
+    # The service normally reads the data-dir cache seeded by the root Certbot hook.
     data_dir = Path(data_dir).resolve()
     cert_out, key_out = cert_paths(data_dir, host)
     alt = cert_paths(data_dir, PUBLIC_ADMIN_CERT_PREFIX + host)
@@ -138,6 +131,27 @@ def ensure_management_https_certificate(data_dir, host=None, *, validate=True):
             pass
     if not cert_out.is_file() or not key_out.is_file():
         raise ValueError('公网管理 HTTPS 证书尚未同步到 Router')
+    return cert_out, key_out
+
+
+def management_https_certificate_status(data_dir):
+    host = management_https_host()
+    if not host:
+        return {}
+    try:
+        cert, _ = _management_https_certificate_paths(data_dir, host)
+    except (OSError, ValueError):
+        return {'host': host, 'days_left': None, 'error': '公网管理 HTTPS 证书尚未同步到 Router'}
+    days = days_until_expiry(cert)
+    return {'host': host, 'days_left': days, 'error': '无法读取证书有效期' if days is None else ''}
+
+
+def ensure_management_https_certificate(data_dir, host=None, *, validate=True):
+    """Reuse the public-admin Nginx certificate for Router HTTPS listeners."""
+    host = (host or management_https_host()).strip().lower().rstrip('.')
+    if not host:
+        raise ValueError('未配置公网 HTTPS 管理地址')
+    cert_out, key_out = _management_https_certificate_paths(data_dir, host)
     expires = days_until_expiry(cert_out)
     if expires is None or expires <= 0:
         raise ValueError('公网管理 HTTPS 证书已过期')

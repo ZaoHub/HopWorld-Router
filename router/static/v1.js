@@ -1860,8 +1860,10 @@
   function renderCertificates() {
     if (!overview) return;
     const now = Date.now() / 1000;
+    const management = overview.management_ip_certificate;
+    const managementValid = management?.days_left > 0;
+    const subscription = overview.public_subscription;
     const ipRecords = Object.entries(overview.ip_certificates || {}).map(([family, cert]) => {
-      const bound = overview.public_subscription;
       return [family === 'ipv6' ? '公网 IPv6' : '公网 IPv4', [
         cert.address, cert.challenge === 'tls-alpn' ? 'TLS-ALPN-01' : 'HTTP-01',
         cert.expires > now ? `有效至 ${formatWhen(cert.expires)}` : '已到期',
@@ -1869,10 +1871,20 @@
         cert.enabled ? '自动续签' : '自动续签已关闭',
         cert.last_check && `最近检查 ${formatWhen(cert.last_check)}`,
         cert.retry_at > now && `下次重试 ${formatWhen(cert.retry_at)}`,
-        !!bound?.base && bound.domain === cert.address && '已绑定公网订阅',
+        !!subscription?.base && subscription.domain === cert.address && '已绑定公网订阅',
         cert.error,
       ].filter(Boolean).join(' · ')];
     });
+    if (management?.host) {
+      ipRecords.unshift(['公网管理 IP 证书', [
+        management.host,
+        managementValid ? `有效至 ${formatWhen(now + management.days_left * 86400)}`
+          : Number.isFinite(management.days_left) ? '已到期' : '',
+        '由系统 Certbot 管理',
+        managementValid && subscription?.base && subscription.domain === management.host && '已绑定公网订阅',
+        management.error,
+      ].filter(Boolean).join(' · ')]);
+    }
     byId('v1-ip-certificates').hidden = !ipRecords.length;
     definitions('v1-ip-certificate-records', ipRecords);
     const local = overview.local_node || {};
@@ -1896,7 +1908,6 @@
     const dns = certificateDNS.get(domain);
     certificateDomain = hasDomain ? domain : '';
     const domainKey = value => (value || '').toLowerCase().replace(/\.$/, '');
-    const subscription = overview.public_subscription;
     const servicesFor = host => {
       const services = new Set(publicPortRows.filter(row => host && domainKey(row.address) === domainKey(host))
         .map(row => `${row.core} / ${protocolName(row.nodeProtocol)}`));
@@ -1920,8 +1931,9 @@
     const resolved = dnsLabel(dns);
     metrics('v1-cert-metrics', [
       ['已绑定域名', new Set((overview.bound_domains || []).map(binding => binding.host)).size, 'circle-dot'],
-      ['有效证书', Number(!!acme.certificate_valid), 'shield', 'cyan'],
-      ['即将到期', Number(!!acme.certificate_valid && acme.days_left <= 14), 'triangle-alert', 'violet'],
+      ['有效证书', Number(!!acme.certificate_valid) + Number(!!managementValid), 'shield', 'cyan'],
+      ['即将到期', Number(!!acme.certificate_valid && acme.days_left <= 14)
+        + Number(!!managementValid && management.days_left <= 2), 'triangle-alert', 'violet'],
       ['自动续签', Number(!!acme.automatic), 'refresh-cw', 'violet'],
       ['DNS 解析', resolved === '已验证' ? records : dash, 'blocks'],
     ]);
@@ -1946,7 +1958,7 @@
     const history = matched ? acme.history || [] : [];
     const diagnostic = byId('v1-cert-diagnostic');
     diagnostic.textContent = certificateBusy || (matched && acme.error) || (!history.length && dns?.detail) ||
-      (hasDomain ? '暂无操作日志' : '请先配置公网域名。');
+      (hasDomain ? '暂无操作日志' : management?.host ? '公网管理 IP 证书的续签日志由系统 Certbot 记录。' : '请先配置公网域名。');
     diagnostic.hidden = !certificateBusy && !(matched && acme.error) && !!history.length;
     byId('v1-cert-history').replaceChildren(...history.map(entry => {
       const item = element('li');

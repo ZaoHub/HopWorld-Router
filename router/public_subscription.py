@@ -8,7 +8,8 @@ import unicodedata
 from pathlib import Path
 
 from router.acme import (HYSTERIA_CERTIFICATE_NAME, cert_paths, ensure_management_https_certificate,
-                         ip_certificate_paths, management_https_host, validate_ip_certificate)
+                         ip_certificate_paths, management_https_certificate_status, management_https_host,
+                         validate_ip_certificate)
 from router.local_node import validate_public_host
 from router.management_access import ManagementHTTPServer, ManagementTLS
 from router.public_endpoint import is_ip_host
@@ -65,16 +66,16 @@ class PublicSubscription:
             self.settings = settings
             return self._view()
 
-    def certificate_status(self, acme):
+    def certificate_status(self, acme, *, management=None):
         choices = {}
         domain = acme.get('domain')
         if domain and domain != HYSTERIA_CERTIFICATE_NAME and acme.get('certificate_valid'):
             choices[domain] = 'domain'
-        try:
-            host, _, _ = ensure_management_https_certificate(self.store.data_dir, validate=False)
+        if management is None:
+            management = management_https_certificate_status(self.store.data_dir)
+        if (management.get('days_left') or 0) > 0:
+            host = management['host']
             choices.setdefault(host, 'ip' if is_ip_host(host) else 'domain')
-        except ValueError:
-            pass
 
         records = [(record.get('address'), record.get('expires', 0)) for record in self.store.ip_certificates().values()]
         hysteria = self.store.independent_profiles().get('hysteria2', {})
