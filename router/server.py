@@ -48,7 +48,8 @@ from router.ddns import publish_ddns
 from router.acme import (ACME_KEY, CERTIFICATE_PEM, HYSTERIA_CERTIFICATE_NAME, IP_CERTIFICATES_KEY, SHORTLIVED_RENEW_SECONDS,
                          cert_paths, days_until_expiry,
                          ensure_ip_certificate, hysteria_local_certificate, import_certificate, ip_certificate_paths,
-                         ip_certificate_readiness, short_acme_error, stage_certificate, sync_certificate,
+                         ip_certificate_readiness, management_https_certificate_status, short_acme_error,
+                         stage_certificate, sync_certificate,
                          validate_acme_challenge, validate_acme_email, validate_ip_challenge)
 from router.dns_hints import build_dns_hints
 from router.dns_verify import _lookup_addresses, verify_dns_resolution
@@ -3210,6 +3211,7 @@ def make_handler(store, password, public_subscription=None, *, request_restart=N
                 publication = public_subscription.view() if public_subscription else None
                 public_urls = build_public_urls(store, subscription_base=publication['base'] if publication else '')
                 acme = store.acme_status()
+                management_certificate = management_https_certificate_status(store.data_dir)
                 access = getattr(self.server, 'management_access', None)
                 if management_local_only and management_https_host:
                     public_urls.update(admin_url=f'https://{management_https_host}', management_note='')
@@ -3225,7 +3227,10 @@ def make_handler(store, password, public_subscription=None, *, request_restart=N
                     'token': store.token(),
                     'public_urls': public_urls,
                     'public_subscription': publication,
-                    'public_subscription_tls': public_subscription.certificate_status(acme) if public_subscription else None,
+                    'public_subscription_tls': public_subscription.certificate_status(
+                        acme, management=management_certificate) if public_subscription else None,
+                    'management_ip_certificate': management_certificate
+                    if is_ip_host(management_certificate.get('host', '')) else None,
                     'local_node': store.local_node_status(),
                     'acme': acme,
                     'bound_domains': store.bound_domains(),

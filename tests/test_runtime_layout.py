@@ -2,6 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from unittest.mock import patch
 
 from router import incremental_update, runtime_layout
 
@@ -45,6 +46,20 @@ class RuntimeLayoutTests(unittest.TestCase):
         self.assertEqual(rolled['running_id'], first['running_id'])
         self.assertEqual((runtime_layout.resolve_current(self.root) / 'router' / 'version.py').read_text(encoding='utf-8'),
                          "VERSION = '1.0.4'\n")
+
+    def test_incremental_version_comes_from_running_code_and_apt_version_uses_package_environment(self):
+        runtime_layout.migrate_from_seed(seed=self.seed, root=self.root, package_version='1.0.4')
+        commit = 'b' * 40
+        release = runtime_layout.releases_dir(self.root) / f'git-{commit}'
+        (release / 'router').mkdir(parents=True)
+        runtime_layout.write_runtime_meta(release, commit=commit, package_version='')
+        runtime_layout.atomic_switch(release, self.root)
+        with patch.dict('os.environ', {'HOPWORLD_PACKAGE_VERSION': '1.0.5'}), \
+             patch('router.runtime_layout.VERSION', '1.0.6'):
+            status = runtime_layout.status(self.root)
+        self.assertEqual(status['apt_version'], '1.0.5')
+        self.assertEqual(status['running_version'], '1.0.6')
+        self.assertEqual(status['running_commit'], commit)
 
     def test_update_lock_rejects_concurrent_holders(self):
         lock = Path(self.temp.name) / 'update.lock'
