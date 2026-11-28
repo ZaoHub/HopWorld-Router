@@ -11,7 +11,9 @@ from router import incremental_update, runtime_layout
 @unittest.skipUnless(__import__('shutil').which('openssl'), 'OpenSSL required')
 class RuntimeArtifactTests(unittest.TestCase):
     def setUp(self):
-        directory = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        directory = Path(temporary.name)
         self.private_key = directory / 'test-signing.pem'
         self.public_key = directory / 'test-signing.pub'
         subprocess.run(['openssl', 'genpkey', '-algorithm', 'ED25519', '-out', str(self.private_key)], check=True)
