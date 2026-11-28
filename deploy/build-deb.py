@@ -39,11 +39,18 @@ def build(version, output):
                 install(source, app / relative)
         install(ROOT / 'deploy/hopworld-acme-dns-hook.sh', app / 'deploy/hopworld-acme-dns-hook.sh', 0o755)
         install(ROOT / 'deploy/hopworld-install-runtime.sh', app / 'deploy/hopworld-install-runtime.sh', 0o755)
+        install(ROOT / 'deploy/hopworld-runtime-update', app / 'deploy/hopworld-runtime-update', 0o755)
         install(ROOT / 'deploy/hopworld-router-check.sh', stage / 'usr/bin/hopworld-router-check', 0o755)
         install(ROOT / 'deploy/hopworld-router-uninstall', stage / 'usr/bin/hopworld-router-uninstall', 0o755)
         install(DEBIAN / 'hopworld-package-update.py', app / 'deploy/hopworld-package-update.py')
         install(DEBIAN / 'hopworld-router-package-update.sudoers',
                 stage / 'etc/sudoers.d/hopworld-router-package-update', 0o440)
+        install(ROOT / 'deploy/hopworld-router-runtime-update.sudoers',
+                stage / 'etc/sudoers.d/hopworld-router-runtime-update', 0o440)
+        install(ROOT / 'deploy/keys/runtime-ed25519.pub',
+                stage / 'usr/share/hopworld-router/keys/runtime-ed25519.pub')
+        install(ROOT / 'deploy/hopworld-router-runtime-update.service',
+                stage / 'lib/systemd/system/hopworld-router-runtime-update.service')
         install(ROOT / 'LICENSE', stage / 'usr/share/doc/hopworld-router/copyright')
         for name in ('preinst', 'postinst', 'prerm', 'postrm'):
             install(DEBIAN / name, stage / 'DEBIAN' / name, 0o755)

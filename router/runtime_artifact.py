@@ -1,0 +1,124 @@
+"""Verify and materialize signed runtime artifacts into versioned release dirs."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+import shutil
+import subprocess
+import tarfile
+import tempfile
+from pathlib import Path
+
+from router.runtime_layout import atomic_switch, releases_dir, runtime_root, write_runtime_meta
+from router.version import RELEASE_MAJOR
+
+COMMIT = re.compile(r'^[0-9a-f]{40}$')
+DEFAULT_PUBLIC_KEY = Path('/usr/share/hopworld-router/keys/runtime-ed25519.pub')
+BUNDLED_PUBLIC_KEY = Path(__file__).resolve().parents[1] / 'deploy' / 'keys' / 'runtime-ed25519.pub'
+
+
+def public_key_path():
+    configured = os.environ.get('HOPWORLD_RUNTIME_PUBLIC_KEY', '').strip()
+    if configured:
+        return Path(configured)
+    if DEFAULT_PUBLIC_KEY.is_file():
+        return DEFAULT_PUBLIC_KEY
+    return BUNDLED_PUBLIC_KEY
+
+
+def sha256_bytes(data: bytes):
+    return hashlib.sha256(data).hexdigest()
+
+
+def sha256_file(path: Path):
+    digest = hashlib.sha256()
+    with path.open('rb') as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def verify_signature(manifest: Path, signature: Path, public_key: Path | None = None):
+    key = public_key or public_key_path()
+    if not key.is_file():
+        raise ValueError('缺少运行时更新公钥')
+    try:
+        subprocess.run(
+            ['openssl', 'pkeyutl', '-verify', '-pubin', '-inkey', str(key), '-rawin',
+             '-in', str(manifest), '-sigfile', str(signature)],
+            check=True, capture_output=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise ValueError('运行时更新签名校验失败') from exc
+
+
+def load_manifest(manifest: Path, signature: Path, archive: Path, *, public_key: Path | None = None):
+    verify_signature(manifest, signature, public_key=public_key)
+    try:
+        data = json.loads(manifest.read_text(encoding='utf-8'))
+    except (OSError, ValueError) as exc:
+        raise ValueError('运行时清单无效') from exc
+    if not isinstance(data, dict):
+        raise ValueError('运行时清单无效')
+    commit = data.get('commit')
+    if not isinstance(commit, str) or not COMMIT.fullmatch(commit):
+        raise ValueError('运行时清单 Commit 无效')
+    major = data.get('compatible_package_major')
+    if major != RELEASE_MAJOR:
+        raise ValueError('运行时产物与当前主版本不兼容')
+    digest = data.get('archive_sha256')
+    if not isinstance(digest, str) or len(digest) != 64:
+        raise ValueError('运行时归档摘要无效')
+    if sha256_file(archive) != digest:
+        raise ValueError('运行时归档校验失败')
+    files = data.get('files')
+    if not isinstance(files, list) or not files:
+        raise ValueError('运行时清单没有文件')
+    return data
+
+
+def install_artifact(manifest: Path, signature: Path, archive: Path, *, root=None, public_key: Path | None = None):
+    """Extract a verified artifact into releases/git-<sha> and atomically switch current."""
+    root = root or runtime_root()
+    data = load_manifest(manifest, signature, archive, public_key=public_key)
+    commit = data['commit']
+    release_id = f'git-{commit}'
+    if not re.fullmatch(r'git-[0-9a-f]{40}', release_id):
+        raise ValueError('运行版本编号无效')
+    destination = releases_dir(root) / release_id
+    if destination.exists():
+        shutil.rmtree(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=destination.parent) as temporary:
+        stage = Path(temporary) / 'tree'
+        stage.mkdir()
+        with tarfile.open(archive, 'r:gz') as tar:
+            tar.extractall(stage, filter='data')
+        # Archives are rooted at '.' so content may be directly under stage.
+        source = stage
+        if not (source / 'router').is_dir():
+            children = [path for path in stage.iterdir() if path.is_dir()]
+            if len(children) == 1 and (children[0] / 'router').is_dir():
+                source = children[0]
+        if not (source / 'router').is_dir():
+            raise ValueError('运行时产物缺少 router 目录')
+        expected = {item['path']: item['sha256'] for item in data['files']
+                    if isinstance(item, dict) and isinstance(item.get('path'), str)}
+        for relative, digest in expected.items():
+            path = source / relative
+            if not path.is_file() or sha256_file(path) != digest:
+                raise ValueError(f'运行时文件校验失败：{relative}')
+        shutil.copytree(source, destination, symlinks=False)
+    write_runtime_meta(
+        destination,
+        id=release_id,
+        source='incremental',
+        commit=commit,
+        package_version='',
+        created_at=__import__('time').time(),
+    )
+    atomic_switch(destination, root)
+    return release_id, commit

@@ -93,17 +93,52 @@ class IncrementalPreviewTests(unittest.TestCase):
                     {'filename': 'README.md', 'status': 'modified'},
                     {'filename': 'router/server.py', 'status': 'renamed', 'previous_filename': 'router/old_server.py'},
                 ]}
+            if url.endswith('/releases/tags/runtime-v1'):
+                raise ValueError('not published')
             raise AssertionError(url)
 
-        result = incremental_update.check(root=self.root, fetch=fetch)
+        # _artifact_urls catches missing release via fetch returning bad shape
+        def fetch2(url):
+            if url.endswith('/commits/main'):
+                return {'sha': 'b' * 40}
+            if '/compare/' in url:
+                return {'files': [
+                    {'filename': 'router/runtime_layout.py', 'status': 'added'},
+                    {'filename': 'README.md', 'status': 'modified'},
+                    {'filename': 'router/server.py', 'status': 'renamed', 'previous_filename': 'router/old_server.py'},
+                ]}
+            if url.endswith('/releases/tags/runtime-v1'):
+                return {'assets': []}
+            raise AssertionError(url)
+
+        result = incremental_update.check(root=self.root, fetch=fetch2)
         self.assertEqual(result['state'], 'available')
         self.assertEqual(result['changed_files'], ['router/runtime_layout.py', 'router/server.py'])
         self.assertEqual(result['changes'][1]['op'], 'rename')
         self.assertFalse(result['apply_ready'])
 
-    def test_apply_is_not_enabled_yet(self):
-        with self.assertRaisesRegex(ValueError, '签名'):
-            incremental_update.apply()
+    def test_apply_ready_when_signed_artifact_exists(self):
+        runtime_layout.set_channel('development', root=self.root)
+        tip = 'b' * 40
+
+        def fetch(url):
+            if url.endswith('/commits/main'):
+                return {'sha': tip}
+            if '/compare/' in url:
+                return {'files': [{'filename': 'router/runtime_layout.py', 'status': 'modified'}]}
+            if url.endswith('/releases/tags/runtime-v1'):
+                base = f'https://github.com/ZaoHub/HopWorld-Router/releases/download/runtime-v1/hopworld-runtime-{tip}'
+                return {'assets': [
+                    {'name': f'hopworld-runtime-{tip}.tar.gz', 'browser_download_url': base + '.tar.gz'},
+                    {'name': f'hopworld-runtime-{tip}.manifest.json', 'browser_download_url': base + '.manifest.json'},
+                    {'name': f'hopworld-runtime-{tip}.manifest.json.sig', 'browser_download_url': base + '.manifest.json.sig'},
+                ]}
+            raise AssertionError(url)
+
+        result = incremental_update.check(root=self.root, fetch=fetch)
+        self.assertTrue(result['apply_ready'])
+        queued = incremental_update.apply(root=self.root, fetch=fetch, start_unit=False)
+        self.assertEqual(queued['queued'], tip)
 
 
 if __name__ == '__main__':

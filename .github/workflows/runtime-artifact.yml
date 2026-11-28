@@ -1,0 +1,46 @@
+name: Runtime artifact
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.txt
+      - run: python -m unittest discover -s tests
+      - name: Import signing key
+        env:
+          HOPWORLD_RUNTIME_SIGNING_KEY_B64: ${{ secrets.HOPWORLD_RUNTIME_SIGNING_KEY_B64 }}
+        run: |
+          if [ -z "$HOPWORLD_RUNTIME_SIGNING_KEY_B64" ]; then
+            echo 'Missing HOPWORLD_RUNTIME_SIGNING_KEY_B64 secret; skip signed artifact publish.'
+            exit 0
+          fi
+          mkdir -p deploy/keys
+          printf '%s' "$HOPWORLD_RUNTIME_SIGNING_KEY_B64" | base64 -d > deploy/keys/runtime-ed25519.pem
+          chmod 600 deploy/keys/runtime-ed25519.pem
+          echo "SIGNED=1" >> "$GITHUB_ENV"
+      - name: Build signed runtime artifact
+        if: env.SIGNED == '1'
+        run: python deploy/build-runtime-artifact.py --output build/runtime --commit "$GITHUB_SHA"
+      - name: Publish to runtime-v1 release
+        if: env.SIGNED == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=runtime-v1
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --prerelease --title 'HopWorld Router runtime channel' \
+              --notes 'Signed runtime trees for development-channel incremental updates. Not a stable package release.'
+          fi
+          gh release upload "$tag" build/runtime/hopworld-runtime-"$GITHUB_SHA".* --clobber

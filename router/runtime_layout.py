@@ -57,8 +57,14 @@ def history_path(root=None):
 @contextmanager
 def update_lock(lock_path=None, *, blocking=False):
     """Exclusive flock shared with package and incremental updaters."""
-    path = Path(lock_path or os.environ.get('HOPWORLD_UPDATE_LOCK', UPDATE_LOCK))
-    path.parent.mkdir(parents=True, exist_ok=True)
+    configured = lock_path or os.environ.get('HOPWORLD_UPDATE_LOCK', '')
+    path = Path(configured) if configured else UPDATE_LOCK
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        # Tests / non-root environments fall back under the runtime root.
+        path = runtime_root() / 'update.lock'
+        path.parent.mkdir(parents=True, exist_ok=True)
     handle = open(path, 'a+', encoding='utf-8')
     try:
         import fcntl

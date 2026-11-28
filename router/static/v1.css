@@ -969,6 +969,7 @@ div.v1-settings-fields { display: grid; grid-template-columns: minmax(100px,34%)
 .v1-update-version-value { margin: 0; font-size: 28px; line-height: 1.1; font-weight: 700; color: #f3f8ff; }
 .v1-update-action-card { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; }
 .v1-update-action-card .field-hint { margin: 0; }
+.v1-update-file-actions { display: grid; gap: 8px; justify-items: stretch; }
 .v1-update-footer { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
 .v1-update-footer button { width: 100%; }
 .v1-update-diff { margin-top: 10px; }

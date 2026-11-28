@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Root oneshot: apply a queued signed runtime artifact and restart Router.
+set -euo pipefail
+umask 022
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export HOME=/root
+
+runtime_root=${HOPWORLD_RUNTIME_ROOT:-/var/lib/hopworld-router-runtime}
+seed=${HOPWORLD_DPKG_SEED:-/usr/lib/hopworld-router}
+state=$runtime_root/page-status.json
+job=$(cat /proc/sys/kernel/random/uuid)
+
+write_state() {
+  printf '{"state":"%s","id":"%s","timestamp":%s}\n' "$1" "$job" "$(date +%s)" > "$runtime_root/page-status.tmp"
+  chmod 644 "$runtime_root/page-status.tmp"
+  mv -f "$runtime_root/page-status.tmp" "$state"
+}
+
+trap 'write_state failed' ERR
+exec 9>/var/lock/hopworld-router-update.lock
+flock -n 9 || { echo 'Another update is running' >&2; exit 1; }
+
+install -d -m 755 "$runtime_root"
+write_state running
+
+# Ensure an independent runtime tree exists before switching commits.
+if [[ ! -L $runtime_root/current ]]; then
+  HOPWORLD_RUNTIME_ROOT=$runtime_root HOPWORLD_DPKG_SEED=$seed \
+    /usr/bin/python3 - <<'PY'
+import os
+from pathlib import Path
+from router.runtime_layout import migrate_from_seed
+seed = Path(os.environ['HOPWORLD_DPKG_SEED'])
+root = Path(os.environ['HOPWORLD_RUNTIME_ROOT'])
+pkg = os.environ.get('HOPWORLD_PACKAGE_VERSION', '')
+commit = os.environ.get('HOPWORLD_SOURCE_COMMIT', '')
+print(migrate_from_seed(seed=seed, root=root, package_version=pkg, commit=commit))
+PY
+fi
+
+# Make systemd use the independent runtime current symlink.
+install -d -m 755 /etc/systemd/system/hopworld-router.service.d
+cat > /etc/systemd/system/hopworld-router.service.d/runtime.conf <<EOF
+[Service]
+WorkingDirectory=$runtime_root/current
+Environment=HOPWORLD_RUNTIME_ROOT=$runtime_root
+EOF
+systemctl daemon-reload
+
+PYTHONPATH=$seed /usr/bin/python3 - <<'PY'
+import os
+from router.incremental_update import run_pending
+os.environ.setdefault('HOPWORLD_RUNTIME_ROOT', '/var/lib/hopworld-router-runtime')
+print(run_pending())
+PY
+
+systemctl restart hopworld-router.service
+PYTHONPATH=$seed /usr/bin/python3 - <<'PY'
+from router.system_update import require_service_ready
+require_service_ready()
+PY
+write_state complete
+echo 'runtime update complete'

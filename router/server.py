@@ -3617,7 +3617,7 @@ def make_handler(store, password, public_subscription=None, *, request_restart=N
                     if action == 'check-files':
                         return self.json(200, {'ok': True, 'incremental': incremental_update.check()})
                     if action == 'apply-files':
-                        incremental_update.apply()
+                        return self.json(200, incremental_update.apply())
                     raise ValueError('运行时更新操作无效')
                 elif path == '/api/ikev2':
                     return self.json(200, {'ok': True, 'ikev2': store.configure_ikev2(

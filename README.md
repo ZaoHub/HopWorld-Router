@@ -304,7 +304,7 @@ HOPWORLD_PUBLIC_HOST=你的域名
 HOPWORLD_SUBSCRIPTION_BASE=https://你的域名
 ```
 
-后台优先使用 `HOPWORLD_SUBSCRIPTION_BASE` 中配置的 HTTPS 入口生成订阅链接。Router 的独立订阅监听仍使用「发布设置」里的端口。
+使用 `--public-admin` 配置的 Nginx 公网入口可以通过 TCP 443 同时提供后台和 `/s/` 订阅。新版部署脚本会默认设置 `HOPWORLD_SUBSCRIPTION_BASE` 来复用现有 HTTPS 证书，并保留已有的自定义值。配置后从后台复制公网订阅链接即可。「发布设置」里的 9443 端口和证书用于另行启用 Router 的独立订阅监听。
 
 使用 nginx 时，证书出现在 `/etc/letsencrypt/live/你的域名/` 后，再配置 nginx 的 443 站点：
 
