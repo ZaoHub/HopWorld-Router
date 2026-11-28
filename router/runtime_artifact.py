@@ -80,17 +80,20 @@ def load_manifest(manifest: Path, signature: Path, archive: Path, *, public_key:
     return data
 
 
-def install_artifact(manifest: Path, signature: Path, archive: Path, *, root=None, public_key: Path | None = None):
+def install_artifact(manifest: Path, signature: Path, archive: Path, *, root=None, public_key: Path | None = None,
+                     expected_commit: str | None = None):
     """Extract a verified artifact into releases/git-<sha> and atomically switch current."""
     root = root or runtime_root()
     data = load_manifest(manifest, signature, archive, public_key=public_key)
     commit = data['commit']
+    if expected_commit and commit != expected_commit:
+        raise ValueError('运行时产物 Commit 与请求不符')
     release_id = f'git-{commit}'
     if not re.fullmatch(r'git-[0-9a-f]{40}', release_id):
         raise ValueError('运行版本编号无效')
     destination = releases_dir(root) / release_id
-    if destination.exists():
-        shutil.rmtree(destination)
+    if destination.exists() or destination.is_symlink():
+        raise ValueError('目标运行版本已经存在，原安装仍保留')
     destination.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=destination.parent) as temporary:
         stage = Path(temporary) / 'tree'

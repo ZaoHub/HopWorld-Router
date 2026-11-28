@@ -6,6 +6,7 @@ import json
 import os
 import re
 import subprocess
+import stat
 import tempfile
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -13,7 +14,7 @@ from urllib.request import Request, urlopen
 from router.release_channel import API, REPOSITORY
 from router.runtime_artifact import install_artifact
 from router.runtime_layout import (
-    append_history, read_state, resolve_current, runtime_meta, runtime_root,
+    append_history, atomic_switch, read_state, resolve_current, runtime_meta, runtime_root,
     status as runtime_status, update_lock, write_state,
 )
 from router.version import RELEASE_MAJOR
@@ -181,15 +182,27 @@ def check(*, root=None, fetch=_json):
     return result
 
 
+def _pending_path(root):
+    directory = Path(root) if root is not None else Path(os.environ.get('HOPWORLD_DATA') or '/var/lib/hopworld-router')
+    return directory / PENDING
+
+
 def write_pending(commit, root=None):
     if not isinstance(commit, str) or not FULL_COMMIT.fullmatch(commit):
         raise ValueError('目标 Commit 无效')
-    root = root or runtime_root()
-    root.mkdir(parents=True, exist_ok=True)
-    path = root / PENDING
-    path.write_text(json.dumps({'commit': commit, 'requested_at': __import__('time').time()}, ensure_ascii=False),
-                    encoding='utf-8')
-    path.chmod(0o600)
+    path = _pending_path(root)
+    try:
+        with tempfile.NamedTemporaryFile(dir=path.parent, prefix='.pending-', delete=False, mode='w',
+                                         encoding='utf-8') as staged:
+            staged_path = Path(staged.name)
+            try:
+                json.dump({'commit': commit}, staged)
+                staged.flush()
+                staged_path.replace(path)
+            finally:
+                staged_path.unlink(missing_ok=True)
+    except OSError as exc:
+        raise ValueError('无法写入运行时更新请求') from exc
     return path
 
 
@@ -214,12 +227,12 @@ def apply(*, root=None, fetch=_json, start_unit=True):
     return {'ok': True, 'queued': commit, 'started': True}
 
 
-def apply_local(manifest: Path, signature: Path, archive: Path, *, root=None, public_key=None):
+def apply_local(manifest: Path, signature: Path, archive: Path, *, root=None, public_key=None, expected_commit=None):
     """Direct apply used by the root worker and tests."""
     root = root or runtime_root()
     with update_lock(Path(root) / 'update.lock', blocking=False):
         release_id, commit = install_artifact(
-            manifest, signature, archive, root=root, public_key=public_key)
+            manifest, signature, archive, root=root, public_key=public_key, expected_commit=expected_commit)
         state = read_state(root)
         state.update(running_id=release_id, running_commit=commit, last_good=release_id, pending='', migrated=True)
         write_state(state, root)
@@ -227,16 +240,32 @@ def apply_local(manifest: Path, signature: Path, archive: Path, *, root=None, pu
         return {'release_id': release_id, 'commit': commit}
 
 
-def run_pending(*, root=None, fetch=_json, download=_download):
-    """Root worker: download pending commit artifacts, verify, switch, leave restart to caller."""
+def run_pending(*, root=None, fetch=_json, download=_download, restart_and_check=None):
+    """Apply a signed queued update, restoring the previous runtime on a failed restart."""
+    path = _pending_path(root)
     root = root or runtime_root()
-    path = root / PENDING
-    if not path.is_file():
-        raise ValueError('没有待应用的增量更新')
-    request = json.loads(path.read_text(encoding='utf-8'))
-    commit = request.get('commit')
+    previous = resolve_current(root)
+    if restart_and_check and not previous:
+        raise ValueError('请先迁移到独立运行时')
+    before = read_state(root)
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd, 'rb') as handle:
+            request_stat = os.fstat(handle.fileno())
+            if not stat.S_ISREG(request_stat.st_mode):
+                raise ValueError('待应用请求不是普通文件')
+            raw = handle.read(4097)
+            if len(raw) > 4096:
+                raise ValueError('待应用请求过大')
+            request = json.loads(raw)
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError('无法读取待应用的增量更新') from exc
+    commit = request.get('commit') if isinstance(request, dict) else None
     if not isinstance(commit, str) or not FULL_COMMIT.fullmatch(commit):
         raise ValueError('待应用 Commit 无效')
+    # Only consume the request read by this worker. An intervening request can be left queued.
+    if path.exists() and path.stat().st_ino == request_stat.st_ino:
+        path.unlink()
     urls = _artifact_urls(commit, fetch=fetch)
     with tempfile.TemporaryDirectory(dir=root) as temporary:
         folder = Path(temporary)
@@ -246,6 +275,15 @@ def run_pending(*, root=None, fetch=_json, download=_download):
         download(urls['archive'], archive)
         download(urls['manifest'], manifest)
         download(urls['signature'], signature)
-        result = apply_local(manifest, signature, archive, root=root)
-    path.unlink(missing_ok=True)
+        try:
+            result = apply_local(manifest, signature, archive, root=root, expected_commit=commit)
+            if restart_and_check:
+                restart_and_check()
+        except Exception:
+            if restart_and_check and resolve_current(root) != previous:
+                atomic_switch(previous, root)
+                write_state(before, root)
+                append_history({'action': 'rollback', 'to': previous.name, 'failed_commit': commit}, root)
+                restart_and_check()
+            raise
     return result

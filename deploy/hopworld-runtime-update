@@ -23,41 +23,18 @@ flock -n 9 || { echo 'Another update is running' >&2; exit 1; }
 install -d -m 755 "$runtime_root"
 write_state running
 
-# Ensure an independent runtime tree exists before switching commits.
-if [[ ! -L $runtime_root/current ]]; then
-  HOPWORLD_RUNTIME_ROOT=$runtime_root HOPWORLD_DPKG_SEED=$seed \
-    /usr/bin/python3 - <<'PY'
-import os
-from pathlib import Path
-from router.runtime_layout import migrate_from_seed
-seed = Path(os.environ['HOPWORLD_DPKG_SEED'])
-root = Path(os.environ['HOPWORLD_RUNTIME_ROOT'])
-pkg = os.environ.get('HOPWORLD_PACKAGE_VERSION', '')
-commit = os.environ.get('HOPWORLD_SOURCE_COMMIT', '')
-print(migrate_from_seed(seed=seed, root=root, package_version=pkg, commit=commit))
-PY
-fi
-
-# Make systemd use the independent runtime current symlink.
-install -d -m 755 /etc/systemd/system/hopworld-router.service.d
-cat > /etc/systemd/system/hopworld-router.service.d/runtime.conf <<EOF
-[Service]
-WorkingDirectory=$runtime_root/current
-Environment=HOPWORLD_RUNTIME_ROOT=$runtime_root
-EOF
-systemctl daemon-reload
-
-PYTHONPATH=$seed /usr/bin/python3 - <<'PY'
-import os
+# The root-owned runtime must already be active before a queued update is applied.
+test -L "$runtime_root/current"
+HOPWORLD_RUNTIME_ROOT=$runtime_root PYTHONPATH=$seed /usr/bin/python3 - <<'PYTHON'
+import subprocess
 from router.incremental_update import run_pending
-os.environ.setdefault('HOPWORLD_RUNTIME_ROOT', '/var/lib/hopworld-router-runtime')
-print(run_pending())
-PY
-
-systemctl restart hopworld-router.service
-PYTHONPATH=$seed /usr/bin/python3 - <<'PY'
 from router.system_update import require_service_ready
-require_service_ready()
-PY
+
+def restart_and_check():
+    subprocess.run(['/usr/bin/systemctl', 'restart', 'hopworld-router.service'], check=True)
+    require_service_ready()
+
+print(run_pending(restart_and_check=restart_and_check))
+PYTHON
 write_state complete
 echo 'runtime update complete'
