@@ -611,8 +611,8 @@ function trackingChannelChanged() {
   return !!savedTrackingChannel && trackingChannel.value !== savedTrackingChannel;
 }
 
-async function saveTrackingChannel() {
-  const result = await call('/api/v1/updates/runtime', {action: 'channel', channel: trackingChannel.value});
+async function saveTrackingChannel(channel) {
+  const result = await call('/api/v1/updates/runtime', {action: 'channel', channel});
   trackingChannelRevision++;
   renderRuntimeUpdate(result.runtime, {replaceChannelDraft: true});
   $('#v1-update-apply-files').hidden = true;

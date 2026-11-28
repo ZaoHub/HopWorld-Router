@@ -2738,6 +2738,8 @@
   const settingsDefaults = {name: 'HopWorld-Router', timezone: 'browser', auto_check: true, auto_apply: true, probe_target: 'google'};
   let savedSettings;
   let savingSettings = false;
+  let settingsTab;
+  let settingsViewRevision = 0;
   let settingsClockZone;
   let consoleName = settingsDefaults.name;
   const managementPort = byId('v1-settings-port');
@@ -2958,6 +2960,11 @@
         acme.days_left <= 14 ? `即将到期 · 剩余 ${acme.days_left} 天` : `有效 · 剩余 ${acme.days_left} 天` : '等待签发';
   }
   function showSettingsTab(tab) {
+    if (settingsTab && settingsTab !== tab) {
+      closeMenus();
+      leaveSettingsView();
+    }
+    settingsTab = tab;
     for (const button of document.querySelectorAll('[data-settings-tab]')) {
       button.setAttribute('aria-pressed', String(button.dataset.settingsTab === tab));
     }
@@ -3148,6 +3155,13 @@
     fields.probe_target.value = value.probe_target || settingsDefaults.probe_target;
     syncSettingsButtons();
   }
+  function leaveSettingsView() {
+    settingsViewRevision++;
+    if (savedTrackingChannel) trackingChannel.value = savedTrackingChannel;
+    if (savedSettings) fillSettingsDraft(savedSettings);
+    else syncSettingsButtons();
+    settingsFeedback.textContent = '';
+  }
   function managementSettingsChanged(draft) {
     return savedSettings && (savedSettings.timezone !== draft.timezone ||
       savedSettings.auto_check !== draft.auto_check ||
@@ -3214,8 +3228,9 @@
     if (savingSettings) return;
     const draft = readSettingsDraft();
     const saveManagement = managementSettingsChanged(draft);
-    const saveChannel = trackingChannelChanged();
-    if (!saveManagement && !saveChannel) return;
+    const channel = trackingChannelChanged() ? trackingChannel.value : '';
+    if (!saveManagement && !channel) return;
+    const viewRevision = settingsViewRevision;
     savingSettings = true;
     syncSettingsButtons();
     settingsFeedback.textContent = '正在保存…';
@@ -3226,13 +3241,15 @@
         applyConsolePreferences(saved);
         renderDefaultProbeTarget(savedSettings.probe_target);
       }
-      if (saveChannel) await saveTrackingChannel();
-      settingsFeedback.textContent = '设置已保存';
+      if (channel) await saveTrackingChannel(channel);
+      if (viewRevision === settingsViewRevision) settingsFeedback.textContent = '设置已保存';
     } catch (error) {
-      settingsFeedback.textContent = error.message;
+      if (viewRevision === settingsViewRevision) settingsFeedback.textContent = error.message;
+      else note(error.message, {error: true});
     } finally {
       savingSettings = false;
-      syncSettingsButtons();
+      if (viewRevision !== settingsViewRevision) leaveSettingsView();
+      else syncSettingsButtons();
     }
   });
   byId('v1-settings-backup').addEventListener('click', async event => {
@@ -4519,6 +4536,7 @@
     const next = requested === 'ikev2-monitor' ? 'public' : Object.hasOwn(pages, requested) ? requested : 'overview';
     if (page !== next && (page === 'overview' || next === 'overview' || page === 'nodes' || next === 'nodes')) hideOverviewSecrets();
     if (page !== next && page === 'public' && relayEditing) setRelayEditing(false);
+    if (page === 'settings' && next !== 'settings') leaveSettingsView();
     page = next;
     if (page === 'settings') {
       showSettingsTab(showMaintenanceOnRoute ? 'maintenance' : 'base');
