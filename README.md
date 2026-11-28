@@ -8,7 +8,7 @@ HopWorld Router 是独立于 [HopWorld macOS 应用](https://github.com/ZaoHub/H
 
 旧版源码归档见 [V0](V0/README.md)（V1 开发前的基线 `e9f1d7a`）。 加密 DNS 配置、隔离出口实验与验收进度见 [V1 网络安全与验收](docs/V1网络安全与验收.md)。
 
-[查看 V1 放行端口表](#v1-部署端口与安全组)
+[查看 V1 放行端口表](#v1-部署端口与安全组) · [在线安装落地页](https://zaohub.github.io/HopWorld-Router/)
 
 ## 当前可用
 
@@ -84,6 +84,8 @@ HopWorld Router 同时做两件事：**把运行本服务的机器网络做成�
 - OpenWrt、Windows 与透明网关等场景的完整部署与验证
 
 ## 安装教程
+
+Linux 服务器推荐先打开 [在线安装落地页](https://zaohub.github.io/HopWorld-Router/)：可在浏览器发起 SSH 安装，或复制终端一键命令；本机安装器、命令大全与端口说明也在该页。下面各平台折叠教程仍适用于手工部署与排障。
 
 ### V1 部署端口与安全组
 
@@ -164,6 +166,16 @@ python3 -m venv .venv
 <summary><strong>Linux 服务器 / VPS：原生安装</strong></summary>
 
 Ubuntu／Debian 测试环境可从源码构建带 SHA-256 校验文件的 `.deb`，由 APT 安装并注册 systemd 服务。见 [V1 原生测试包](docs/V1开发与验收.md#linux-原生测试包)。
+
+### 在线安装落地页
+
+打开 [https://zaohub.github.io/HopWorld-Router/](https://zaohub.github.io/HopWorld-Router/)。页面支持：
+
+- **浏览器 / 本机安装器**：填写 SSH 地址、账号与主机指纹，由本机安装器连到服务器执行官方安装脚本；密码与密钥只留在本机进程。
+- **终端一键命令**：在服务器以 root 复制粘贴安装命令（与下方「从 GitHub 一键安装」相同）。
+- **命令大全**：systemd、Docker、清理与排障常用命令。
+
+源码与静态页在仓库 [`landing/`](landing/)，由 GitHub Pages 发布。本机自建安装器见 [`landing/README.md`](landing/README.md)。
 
 ### 从 GitHub 一键安装 V1
 
@@ -304,7 +316,7 @@ HOPWORLD_PUBLIC_HOST=你的域名
 HOPWORLD_SUBSCRIPTION_BASE=https://你的域名
 ```
 
-使用 `--public-admin` 配置的 Nginx 公网入口可以通过 TCP 443 同时提供后台和 `/s/` 订阅。新版部署脚本会默认设置 `HOPWORLD_SUBSCRIPTION_BASE` 来复用现有 HTTPS 证书，并保留已有的自定义值。配置后从后台复制公网订阅链接即可。「发布设置」里的 9443 端口和证书用于另行启用 Router 的独立订阅监听。
+后台优先使用 `HOPWORLD_SUBSCRIPTION_BASE` 中配置的 HTTPS 入口生成订阅链接。Router 的独立订阅监听仍使用「发布设置」里的端口。
 
 使用 nginx 时，证书出现在 `/etc/letsencrypt/live/你的域名/` 后，再配置 nginx 的 443 站点：
 
