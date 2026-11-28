@@ -3160,6 +3160,23 @@
     if (savedTrackingChannel) trackingChannel.value = savedTrackingChannel;
     if (savedSettings) fillSettingsDraft(savedSettings);
     else syncSettingsButtons();
+    if (managementAccess?.active && !managementBusy) {
+      managementPort.value = managementAccess.active.port;
+      managementHttps.checked = managementAccess.active.https;
+      syncManagementInputs();
+    }
+    if (settingsTab === 'network-security') {
+      const policy = currentNetworkPolicy();
+      securityMode.value = policy?.mode || 'compatibility';
+      securityResolver.value = policy?.resolver_id || '';
+      for (const field of ['name', 'address', 'port', 'host', 'path']) {
+        const input = byId('v1-security-dns-' + field);
+        input.value = input.defaultValue;
+      }
+      byId('v1-security-dns-protocol').value = 'doh';
+      byId('v1-security-dns-path').disabled = false;
+      syncSecurityButtons();
+    }
     settingsFeedback.textContent = '';
   }
   function managementSettingsChanged(draft) {
@@ -4535,8 +4552,19 @@
     const requested = location.hash.slice(1);
     const next = requested === 'ikev2-monitor' ? 'public' : Object.hasOwn(pages, requested) ? requested : 'overview';
     if (page !== next && (page === 'overview' || next === 'overview' || page === 'nodes' || next === 'nodes')) hideOverviewSecrets();
-    if (page !== next && page === 'public' && relayEditing) setRelayEditing(false);
-    if (page === 'settings' && next !== 'settings') leaveSettingsView();
+    if (page !== next) {
+      if (page === 'public' && relayEditing) setRelayEditing(false);
+      if (page === 'settings') leaveSettingsView();
+      for (const dialog of document.querySelectorAll('dialog[open]:not(#first-login-dialog)')) {
+        if (dialog.querySelector('form:not([method="dialog"])')) dialog.close();
+      }
+      for (const [key, id] of Object.entries(MODAL_IDS)) {
+        const modal = byId(id);
+        if (modal.hidden || !modal.querySelector('form')) continue;
+        if (key === 'manual' || key === 'add-source') modal.querySelector('form').reset();
+        closeModal(key);
+      }
+    }
     page = next;
     if (page === 'settings') {
       showSettingsTab(showMaintenanceOnRoute ? 'maintenance' : 'base');
