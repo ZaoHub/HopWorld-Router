@@ -47,8 +47,9 @@ from router.public_endpoint import detect_public_host, detect_public_ip, direct_
 from router.ddns import publish_ddns
 from router.acme import (ACME_KEY, CERTIFICATE_PEM, HYSTERIA_CERTIFICATE_NAME, IP_CERTIFICATES_KEY, SHORTLIVED_RENEW_SECONDS,
                          cert_paths, days_until_expiry,
-                         ensure_ip_certificate, hysteria_local_certificate, import_certificate, ip_certificate_paths,
-                         ip_certificate_readiness, management_https_certificate_status, short_acme_error,
+                         ensure_ip_certificate, ensure_management_https_certificate, hysteria_local_certificate,
+                         import_certificate, ip_certificate_paths, ip_certificate_readiness,
+                         management_https_certificate_status, management_https_host, short_acme_error,
                          stage_certificate, sync_certificate,
                          validate_acme_challenge, validate_acme_email, validate_ip_challenge)
 from router.dns_hints import build_dns_hints
@@ -571,7 +572,7 @@ class Store:
 
     @staticmethod
     def _independent_links_available(profile):
-        return profile.get('tls_mode') != 'ip_acme' or (
+        return profile.get('tls_mode') not in ('ip_acme', 'management_ip') or (
             not profile.get('ip_certificate_pending') and profile.get('ip_certificate_expires', 0) > time.time()
         )
 
@@ -763,8 +764,12 @@ class Store:
         certificate_domain = acme.get('domain', '')
         certificate_ready = bool(certificate_domain and not is_ip_host(certificate_domain)
                                  and self._quic_certificate({'public_host': certificate_domain}))
+        management = management_https_certificate_status(self.data_dir) if tls else {}
+        certificate_ip = management.get('host', '') if (management.get('days_left') or 0) > 0 else ''
+        if not is_ip_host(certificate_ip):
+            certificate_ip = ''
         default_mode = 'domain'
-        if core_id == 'hysteria2' and not certificate_ready:
+        if not certificate_ready and (core_id == 'hysteria2' or certificate_ip):
             default_mode = 'auto_ip'
         if not tls:
             if not host:
@@ -775,7 +780,7 @@ class Store:
             'public_host': host, 'detected_host': profile.get('detected_host', ''),
             'detected_ipv6': profile.get('detected_ipv6', ''),
             'address_mode': profile.get('address_mode', default_mode),
-            'address_family': profile.get('address_family', 'ipv6' if ':' in host else 'ipv4'),
+            'address_family': profile.get('address_family', 'ipv6' if ':' in (host or certificate_ip) else 'ipv4'),
             'ddns': profile.get('ddns', False), 'address_error': profile.get('address_error', ''),
             'ddns_ipv4': profile.get('ddns_ipv4', ''), 'ddns_ipv6': profile.get('ddns_ipv6', ''),
             'port': profile.get('port', port), 'tuic_port': profile.get('tuic_port'),
@@ -787,6 +792,7 @@ class Store:
             'certificate_required': tls, 'fixed_upstream': fixed,
             'certificate_domain': certificate_domain,
             'certificate_ready': certificate_ready,
+            'certificate_ip': certificate_ip,
             'tls_mode': profile.get('tls_mode', 'automatic'),
             'ip_certificate_email': profile.get('ip_certificate_email') or acme.get('email', ''),
             'ip_certificate_expires': profile.get('ip_certificate_expires'),
@@ -960,7 +966,8 @@ class Store:
             if profile.get('ip_certificate_expires', 0) <= time.time():
                 raise ValueError('公网 IP 证书已过期，等待自动续期')
             certificate = ip_certificate_paths(self.data_dir, profile['public_host'])
-        elif core_id == 'hysteria2' and profile.get('address_mode') == 'auto_ip' and is_ip_host(profile['public_host']):
+        elif (core_id == 'hysteria2' and profile.get('tls_mode') != 'management_ip'
+              and profile.get('address_mode') == 'auto_ip' and is_ip_host(profile['public_host'])):
             certificate, pin = hysteria_local_certificate(self.data_dir)
         else:
             certificate = self._quic_certificate(profile) if PUBLISHERS[core_id][4] else None
@@ -1026,7 +1033,8 @@ class Store:
             elif occupied:
                 reason = '目标内核已配置相同的协议和端口'
             elif protocol == 'hysteria2' and (source.get('tls_mode') == 'ip_acme' or
-                    source.get('address_mode') == 'auto_ip' and is_ip_host(source['public_host'])):
+                    source.get('tls_mode') != 'management_ip'
+                    and source.get('address_mode') == 'auto_ip' and is_ip_host(source['public_host'])):
                 reason = '此节点的公网 IP 证书模式由原生 Hysteria 2 提供，请先改用域名证书'
             elif not self.independent[target].locate():
                 reason = '请先在内核管理安装目标内核'
@@ -1084,6 +1092,7 @@ class Store:
             shared = ('public_host', 'address_family', 'public_listener', 'address_mode', 'ddns',
                       'public_host_ipv6', 'detected_host', 'detected_ipv6', 'egress', 'upstream_id')
             merge = (previous_target.get('enabled') and protocol not in publisher_ports(target, previous_target)
+                     and (new_target.get('tls_mode') == 'management_ip') == (previous_target.get('tls_mode') == 'management_ip')
                      and all((new_target.get(key) or '') == (previous_target.get(key) or '') for key in shared))
             if merge:
                 new_target = {**previous_target}
@@ -1227,19 +1236,24 @@ class Store:
             raise ValueError('公网 IP 证书模式只支持单地址族，双栈请选择自动 TLS 证书')
         ip_certificate = {'tls_mode': tls_mode, 'ip_certificate_email': '', 'ip_certificate_expires': 0,
                           'ip_certificate_pending': False}
-        certificate_host = ''
-        if automatic and PUBLISHERS[core_id][4] and tls_mode != 'ip_acme':
-            certificate_host = self.acme_settings().get('domain') or ''
-            if (not certificate_host or is_ip_host(certificate_host)
-                    or not self._quic_certificate({'public_host': certificate_host})):
-                if core_id != 'hysteria2':
-                    raise ValueError('自动公网 IP 模式需要有效的 TLS 域名证书。订阅使用公网 IP，证书域名用于校验连接。')
-                certificate_host = ''
         if dual_ip:
             detected, detected_ipv6 = (self._detect_dual_public_ip(version) for version in (4, 6))
         else:
             detected = self._detect_direct_public_ip(6 if family == 'ipv6' else 4) if automatic else ''
             detected_ipv6 = ''
+        certificate_host = ''
+        if automatic and PUBLISHERS[core_id][4] and tls_mode != 'ip_acme':
+            domain = self.acme_settings().get('domain') or ''
+            if domain and not is_ip_host(domain) and self._quic_certificate({'public_host': domain}):
+                certificate_host = domain
+            elif not dual_ip and detected == management_https_host():
+                paths = self._quic_certificate({'public_host': detected, 'tls_mode': 'management_ip'})
+                if paths and (days := days_until_expiry(paths[0]) or 0) > 0:
+                    certificate_host = detected
+                    ip_certificate.update(tls_mode='management_ip', ip_certificate_expires=int(time.time() + days * 86400))
+            if not certificate_host and core_id != 'hysteria2':
+                raise ValueError('双栈自动公网 IP 需要有效的域名证书。也可选择安装证书覆盖的单一地址族。' if dual_ip
+                                 else '检测到的公网 IP 没有匹配的管理 IP 证书，请配置有效的域名证书。')
         if tls_mode == 'ip_acme':
             email = validate_acme_email(data.get('ip_certificate_email'))
             service = self.independent[core_id]
@@ -1522,6 +1536,9 @@ class Store:
                             update['address_error'] = 'DDNS 更新失败，请检查 DNS 提供方配置'
                         else:
                             update.update({f'ddns_{family}': host for family, host in changed.items()})
+                elif profile.get('tls_mode') == 'management_ip':
+                    if not missing and detected[versions[0]] != profile['public_host']:
+                        update['address_error'] = '公网 IP 已变化，保留证书覆盖的原地址'
                 elif profile.get('public_host_ipv6'):
                     if detected[4]:
                         update['detected_host'] = detected[4]
@@ -1539,6 +1556,34 @@ class Store:
             for profile_id, profile in self.independent_profiles().items():
                 if publisher_core(profile_id) == 'hysteria2' and profile.get('enabled') and profile.get('tls_mode') == 'ip_acme':
                     self._sync_hysteria_ip_profile(profile_id, profile)
+
+    def sync_management_ip_core_certificates(self):
+        with self._local_lock:
+            profiles = self.independent_profiles()
+            managed = {key: profile for key, profile in profiles.items()
+                       if profile.get('enabled') and profile.get('tls_mode') == 'management_ip'}
+            if not managed:
+                return
+            certificate = management_https_certificate_status(self.data_dir)
+            days = certificate.get('days_left') or 0
+            if days <= 0:
+                return
+            expires = int(time.time() + days * 86400)
+            changed = False
+            for key, profile in managed.items():
+                if profile['public_host'] != certificate['host']:
+                    continue
+                if abs(expires - profile['ip_certificate_expires']) <= 1 and self.publisher_runtime(key).running():
+                    continue
+                updated = {**profile, 'ip_certificate_expires': expires}
+                try:
+                    self._apply_independent_profile(key, updated)
+                except (ValueError, OSError):
+                    continue
+                profiles[key] = updated
+                changed = True
+            if changed:
+                self._save_independent_profiles(profiles)
 
     def _sync_hysteria_ip_profile(self, profile_id, previous):
         pending = previous
@@ -1728,6 +1773,12 @@ class Store:
                     service._error = str(error)
 
     def _quic_certificate(self, settings):
+        if settings.get('tls_mode') == 'management_ip':
+            try:
+                _, cert, key = ensure_management_https_certificate(self.data_dir, settings['public_host'])
+                return str(cert), str(key)
+            except (OSError, ValueError):
+                return None
         acme = self.acme_settings()
         cert = acme.get('cert_path') or ''
         key = acme.get('key_path') or ''
@@ -3867,6 +3918,7 @@ def serve(data_dir, *, allow_restart=False):
             try:
                 store.sync_managed_ip_certificates()
                 store.sync_hysteria_ip_certificate()
+                store.sync_management_ip_core_certificates()
                 public_subscription.sync_ip_binding(handler)
             except sqlite3.Error:
                 print('无法更新 Hysteria 2 公网 IP 证书状态', flush=True)

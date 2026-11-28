@@ -646,6 +646,42 @@ class ServerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, '公网 IP 证书模式只支持单地址族'):
             self.store.start_independent_core('hysteria2', profile)
 
+    def test_automatic_tls_reuses_installation_certificate_only_for_its_public_ip(self):
+        host = '8.8.8.8'
+        paths = ('/fixture/fullchain.pem', '/fixture/privkey.pem')
+        profile = {'public_host': '', 'port': 8442, 'public_listener': True, 'egress': 'direct',
+                   'upstream_id': '', 'address_mode': 'auto_ip', 'address_family': 'ipv4'}
+        result = {}
+
+        def apply(profile_id, saved):
+            _, result['links'], result['certificate'] = self.store._independent_config(profile_id, saved)
+
+        with patch.dict(os.environ, {'HOPWORLD_MANAGEMENT_HTTPS_HOST': host}), \
+             patch('router.server.ensure_management_https_certificate', return_value=(host, *paths)) as reuse, \
+             patch('router.server.days_until_expiry', return_value=3), \
+             patch.object(self.store, '_detect_direct_public_ip', return_value=host) as detect, \
+             patch.object(self.store, '_detect_dual_public_ip', side_effect={4: host, 6: '2606:4700::1111'}.get), \
+             patch.object(self.store, '_apply_independent_profile', side_effect=apply), \
+             patch.object(self.store.independent['sing-box'], 'locate', return_value='/fixture/core'):
+            self.store.start_independent_core('sing-box', profile)
+            saved = self.store.independent_profiles()['sing-box']
+            self.assertEqual(saved['tls_mode'], 'management_ip')
+            self.assertGreater(saved['ip_certificate_expires'], time.time())
+            self.assertEqual(result['certificate'], paths)
+            for link in result['links']:
+                self.assertEqual(urlsplit(link).hostname, host)
+                self.assertNotIn('insecure', parse_qs(urlsplit(link).query))
+            with self.assertRaisesRegex(ValueError, '双栈自动公网 IP'):
+                self.store.start_independent_core('sing-box', {**profile, 'address_family': 'dual'})
+            detect.return_value = '8.8.4.4'
+            with self.assertRaisesRegex(ValueError, '没有匹配'):
+                self.store.start_independent_core('sing-box', profile)
+            self.store.sync_independent_addresses()
+            saved = self.store.independent_profiles()['sing-box']
+            self.assertEqual(saved['detected_host'], host)
+            self.assertIn('保留证书覆盖的原地址', saved['address_error'])
+            self.assertTrue(all(call.args[1] == host for call in reuse.call_args_list))
+
     def test_dual_address_check_uses_only_public_interface_fallback(self):
         path = '/api/v1/cores/address-check'
         with patch('router.server.detect_public_ip', side_effect=ValueError('unavailable')), \

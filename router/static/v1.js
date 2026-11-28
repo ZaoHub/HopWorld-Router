@@ -1208,6 +1208,12 @@
     }
   }
 
+  function matchingManagementIp(fields) {
+    const address = profileCertificate?.ip;
+    if (fields.address_mode.value !== 'auto_ip' || !address) return '';
+    return fields.address_family.value === (address.includes(':') ? 'ipv6' : 'ipv4') ? address : '';
+  }
+
   function syncProfileAddress() {
     const fields = profileForm.elements;
     const mode = fields.address_mode.value;
@@ -1219,17 +1225,20 @@
     fields.ip_certificate_email.disabled = !publicIPCertificate;
     fields.ip_certificate_email.required = publicIPCertificate;
     if (profileCertificate?.required) {
-      const localHysteriaCertificate = hysteriaAutoIP && !profileCertificate.ready;
+      const managementIp = !profileCertificate.ready && matchingManagementIp(fields);
+      const localHysteriaCertificate = hysteriaAutoIP && !profileCertificate.ready && !managementIp;
       const expires = fields.address_family.value === profileCertificate.family && profileCertificate.expires;
       byId('v1-core-profile-cert-note').textContent = publicIPCertificate
         ? (expires > Date.now() / 1000 ? `公网 IP 证书有效至 ${formatWhen(expires)}。Router 会自动续期。` :
           '签发需从外网访问所选公网 IPv4 或 IPv6 的 TCP 80 端口。证书有效期约 6 天，Router 会自动续期。')
+        : managementIp ? `若检测到的公网 IP 为 ${managementIp}，将复用安装时签发的证书。`
         : mode === 'auto_ip'
         ? (profileCertificate.ready ? `连接地址为公网 IP。TLS 校验使用证书名称 ${profileCertificate.domain}。` :
           localHysteriaCertificate ? 'Router 会自动生成 TLS 证书。请使用支持证书指纹校验的 Hysteria 2 客户端。' :
             '连接地址为公网 IP。此模式仍需 TLS 证书。')
         : domain ? 'TLS 证书须与所选域名匹配。' : 'TLS 证书须与所填 IP 匹配。';
-      byId('v1-core-profile-cert-link').hidden = mode === 'auto_ip' && (publicIPCertificate || profileCertificate.ready || localHysteriaCertificate);
+      byId('v1-core-profile-cert-link').hidden = mode === 'auto_ip' &&
+        (publicIPCertificate || managementIp || profileCertificate.ready || localHysteriaCertificate);
     }
     const dualAllowed = domain || (mode === 'auto_ip' && !publicIPCertificate);
     byId('v1-core-dual').disabled = !dualAllowed;
@@ -1276,12 +1285,12 @@
       if (!profileDialog.open || request !== profileRequest) return;
       profileCore = core;
       const fields = profileForm.elements;
-      profileCertificate = {required: saved.certificate_required, domain: saved.certificate_domain,
+      profileCertificate = {required: saved.certificate_required, domain: saved.certificate_domain, ip: saved.certificate_ip,
         ready: saved.certificate_ready, family: saved.address_family, expires: saved.ip_certificate_expires};
       fields.address_mode.options[2].hidden = saved.address_mode !== 'fixed_ip';
       fields.address_mode.value = saved.address_mode;
       fields.address_family.value = saved.address_family;
-      fields.tls_mode.value = saved.tls_mode || 'automatic';
+      fields.tls_mode.value = saved.tls_mode === 'ip_acme' ? 'ip_acme' : 'automatic';
       fields.ip_certificate_email.value = saved.ip_certificate_email || '';
       fields.ddns.checked = saved.ddns;
       fields.public_host.value = saved.address_mode === 'fixed_ip' ? saved.public_host : '';
@@ -1520,9 +1529,12 @@
     if (!profileCore || profileSubmit.disabled) return;
     const {id, name} = profileCore;
     const fields = profileForm.elements;
-    if (fields.address_mode.value === 'auto_ip' && profileCertificate.required && !profileCertificate.ready && id !== 'hysteria2') {
+    if (fields.address_mode.value === 'auto_ip' && profileCertificate.required &&
+        !profileCertificate.ready && !matchingManagementIp(fields) && id !== 'hysteria2') {
       openConfirm('需要有效的 TLS 证书',
-        '订阅会使用检测到的公网 IP 连接。当前自动公网 IP 模式使用域名证书校验 TLS，请先配置有效证书。',
+        fields.address_family.value === 'dual' && profileCertificate.ip
+          ? '双栈需要域名证书。可改选安装时 IP 证书覆盖的单一地址族。'
+          : '请配置有效域名证书，或选择安装时 IP 证书覆盖的地址族。',
         '配置证书', () => {
           profileDialog.close();
           location.hash = '#certificates';
