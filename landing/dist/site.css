@@ -134,6 +134,22 @@ pre { background: #edf2fa; color: #1c3155; border-radius: 8px; padding: 12px; wh
 .entry-body pre { margin: 0 0 8px; }
 @media (max-width: 480px) { .catalog { padding-block: 30px; } .site-header .nav-links a[href="#install-commands"] { display: none; } }
 
+.local-launcher {
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #f8fbff;
+}
+.local-launcher p { margin: 0 0 12px; color: var(--muted); line-height: 1.55; font-size: .92rem; }
+.local-launcher .quiet { margin: 10px 0 0; font-size: .84rem; }
+.local-launcher code {
+  font-family: var(--mono);
+  font-size: .86em;
+  padding: .1em .35em;
+  border-radius: 6px;
+  background: #eaf0fa;
+}
 .ssh-verification {
   margin-top: 16px;
   padding: 14px;

@@ -28,21 +28,21 @@
     <section id="install-commands" class="catalog-section" aria-labelledby="install-command-title">
       <h2 id="install-command-title">安装</h2>
       <p>原生安装使用 GitHub V1.0.2。容器安装命令须在 Linux Docker 主机上执行。</p>
-      <details class="command-entry" open><summary>Ubuntu 18.04 / 22.04 及更新版本</summary><div class="entry-body"><p>需要 systemd、curl 和 sudo 权限。Ubuntu 18.04 使用独立 Python 运行环境。</p><pre>( set -o pipefail; curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/v1.0.2/deploy/install.sh | sudo bash )</pre></div></details>
-      <details class="command-entry"><summary>Debian 12 及更新版本</summary><div class="entry-body"><p>需要 systemd、curl 和 sudo 权限。</p><pre>( set -o pipefail; curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/v1.0.2/deploy/install.sh | sudo bash )</pre></div></details>
-      <details class="command-entry"><summary>CentOS 7</summary><div class="entry-body"><p>支持使用 systemd 的 CentOS 7。CentOS Stream 可参考下方 Docker 路径。</p><pre>( set -o pipefail; curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/v1.0.2/deploy/install.sh | sudo bash )</pre></div></details>
-      <details class="command-entry"><summary>Deepin 安装（Docker）</summary><div class="entry-body"><p>先在系统上准备 Docker Engine、Compose 和 Git。此容器路径尚未在 Deepin 实机验证。</p><pre>git clone --branch v1.0.2 https://github.com/ZaoHub/HopWorld-Router.git &amp;&amp;
+      <details class="command-entry" open><summary>Ubuntu 18.04 / 22.04 及更新版本</summary><div class="entry-body"><p>需要 systemd、curl 和 sudo 权限。Ubuntu 18.04 使用独立 Python 运行环境。</p><pre>( set -o pipefail; curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/v1.0.5/deploy/install.sh | sudo bash )</pre></div></details>
+      <details class="command-entry"><summary>Debian 12 及更新版本</summary><div class="entry-body"><p>需要 systemd、curl 和 sudo 权限。</p><pre>( set -o pipefail; curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/v1.0.5/deploy/install.sh | sudo bash )</pre></div></details>
+      <details class="command-entry"><summary>CentOS 7</summary><div class="entry-body"><p>支持使用 systemd 的 CentOS 7。CentOS Stream 可参考下方 Docker 路径。</p><pre>( set -o pipefail; curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/v1.0.5/deploy/install.sh | sudo bash )</pre></div></details>
+      <details class="command-entry"><summary>Deepin 安装（Docker）</summary><div class="entry-body"><p>先在系统上准备 Docker Engine、Compose 和 Git。此容器路径尚未在 Deepin 实机验证。</p><pre>git clone --branch v1.0.5 https://github.com/ZaoHub/HopWorld-Router.git &amp;&amp;
 cd HopWorld-Router &amp;&amp;
 (umask 077; mkdir -p data; printf '%s\n' 'HOPWORLD_ADMIN_PASSWORD=admin' &gt; router.env) &amp;&amp;
 sudo docker compose up -d --build</pre></div></details>
-      <details class="command-entry"><summary>Fedora 安装（Docker）</summary><div class="entry-body"><p>先按 <a href="https://docs.docker.com/engine/install/fedora/">Docker 官方 Fedora 指南</a>安装引擎和 Compose，并确保 Git 可用。HopWorld-Router 尚未在 Fedora 实机验证。</p><pre>git clone --branch v1.0.2 https://github.com/ZaoHub/HopWorld-Router.git &amp;&amp;
+      <details class="command-entry"><summary>Fedora 安装（Docker）</summary><div class="entry-body"><p>先按 <a href="https://docs.docker.com/engine/install/fedora/">Docker 官方 Fedora 指南</a>安装引擎和 Compose，并确保 Git 可用。HopWorld-Router 尚未在 Fedora 实机验证。</p><pre>git clone --branch v1.0.5 https://github.com/ZaoHub/HopWorld-Router.git &amp;&amp;
 cd HopWorld-Router &amp;&amp;
 (umask 077; mkdir -p data; printf '%s\n' 'HOPWORLD_ADMIN_PASSWORD=admin' &gt; router.env) &amp;&amp;
 sudo docker compose up -d --build</pre></div></details>
-      <details class="command-entry"><summary>Docker / 绿联 NAS</summary><div class="entry-body"><p>先准备 Git 和 Docker Compose。在主机的持久存储目录运行：</p><pre>git clone --branch v1.0.2 https://github.com/ZaoHub/HopWorld-Router.git &amp;&amp;
+      <details class="command-entry"><summary>Docker / 绿联 NAS</summary><div class="entry-body"><p>先准备 Git 和 Docker Compose。在主机的持久存储目录运行：</p><pre>git clone --branch v1.0.5 https://github.com/ZaoHub/HopWorld-Router.git &amp;&amp;
 cd HopWorld-Router &amp;&amp;
 (umask 077; mkdir -p data; printf '%s\n' 'HOPWORLD_ADMIN_PASSWORD=admin' &gt; router.env) &amp;&amp;
-sudo docker compose up -d --build</pre><p><a href="https://github.com/ZaoHub/HopWorld-Router/blob/v1.0.2/docs/NAS容器试用指南.md">NAS 指南</a></p></div></details>
+sudo docker compose up -d --build</pre><p><a href="https://github.com/ZaoHub/HopWorld-Router/blob/v1.0.5/docs/NAS容器试用指南.md">NAS 指南</a></p></div></details>
     </section>
 
     <section id="manage-commands" class="catalog-section" aria-labelledby="manage-command-title">
