@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from router.runtime_layout import atomic_switch, releases_dir, runtime_root, write_runtime_meta
 from router.version import RELEASE_MAJOR
@@ -98,23 +98,26 @@ def install_artifact(manifest: Path, signature: Path, archive: Path, *, root=Non
     with tempfile.TemporaryDirectory(dir=destination.parent) as temporary:
         stage = Path(temporary) / 'tree'
         stage.mkdir()
+        expected = {item['path']: item['sha256'] for item in data['files']}
         with tarfile.open(archive, 'r:gz') as tar:
-            tar.extractall(stage, filter='data')
-        # Archives are rooted at '.' so content may be directly under stage.
-        source = stage
-        if not (source / 'router').is_dir():
-            children = [path for path in stage.iterdir() if path.is_dir()]
-            if len(children) == 1 and (children[0] / 'router').is_dir():
-                source = children[0]
-        if not (source / 'router').is_dir():
-            raise ValueError('运行时产物缺少 router 目录')
-        expected = {item['path']: item['sha256'] for item in data['files']
-                    if isinstance(item, dict) and isinstance(item.get('path'), str)}
-        for relative, digest in expected.items():
-            path = source / relative
-            if not path.is_file() or sha256_file(path) != digest:
-                raise ValueError(f'运行时文件校验失败：{relative}')
-        shutil.copytree(source, destination, symlinks=False)
+            for member in tar:
+                relative = PurePosixPath(member.name)
+                if relative.is_absolute() or '..' in relative.parts:
+                    raise ValueError('运行时归档路径无效')
+                if member.isdir():
+                    continue
+                if not member.isfile() or relative.as_posix() not in expected:
+                    raise ValueError(f'运行时归档成员无效：{relative}')
+                target = stage / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with tar.extractfile(member) as source, target.open('xb') as handle:
+                    shutil.copyfileobj(source, handle)
+                target.chmod(0o755 if member.mode & 0o111 else 0o644)
+                if sha256_file(target) != expected.pop(relative.as_posix()):
+                    raise ValueError(f'运行时文件校验失败：{relative}')
+        if expected or not (stage / 'router').is_dir():
+            raise ValueError('运行时归档缺少清单文件')
+        stage.rename(destination)
     write_runtime_meta(
         destination,
         id=release_id,
