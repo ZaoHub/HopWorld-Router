@@ -1,1 +1,2 @@
 hopworld-router ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block hopworld-router-runtime-update.service
+hopworld-router ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block hopworld-router-runtime-migrate.service

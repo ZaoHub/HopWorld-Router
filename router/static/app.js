@@ -887,9 +887,8 @@ $('#v1-update-channel')?.addEventListener('change', async event => {
 });
 $('#v1-update-migrate')?.addEventListener('click', async () => {
   try {
-    const result = await call('/api/v1/updates/runtime', {action: 'migrate'});
-    renderRuntimeUpdate(result.runtime);
-    note('已迁移到独立运行时目录');
+    await call('/api/v1/updates/runtime', {action: 'migrate'});
+    note('迁移已开始，后台可能短暂断开。恢复后刷新页面检查运行版本。');
   } catch (error) {
     note(error.message, {error: true});
   }

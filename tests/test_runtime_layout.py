@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from router import incremental_update, runtime_layout
 
@@ -57,6 +58,24 @@ class RuntimeLayoutTests(unittest.TestCase):
         status = runtime_layout.set_channel('development', root=self.root)
         self.assertEqual(status['channel'], 'development')
         self.assertEqual(runtime_layout.read_state(self.root)['channel'], 'development')
+
+
+    def test_service_channel_is_saved_separately_from_runtime(self):
+        data = Path(self.temp.name) / 'data'
+        data.mkdir()
+        with patch.dict('os.environ', {'HOPWORLD_DATA': str(data), 'HOPWORLD_RUNTIME_ROOT': str(self.root)}):
+            self.assertEqual(runtime_layout.set_channel('development')['channel'], 'development')
+            self.assertEqual(runtime_layout.status()['channel'], 'development')
+            self.assertEqual(runtime_layout.read_state(self.root)['channel'], 'stable')
+            self.assertFalse(self.root.exists())
+
+    def test_start_migration_invokes_only_the_fixed_unit(self):
+        with patch.object(incremental_update.subprocess, 'run') as launch:
+            launch.return_value.returncode = 0
+            incremental_update.start_migration()
+        launch.assert_called_once_with(
+            ['/usr/bin/sudo', '-n', '/usr/bin/systemctl', 'start', '--no-block',
+             'hopworld-router-runtime-migrate.service'], capture_output=True, timeout=5)
 
 
 class IncrementalPreviewTests(unittest.TestCase):

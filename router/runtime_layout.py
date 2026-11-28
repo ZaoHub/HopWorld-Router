@@ -271,13 +271,30 @@ def migrate_from_seed(*, seed=None, root=None, package_version='', commit='', fo
     return status(root)
 
 
+def _channel_file():
+    directory = os.environ.get('HOPWORLD_DATA')
+    return Path(directory) / 'runtime-update-channel' if directory else None
+
+
 def set_channel(channel, root=None):
     if channel not in ('stable', 'development'):
         raise ValueError('更新通道须为正式或开发')
-    state = read_state(root)
-    state['channel'] = channel
-    write_state(state, root)
-    append_history({'action': 'channel', 'channel': channel}, root)
+    if root is None and (path := _channel_file()):
+        try:
+            with tempfile.NamedTemporaryFile(dir=path.parent, delete=False, mode='w', encoding='ascii') as staged:
+                try:
+                    staged.write(channel + '\n')
+                    staged.flush()
+                    Path(staged.name).replace(path)
+                finally:
+                    Path(staged.name).unlink(missing_ok=True)
+        except OSError as exc:
+            raise ValueError('无法保存更新通道') from exc
+    else:
+        state = read_state(root)
+        state['channel'] = channel
+        write_state(state, root)
+        append_history({'action': 'channel', 'channel': channel}, root)
     return status(root)
 
 
@@ -304,6 +321,7 @@ def list_releases(root=None):
 
 
 def status(root=None):
+    channel_path = _channel_file() if root is None else None
     root = root or runtime_root()
     state = read_state(root)
     current = resolve_current(root)
@@ -313,10 +331,18 @@ def status(root=None):
     running_id = current.name if current else state.get('running_id', '')
     running_commit = meta.get('commit') or state.get('running_commit', '')
     healthy = bool(current and (current / 'router').is_dir())
+    channel = state.get('channel') or 'stable'
+    if channel_path:
+        try:
+            configured = channel_path.read_text(encoding='ascii').strip()
+        except (OSError, UnicodeError):
+            configured = ''
+        if configured in ('stable', 'development'):
+            channel = configured
     return {
         'runtime_root': str(root),
         'migrated': bool(state.get('migrated') or current),
-        'channel': state.get('channel') or 'stable',
+        'channel': channel,
         'installation': installation,
         'apt_version': apt or VERSION,
         'running_id': running_id,

@@ -3606,10 +3606,8 @@ def make_handler(store, password, public_subscription=None, *, request_restart=N
                 elif path == '/api/v1/updates/runtime':
                     action = data.get('action')
                     if action == 'migrate':
-                        return self.json(200, {'ok': True, 'runtime': runtime_layout.migrate_from_seed(
-                            package_version=os.environ.get('HOPWORLD_PACKAGE_VERSION', ''),
-                            commit=os.environ.get('HOPWORLD_SOURCE_COMMIT', ''),
-                        )})
+                        incremental_update.start_migration()
+                        return self.json(202, {'ok': True, 'started': True})
                     if action == 'channel':
                         return self.json(200, {'ok': True, 'runtime': runtime_layout.set_channel(data.get('channel'))})
                     if action == 'rollback':

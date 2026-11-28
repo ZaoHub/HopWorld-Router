@@ -1,0 +1,10 @@
+[Unit]
+Description=Migrate HopWorld Router into its private runtime
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Environment=HOPWORLD_RUNTIME_ROOT=/var/lib/hopworld-router-runtime
+Environment=HOPWORLD_DPKG_SEED=/usr/lib/hopworld-router
+ExecStart=/usr/lib/hopworld-router/deploy/hopworld-install-runtime.sh

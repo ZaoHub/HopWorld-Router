@@ -215,16 +215,22 @@ def apply(*, root=None, fetch=_json, start_unit=True):
     write_pending(commit, root=root)
     if not start_unit:
         return {'ok': True, 'queued': commit, 'started': False}
-    try:
-        result = subprocess.run(
-            ['/usr/bin/sudo', '-n', '/usr/bin/systemctl', 'start', '--no-block', UNIT],
-            capture_output=True, timeout=5,
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise ValueError('页面增量更新服务不可用，请检查服务器安装') from exc
-    if result.returncode:
-        raise ValueError('页面增量更新服务不可用，请检查服务器安装')
+    _start_worker(UNIT)
     return {'ok': True, 'queued': commit, 'started': True}
+
+
+def _start_worker(unit):
+    try:
+        result = subprocess.run(['/usr/bin/sudo', '-n', '/usr/bin/systemctl', 'start', '--no-block', unit],
+                                capture_output=True, timeout=5)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError('页面运行时服务不可用，请检查服务器安装') from exc
+    if result.returncode:
+        raise ValueError('页面运行时服务不可用，请检查服务器安装')
+
+
+def start_migration():
+    _start_worker('hopworld-router-runtime-migrate.service')
 
 
 def apply_local(manifest: Path, signature: Path, archive: Path, *, root=None, public_key=None, expected_commit=None):
