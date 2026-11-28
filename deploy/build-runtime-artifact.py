@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 COMMIT_RE = re.compile(r'^[0-9a-f]{40}$')
 INCLUDE_PREFIXES = ('router/',)
 INCLUDE_FILES = (
+    'deploy/hopworld-acme-dns-hook.sh',
     'deploy/hopworld-sync-management-cert.sh',
     'deploy/hopworld-certbot-renew-hook.sh',
     'deploy/hopworld-install-runtime.sh',

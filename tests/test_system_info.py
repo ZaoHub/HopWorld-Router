@@ -13,6 +13,7 @@ from urllib.request import Request, urlopen
 
 from router.server import Store, make_handler
 from router.system_info import _etime_seconds, _memory, _process_usage, core_inventory
+from router.version import VERSION
 
 
 class SystemInfoTests(unittest.TestCase):
