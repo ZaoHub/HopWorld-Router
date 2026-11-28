@@ -17,7 +17,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import Mock, patch
 from urllib.error import HTTPError
-from urllib.parse import parse_qs, quote, urlsplit
+from urllib.parse import parse_qs, quote, unquote, urlsplit
 from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener, urlopen
 
 import yaml
@@ -380,7 +380,8 @@ class ServerTests(unittest.TestCase):
              patch.object(self.store, 'independent_endpoints', return_value={node_id(link): endpoint}):
             with self.request(path) as response:
                 self.assertEqual(response.headers['Cache-Control'], 'no-store')
-                self.assertEqual(json.load(response)['uri'], link.replace(':8443?', ':9443?'))
+                self.assertEqual(json.load(response)['uri'],
+                                 link.replace(':8443?', ':9443?').replace('#Published', '#' + quote('HopWorld-Router · 域名')))
             with self.request(path + '&format=mihomo') as response:
                 exported = json.load(response)
                 self.assertEqual(exported['filename'], 'hopworld-mihomo.yaml')
@@ -1349,6 +1350,35 @@ class ServerTests(unittest.TestCase):
         with self.assertRaises(HTTPError) as error:
             self.request('/api/local-node', {'enabled': False, 'public_host': '8.8.8.8', 'port': 8443, 'name': ' '})
         self.assertEqual(error.exception.code, 400)
+
+    def test_generated_node_names_match_subscription_and_exports_without_changing_ids(self):
+        links = [
+            'vless://user@8.8.8.8:8443#Xray',
+            'hysteria2://secret@8.8.8.8:8444#Hysteria',
+            'tuic://id:secret@[2606:4700::1111]:8445#TUIC',
+            'hysteria2://secret@node.example.test:8446#Sing-box',
+            'hysteria2://other@8.8.8.8:8447#Custom',
+            'tuic://id:secret@8.8.8.8:8443#Same-port',
+        ]
+        ids = list(map(node_id, links))
+        addresses = {ids[1]: {'core_id': 'hysteria2', 'public_host': '8.8.8.8', 'port': 8444, 'public_port': 18444},
+                     ids[4]: {'core_id': 'hysteria2', 'profile_id': 'hysteria2@custom', 'public_host': '8.8.8.8', 'port': 8447}}
+        profiles = {'hysteria2@custom': {'name': 'Custom'}}
+        manual = 'trojan://secret@upstream.example.test:443#Manual'
+        self.store.add_manual(manual)
+        with patch.object(self.store, 'local_links', return_value=links), \
+             patch.object(self.store, 'independent_endpoints', return_value=addresses), \
+             patch.object(self.store, 'independent_profiles', return_value=profiles):
+            expected = ['HopWorld-Router · IPv4 · 8443', 'HopWorld-Router · IPv4 · 18444',
+                        'HopWorld-Router · IPv6', 'HopWorld-Router · 域名', 'Custom', 'HopWorld-Router · IPv4 · 8443 · 2']
+            nodes = {node['id']: node for node in self.store.nodes()}
+            self.assertEqual([nodes[key]['title'] for key in ids], expected)
+            subscription = decode_subscription(self.store.subscription().encode())
+            self.assertEqual(subscription, [manual, *(self.store.node_link(key, local_only=True) for key in ids)])
+            self.assertEqual([unquote(urlsplit(link).fragment) for link in subscription[1:]], expected)
+            self.store.set_node_enabled(ids[0], False)
+            self.assertEqual(next(node['title'] for node in self.store.nodes() if node['id'] == ids[0]), expected[0])
+            self.assertNotIn(subscription[1], decode_subscription(self.store.subscription().encode()))
 
     def test_local_network_subscription_includes_hysteria2_and_tuic(self):
         settings = self.store.xray.default_settings('8.8.8.8')

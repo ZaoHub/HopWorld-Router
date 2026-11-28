@@ -1,5 +1,6 @@
 """Loopback-only subscription manager; run behind an authenticated secure tunnel."""
 import base64
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 import hmac
@@ -1859,6 +1860,41 @@ class Store:
         auth, separator, _ = parts.netloc.rpartition('@')
         return parts._replace(netloc=f'{auth}{separator}{address}:{port}').geturl()
 
+    def _local_publication(self):
+        with self._local_lock:
+            settings = self.local_node_settings()
+            profiles = self.independent_profiles()
+            local = {node_id(link): link for link in self.local_links(settings)}
+            endpoints = self.independent_endpoints(profiles)
+        published = {}
+        names = {}
+        reserved = set()
+        for identifier, link in local.items():
+            endpoint = endpoints.get(identifier, {})
+            parts = urlsplit(self._published_link(link, endpoint))
+            published[identifier] = parts
+            profile_id = endpoint.get('profile_id') or endpoint.get('core_id')
+            name = (profiles.get(profile_id, {}) if profile_id else settings).get('name')
+            if name and name != DEFAULT_NODE_NAME:
+                reserved.add(unquote(parts.fragment))
+                continue
+            host = parts.hostname or ''
+            family = ('IPv6' if ':' in host else 'IPv4') if is_ip_host(host) else '域名'
+            names[identifier] = f"{UI_DEFAULTS['name']} · {family}"
+        counts = Counter(names.values())
+        for identifier, title in names.items():
+            parts = published[identifier]
+            if counts[title] > 1 or title in reserved:
+                title = f'{title} · {parts.port}'
+            stem = title
+            index = 1
+            while title in reserved:
+                index += 1
+                title = f'{stem} · {index}'
+            reserved.add(title)
+            published[identifier] = parts._replace(fragment=quote(title))
+        return local, endpoints, {identifier: parts.geturl() for identifier, parts in published.items()}
+
     def subscription(self):
         try:
             self.sync_public_endpoint(force=True)
@@ -1867,12 +1903,10 @@ class Store:
         with self.connect() as db:
             upstreams = self._upstream_nodes(db)
             disabled = {row['id'] for row in db.execute('SELECT id FROM disabled_nodes')}
-        with self._local_lock:
-            local = self.local_links()
-            independent = self.independent_endpoints()
-        links = [link for identifier, (link, _) in upstreams.items() if identifier not in disabled and link not in local]
-        links.extend(self._published_link(link, independent.get(node_id(link), {}))
-                     for link in local if node_id(link) not in disabled)
+        local, _, published = self._local_publication()
+        local_uris = set(local.values()) | set(published.values())
+        links = [link for identifier, (link, _) in upstreams.items() if identifier not in disabled and link not in local_uris]
+        links.extend(link for identifier, link in published.items() if identifier not in disabled)
         links = list(dict.fromkeys(links))
         return encode_subscription(links) if links else ''
 
@@ -1897,14 +1931,13 @@ class Store:
         return nodes
 
     def _node_entries(self, upstreams):
-        with self._local_lock:
-            local_links = self.local_links()
-            independent = self.independent_endpoints()
-        local = {node_id(link): (link, {'local'}) for link in local_links}
-        for link, groups in local.values():
-            identifier = upstream_node_id(link)
-            if identifier in upstreams and upstreams[identifier][0] == link:
-                groups.update(upstreams.pop(identifier)[1])
+        raw, independent, published = self._local_publication()
+        local = {identifier: (link, {'local'}) for identifier, link in published.items()}
+        for identifier, (link, groups) in local.items():
+            for uri in (raw[identifier], link):
+                upstream = upstream_node_id(uri)
+                if upstream in upstreams and upstreams[upstream][0] == uri:
+                    groups.update(upstreams.pop(upstream)[1])
         return upstreams | local, independent
 
     def nodes(self):
@@ -1955,8 +1988,7 @@ class Store:
                 raise ValueError('订阅组无效')
             selected_groups = allowed if groups is None else set(groups)
             selected = {identifier for identifier, (_, memberships) in entries.items() if selected_groups.intersection(memberships)}
-        return {identifier: (self._published_link(link, independent.get(identifier, {})),
-                             independent.get(identifier, {}).get('core_id'))
+        return {identifier: (link, independent.get(identifier, {}).get('core_id'))
                 for identifier, (link, _) in entries.items() if identifier in selected}
 
     def node_link(self, identifier, *, local_only=False):
@@ -1967,11 +1999,9 @@ class Store:
             with self.connect() as db:
                 if upstream := self._upstream_nodes(db).get(identifier):
                     return upstream[0], None
-        with self._local_lock:
-            for link in self.local_links():
-                if node_id(link) == identifier:
-                    endpoint = self.independent_endpoints().get(identifier, {})
-                    return self._published_link(link, endpoint), endpoint.get('core_id')
+        _, independent, published = self._local_publication()
+        if identifier in published:
+            return published[identifier], independent.get(identifier, {}).get('core_id')
         raise ValueError('节点不存在')
 
     def set_node_enabled(self, identifier, enabled):
