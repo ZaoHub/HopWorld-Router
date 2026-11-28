@@ -114,7 +114,7 @@ def _render_publisher(core_id, profile, certificate=None, proxy=None, *, certifi
     if fixed and (not proxy or not fixed_kind or (fixed_kind == 'socks' and proxy['protocol'] != 'socks')):
         raise ValueError('绑定的上游不可用或协议不兼容')
     if PUBLISHERS[core_id][4] and not certificate:
-        raise ValueError('请先在「域名与证书」配置与公网域名匹配的有效证书')
+        raise ValueError('缺少与此节点地址匹配的有效 TLS 证书')
 
     if core_id == 'xray-core':
         config, uri = build_local_reality_node(
