@@ -1231,8 +1231,9 @@
         : domain ? 'TLS 证书须与所选域名匹配。' : 'TLS 证书须与所填 IP 匹配。';
       byId('v1-core-profile-cert-link').hidden = mode === 'auto_ip' && (publicIPCertificate || profileCertificate.ready || localHysteriaCertificate);
     }
-    fields.address_family.options[2].disabled = !domain;
-    if (!domain && fields.address_family.value === 'dual') fields.address_family.value = 'ipv4';
+    const dualAllowed = domain || (mode === 'auto_ip' && !publicIPCertificate);
+    byId('v1-core-dual').disabled = !dualAllowed;
+    if (!dualAllowed && fields.address_family.value === 'dual') fields.address_family.value = 'ipv4';
     byId('v1-core-address-host').hidden = mode !== 'fixed_ip';
     fields.public_host.required = mode === 'fixed_ip';
     byId('v1-core-bound-domain').hidden = !domain;
@@ -1247,6 +1248,7 @@
     addressCheck.textContent = '检查公网 IP';
     byId('v1-core-address-hint').textContent = domain
       ? (profileDomains.length ? '地址族沿用域名绑定设置。' : '暂无已绑定域名，请先完成绑定。')
+      : publicIPCertificate ? '公网 IP 证书只支持单地址族，双栈请选择自动 TLS 证书。'
       : mode === 'auto_ip' ? 'Router 会定期检测公网 IP。地址变化后客户端需刷新订阅。'
       : '现有手动 IP 可继续使用，也可改为自动获取。';
     void showProfileIpReadiness(fields.address_family.value, publicIPCertificate);
@@ -1289,6 +1291,7 @@
       fields.bound_domain.value = profileDomains.some(item => item.host === saved.public_host) ? saved.public_host : '';
       addressResult.textContent = [
         saved.detected_host && `当前订阅地址 ${saved.detected_host}`,
+        saved.detected_ipv6 && `IPv6 ${saved.detected_ipv6}`,
         saved.ddns_ipv4 && `上次更新 A ${saved.ddns_ipv4}`,
         saved.ddns_ipv6 && `上次更新 AAAA ${saved.ddns_ipv6}`,
         saved.address_error,
@@ -1356,7 +1359,8 @@
     addressResult.textContent = '正在检查地址…';
     try {
       const result = await call('/api/v1/cores/address-check', {mode: 'auto_ip', family});
-      if (current()) addressResult.textContent = `检测到公网地址 ${result.address} · 入站待验证`;
+      const addresses = family === 'dual' ? `${result.ipv4} · ${result.ipv6}` : result.address;
+      if (current()) addressResult.textContent = `检测到公网地址 ${addresses} · 入站待验证`;
     } catch (error) {
       if (current()) addressResult.textContent = error.message;
     } finally {
