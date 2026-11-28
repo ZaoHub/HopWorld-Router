@@ -603,7 +603,22 @@ let manualUpdateCheck = false;
 let managedUpdate = true;
 let updateInstallation = 'project';
 const updateWaitLimit = 12 * 60 * 1000;
-function renderRuntimeUpdate(runtime) {
+const trackingChannel = $('#v1-update-channel');
+let savedTrackingChannel = '';
+let trackingChannelRevision = 0;
+
+function trackingChannelChanged() {
+  return !!savedTrackingChannel && trackingChannel.value !== savedTrackingChannel;
+}
+
+async function saveTrackingChannel() {
+  const result = await call('/api/v1/updates/runtime', {action: 'channel', channel: trackingChannel.value});
+  trackingChannelRevision++;
+  renderRuntimeUpdate(result.runtime, {replaceChannelDraft: true});
+  $('#v1-update-apply-files').hidden = true;
+  $('#v1-update-diff').hidden = true;
+}
+function renderRuntimeUpdate(runtime, {replaceChannelDraft = false} = {}) {
   if (!runtime) return;
   const apt = runtime.apt_version || '—';
   const running = runtime.running_version || apt;
@@ -624,8 +639,14 @@ function renderRuntimeUpdate(runtime) {
   }
   const migrate = $('#v1-update-migrate');
   if (migrate) migrate.hidden = !!runtime.migrated;
-  const channel = $('#v1-update-channel');
-  if (channel && (runtime.channel === 'stable' || runtime.channel === 'development')) channel.value = runtime.channel;
+  if (runtime.channel === 'stable' || runtime.channel === 'development') {
+    const keepDraft = !replaceChannelDraft && trackingChannelChanged();
+    if (!keepDraft) trackingChannel.value = runtime.channel;
+    if (savedTrackingChannel !== runtime.channel) {
+      savedTrackingChannel = runtime.channel;
+      document.dispatchEvent(new Event('tracking-channel-saved'));
+    }
+  }
   const box = $('#v1-update-releases');
   if (box) {
     const releases = Array.isArray(runtime.releases) ? runtime.releases.filter(item => !item.active) : [];
@@ -753,6 +774,7 @@ async function checkSystemUpdate() {
   clearTimeout(systemUpdateTimer);
   let delay = 600000;
   const prefSequence = updatePrefSequence;
+  const channelRevision = trackingChannelRevision;
   try {
     const status = await call('/api/system/update');
     if (prefSequence === updatePrefSequence) rememberUpdatePrefs(status);
@@ -760,7 +782,7 @@ async function checkSystemUpdate() {
     if (systemUpdateStarted && Date.now() - systemUpdateStarted > updateWaitLimit && status.state !== 'current') {
       renderSystemUpdate({state: 'failed', error: '等待更新超时，请检查服务状态。'});
     } else {
-      renderSystemUpdate(status);
+      renderSystemUpdate(channelRevision === trackingChannelRevision ? status : {...status, runtime: undefined});
     }
   } catch (error) {
     if (systemUpdateStarted && Date.now() - systemUpdateStarted > updateWaitLimit) {
@@ -810,8 +832,10 @@ async function requestFileUpdateCheck() {
   if (apply) apply.hidden = true;
   status.textContent = '正在检查 GitHub main 文件差异…';
   diff.hidden = false;
+  const channelRevision = trackingChannelRevision;
   try {
     const result = await call('/api/v1/updates/runtime', {action: 'check-files'});
+    if (channelRevision !== trackingChannelRevision) return;
     const incremental = result.incremental || {};
     const files = Array.isArray(incremental.changed_files) ? incremental.changed_files : [];
     list.replaceChildren(...files.map(name => {
@@ -872,15 +896,6 @@ $('#v1-update-releases')?.addEventListener('click', async event => {
     const result = await call('/api/v1/updates/runtime', {action: 'rollback', id});
     renderRuntimeUpdate(result.runtime);
     note('已切换运行版本，请按需重启 Router');
-  } catch (error) {
-    note(error.message, {error: true});
-  }
-});
-$('#v1-update-channel')?.addEventListener('change', async event => {
-  try {
-    const result = await call('/api/v1/updates/runtime', {action: 'channel', channel: event.target.value});
-    renderRuntimeUpdate(result.runtime);
-    note(event.target.value === 'development' ? '已切换到开发通道（不会自动应用未签名产物）' : '已切换到正式通道');
   } catch (error) {
     note(error.message, {error: true});
   }

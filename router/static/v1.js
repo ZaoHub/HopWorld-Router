@@ -748,81 +748,108 @@
     panel.style.right = 'auto';
     panel.style.left = '0';
   }
+  let openSelect;
+  let activeSelectOption;
   function closeMenus() {
     for (const panel of document.querySelectorAll('.v1-menu-panel')) {
       panel.hidden = true;
       clearMenuPosition(panel);
       panel.parentElement?.querySelector('[data-menu-toggle]')?.setAttribute('aria-expanded', 'false');
     }
-    const filterMenu = byId('v1-filter-select-menu');
-    if (filterMenu) {
-      filterMenu.hidden = true;
-      filterMenu.replaceChildren();
-      delete filterMenu.dataset.selectId;
+    if (openSelect) {
+      const panel = byId('v1-select-menu');
+      panel.hidePopover?.();
+      panel.remove();
+      openSelect.setAttribute('aria-expanded', 'false');
+      openSelect.removeAttribute('aria-controls');
+      openSelect.removeAttribute('aria-activedescendant');
+      openSelect = undefined;
+      activeSelectOption = undefined;
     }
-    for (const select of document.querySelectorAll('.v1-node-filters select[aria-expanded="true"]')) {
-      select.setAttribute('aria-expanded', 'false');
+  }
+  function placeSelectMenu(panel) {
+    if (!openSelect.getClientRects().length || openSelect.matches(':disabled') ||
+        (panel.parentElement.matches('dialog') && !panel.parentElement.open)) {
+      closeMenus();
+      return;
+    }
+    const rect = openSelect.getBoundingClientRect();
+    const viewport = document.documentElement;
+    const width = Math.max(0, viewport.clientWidth - 16);
+    panel.style.minWidth = `${Math.min(Math.max(rect.width, 160), width)}px`;
+    panel.style.maxWidth = `${width}px`;
+    const left = Math.max(8, Math.min(rect.left, viewport.clientWidth - panel.offsetWidth - 8));
+    const below = viewport.clientHeight - rect.bottom - 14;
+    const above = rect.top - 14;
+    const upwards = below < Math.min(panel.scrollHeight, 240) && above > below;
+    const space = Math.max(0, upwards ? above : below);
+    panel.style.maxHeight = `${Math.min(320, space)}px`;
+    panel.style.left = `${left}px`;
+    panel.style.top = `${upwards ? rect.top - 6 - panel.offsetHeight : rect.bottom + 6}px`;
+  }
+  function highlightSelectOption(option, scroll = true) {
+    if (!option) return;
+    activeSelectOption?.removeAttribute('data-active');
+    activeSelectOption = option;
+    option.dataset.active = '';
+    openSelect.setAttribute('aria-activedescendant', option.id);
+    if (scroll) {
+      const panel = option.parentElement;
+      if (option.offsetTop < panel.scrollTop) panel.scrollTop = option.offsetTop;
+      if (option.offsetTop + option.offsetHeight > panel.scrollTop + panel.clientHeight) {
+        panel.scrollTop = option.offsetTop + option.offsetHeight - panel.clientHeight;
+      }
     }
   }
-  function filterSelectMenuHost() {
-    return document.querySelector('.v1-node-filters');
-  }
-  function ensureFilterSelectMenu() {
-    let panel = byId('v1-filter-select-menu');
-    if (panel) return panel;
-    panel = element('div', null, 'v1-menu-panel');
-    panel.id = 'v1-filter-select-menu';
-    panel.setAttribute('role', 'listbox');
-    panel.hidden = true;
-    return panel;
-  }
-  function placeFilterSelectMenu(select, panel) {
-    const host = filterSelectMenuHost();
-    if (!host || !select || !panel) return;
-    if (panel.parentElement !== host) host.append(panel);
-    clearMenuPosition(panel);
-    const sr = select.getBoundingClientRect();
-    const hr = host.getBoundingClientRect();
-    const width = Math.max(Math.round(sr.width), 160);
-    panel.style.position = 'absolute';
-    panel.style.top = `${Math.round(sr.bottom - hr.top + 6)}px`;
-    panel.style.left = `${Math.round(sr.left - hr.left)}px`;
-    panel.style.right = 'auto';
-    panel.style.minWidth = `${width}px`;
-    panel.style.zIndex = '50';
-  }
-  function openFilterSelectMenu(select) {
-    if (document.documentElement.dataset.theme !== 'neon-fusion') return false;
-    if (!select || !select.closest('.v1-node-filters')) return false;
-    const panel = ensureFilterSelectMenu();
-    const already = !panel.hidden && panel.dataset.selectId === select.id;
+  function showSelectMenu(select) {
+    if (select === openSelect) return;
     closeMenus();
-    if (already) return true;
-    panel.replaceChildren(...[...select.options].map(option => {
-      const item = element('button', option.textContent, null);
+    const panel = element('div', null, 'v1-menu-panel');
+    panel.id = 'v1-select-menu';
+    panel.setAttribute('role', 'listbox');
+    const label = select.getAttribute('aria-label') || select.labels?.[0]?.textContent.trim();
+    if (label) panel.setAttribute('aria-label', label);
+    const options = Array.from(select.options).filter(option => !option.hidden && !option.closest('optgroup[hidden]'));
+    for (const option of options) {
+      const item = element('button', option.label, null);
       item.type = 'button';
+      item.tabIndex = -1;
+      item.id = `v1-select-option-${option.index}`;
+      item.dataset.index = option.index;
       item.setAttribute('role', 'option');
-      item.dataset.value = option.value;
-      if (option.disabled) item.disabled = true;
-      if (option.selected) item.setAttribute('aria-selected', 'true');
-      return item;
-    }));
-    panel.dataset.selectId = select.id;
-    panel.hidden = false;
+      item.setAttribute('aria-selected', String(option.selected));
+      item.disabled = option.matches(':disabled');
+      panel.append(item);
+    }
+    if (!panel.children.length) return;
+    openSelect = select;
     select.setAttribute('aria-expanded', 'true');
-    placeFilterSelectMenu(select, panel);
-    return true;
+    select.setAttribute('aria-controls', panel.id);
+    if (typeof panel.showPopover === 'function') panel.setAttribute('popover', 'manual');
+    (select.closest('dialog[open]') || document.body).append(panel);
+    panel.showPopover?.();
+    placeSelectMenu(panel);
+    if (openSelect) highlightSelectOption(panel.querySelector('[aria-selected="true"]:not(:disabled)') || panel.querySelector('button:not(:disabled)'));
   }
-  function syncOpenMenus() {
+  function chooseSelectOption(item) {
+    if (!openSelect || !item || item.disabled) return;
+    const select = openSelect;
+    const index = Number(item.dataset.index);
+    closeMenus();
+    if (select.selectedIndex !== index) {
+      select.selectedIndex = index;
+      select.dispatchEvent(new Event('input', {bubbles: true}));
+      select.dispatchEvent(new Event('change', {bubbles: true}));
+    }
+    select.focus({preventScroll: true});
+  }
+  function syncOpenMenus(event) {
     for (const toggle of document.querySelectorAll('[data-menu-toggle][aria-expanded="true"]')) {
       const panel = byId(toggle.getAttribute('aria-controls'));
       if (panel && !panel.hidden) placeMenu(toggle, panel);
     }
-    const filterMenu = byId('v1-filter-select-menu');
-    if (filterMenu && !filterMenu.hidden && filterMenu.dataset.selectId) {
-      const select = byId(filterMenu.dataset.selectId);
-      if (select) placeFilterSelectMenu(select, filterMenu);
-    }
+    const selectMenu = byId('v1-select-menu');
+    if (openSelect && event.target !== selectMenu) placeSelectMenu(selectMenu);
   }
   window.addEventListener('resize', syncOpenMenus);
   document.addEventListener('scroll', syncOpenMenus, true);
@@ -3121,11 +3148,14 @@
     fields.probe_target.value = value.probe_target || settingsDefaults.probe_target;
     syncSettingsButtons();
   }
-  function syncSettingsButtons() {
-    const draft = readSettingsDraft();
-    const dirty = savedSettings && (savedSettings.timezone !== draft.timezone ||
+  function managementSettingsChanged(draft) {
+    return savedSettings && (savedSettings.timezone !== draft.timezone ||
       savedSettings.auto_check !== draft.auto_check ||
       savedSettings.auto_apply !== draft.auto_apply || savedSettings.probe_target !== draft.probe_target);
+  }
+  function syncSettingsButtons() {
+    const dirty = managementSettingsChanged(readSettingsDraft()) || trackingChannelChanged();
+    trackingChannel.disabled = savingSettings || !savedTrackingChannel;
     byId('v1-settings-save').disabled = savingSettings || !dirty;
     byId('v1-settings-reset').disabled = !savedSettings || savingSettings;
   }
@@ -3169,22 +3199,34 @@
     button.addEventListener('click', () => showSettingsTab(button.dataset.settingsTab));
   }
   settingsForm.addEventListener('input', syncSettingsButtons);
+  trackingChannel.addEventListener('change', syncSettingsButtons);
+  document.addEventListener('tracking-channel-saved', () => {
+    renderAppVersion(system?.version);
+    syncSettingsButtons();
+  });
   byId('v1-settings-reset').addEventListener('click', () => {
+    if (savedTrackingChannel) trackingChannel.value = 'stable';
     fillSettingsDraft(settingsDefaults);
     settingsFeedback.textContent = byId('v1-settings-save').disabled ? '当前已是默认设置。' : '已填入默认值，点「保存设置」应用。';
   });
   settingsForm.addEventListener('submit', async event => {
     event.preventDefault();
-    if (!savedSettings || savingSettings) return;
+    if (savingSettings) return;
     const draft = readSettingsDraft();
+    const saveManagement = managementSettingsChanged(draft);
+    const saveChannel = trackingChannelChanged();
+    if (!saveManagement && !saveChannel) return;
     savingSettings = true;
     syncSettingsButtons();
     settingsFeedback.textContent = '正在保存…';
     try {
-      const saved = await persistManagementSettings(draft);
-      savedSettings = {...savedSettings, ...saved};
-      applyConsolePreferences(saved);
-      renderDefaultProbeTarget(savedSettings.probe_target);
+      if (saveManagement) {
+        const saved = await persistManagementSettings(draft);
+        savedSettings = {...savedSettings, ...saved};
+        applyConsolePreferences(saved);
+        renderDefaultProbeTarget(savedSettings.probe_target);
+      }
+      if (saveChannel) await saveTrackingChannel();
       settingsFeedback.textContent = '设置已保存';
     } catch (error) {
       settingsFeedback.textContent = error.message;
@@ -3259,7 +3301,12 @@
   function renderAppVersion(version) {
     const text = formatAppVersion(version);
     const label = byId('v1-sidebar-version-label');
-    if (label) label.textContent = text;
+    if (label) {
+      const base = text.replace(/\+runtime\d+$/, '');
+      const release = /^v\d+\.\d+\.\d+/.exec(base)?.[0];
+      label.textContent = savedTrackingChannel === 'development' && release ? release + 'r' : base;
+      label.title = text;
+    }
     const about = byId('v1-about-version');
     if (about) about.textContent = text || dash;
   }
@@ -4709,7 +4756,7 @@
     const subAct = event.target.closest('[data-sub-act]');
     if (subAct) { void runSourceAct(subAct.dataset.subAct, subAct.dataset.subId); return; }
     const subRow = event.target.closest('#v1-sub-rows tr');
-    if (subRow?.dataset.subPick && !event.target.closest('input, button, a, label')) {
+    if (subRow?.dataset.subPick && !event.target.closest('input, select, button, a, label')) {
       const picked = (overview?.sources || []).find(item => String(item.id) === subRow.dataset.subPick);
       if (picked) { selectedSourceId = picked.id; renderSubscriptions(); }
       return;
@@ -4717,7 +4764,7 @@
     const nodeAct = event.target.closest('[data-node-act]');
     if (nodeAct) { void runNodeAct(nodeAct.dataset.nodeAct, nodeAct.dataset.nodeId); return; }
     const nodeRow = event.target.closest('#v1-node-rows tr');
-    if (nodeRow?.dataset.nodePick && !event.target.closest('input, button, a, label')) {
+    if (nodeRow?.dataset.nodePick && !event.target.closest('input, select, button, a, label')) {
       selectedNodeId = nodeRow.dataset.nodePick;
       renderNodes();
       return;
@@ -4735,7 +4782,7 @@
     }
     if (event.target.closest('#v1-core-wizard-open')) { openWizard(selectedCoreId); return; }
     const row = event.target.closest('#v1-core-rows tr');
-    if (row?.dataset.corePick && !event.target.closest('input, button, a, label')) { selectCore(row.dataset.corePick, true); return; }
+    if (row?.dataset.corePick && !event.target.closest('input, select, button, a, label')) { selectCore(row.dataset.corePick, true); return; }
     const toggle = event.target.closest('[data-menu-toggle]');
     if (toggle) {
       const panel = byId(toggle.getAttribute('aria-controls'));
@@ -4748,29 +4795,28 @@
       }
       return;
     }
-    if (!event.target.closest('.v1-menu, .v1-node-filters select, #v1-filter-select-menu')) closeMenus();
+    if (!event.target.closest('.v1-menu, select, #v1-select-menu')) closeMenus();
   });
-  document.addEventListener('mousedown', event => {
-    if (document.documentElement.dataset.theme !== 'neon-fusion') return;
-    const select = event.target.closest('.v1-node-filters select');
+  const selectControl = 'select:not([multiple], [size]):not(:disabled), select[size="1"]:not([multiple]):not(:disabled)';
+  document.addEventListener('pointerdown', event => {
+    if (event.button !== 0 || event.pointerType !== 'mouse') return;
+    const select = event.target.closest(selectControl);
     if (!select) return;
     event.preventDefault();
     select.focus({preventScroll: true});
-    openFilterSelectMenu(select);
+    showSelectMenu(select);
   }, true);
   document.addEventListener('click', event => {
-    const option = event.target.closest('#v1-filter-select-menu [role="option"]');
-    if (!option || option.disabled) return;
-    const panel = byId('v1-filter-select-menu');
-    const select = panel?.dataset.selectId ? byId(panel.dataset.selectId) : null;
-    if (!select) return;
-    const next = option.dataset.value ?? '';
-    if (select.value !== next) {
-      select.value = next;
-      select.dispatchEvent(new Event('change', {bubbles: true}));
+    const select = event.target.closest(selectControl);
+    if (select) {
+      event.preventDefault();
+      showSelectMenu(select);
     }
-    closeMenus();
-    select.focus({preventScroll: true});
+    const option = event.target.closest('#v1-select-menu [role="option"]');
+    if (option) chooseSelectOption(option);
+  }, true);
+  document.addEventListener('focusin', event => {
+    if (openSelect && event.target !== openSelect && !event.target.closest('#v1-select-menu')) closeMenus();
   });
   const hoverTitles = new WeakMap();
   document.addEventListener('pointerover', event => {
@@ -4783,6 +4829,12 @@
     }
   });
   document.addEventListener('keydown', event => {
+    const select = event.target.closest?.(selectControl);
+    if (openSelect && event.key === 'Escape') {
+      event.preventDefault();
+      closeMenus();
+      return;
+    }
     if (event.key === 'Escape') {
       closeMenus();
       const probe = byId('v1-global-probe');
@@ -4792,12 +4844,34 @@
       }
       return;
     }
-    if (document.documentElement.dataset.theme !== 'neon-fusion') return;
-    const select = event.target.closest?.('.v1-node-filters select') || (event.target.matches?.('.v1-node-filters select') ? event.target : null);
-    if (!select || select !== document.activeElement) return;
-    if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+    if (!select) return;
+    const key = event.key;
+    if (openSelect !== select) {
+      if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(key)) {
+        event.preventDefault();
+        showSelectMenu(select);
+      }
+      return;
+    }
+    if (key === 'Tab') {
+      closeMenus();
+      return;
+    }
+    if (key === 'Enter' || key === ' ') {
       event.preventDefault();
-      openFilterSelectMenu(select);
+      chooseSelectOption(activeSelectOption);
+      return;
+    }
+    const options = Array.from(byId('v1-select-menu').querySelectorAll('button:not(:disabled)'));
+    const index = options.indexOf(activeSelectOption);
+    if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(key)) {
+      event.preventDefault();
+      const next = {ArrowDown: index + 1, ArrowUp: index - 1, Home: 0, End: options.length - 1}[key];
+      highlightSelectOption(options[Math.max(0, Math.min(options.length - 1, next))]);
+    } else if (key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+      const ordered = [...options.slice(index + 1), ...options.slice(0, index + 1)];
+      highlightSelectOption(ordered.find(option => option.textContent.trim().toLowerCase().startsWith(key.toLowerCase())));
     }
   });
   const clock = () => { byId('v1-clock').textContent = new Date().toLocaleString('zh-CN', {hour12: false, timeZone: settingsClockZone}); };

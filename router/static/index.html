@@ -125,7 +125,7 @@
       <a href="#traffic" data-v1-link="traffic"><svg class="v1-nav-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>流量监控</a>
       <a href="#settings" data-v1-link="settings"><svg class="v1-nav-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg>系统设置</a>
       <a href="#about" data-v1-link="about"><svg class="v1-nav-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>关于</a>
-      <div class="v1-sidebar-version"><div class="v1-sidebar-user"><span class="v1-user-avatar" aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><circle cx="12" cy="10" r="3" /><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662" /></svg></span><span class="v1-admin">管理员</span><button type="button" id="v1-logout">退出</button></div><div class="v1-sidebar-brand"><span class="v1-sidebar-product">HopWorld-Router</span><small id="v1-sidebar-version-label"></small></div></div>
+      <div class="v1-sidebar-version"><div class="v1-sidebar-user"><span class="v1-user-avatar" aria-hidden="true"><svg class="v1-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><circle cx="12" cy="10" r="3" /><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662" /></svg></span><span class="v1-admin">管理员</span><button type="button" id="v1-logout">退出</button></div><div class="v1-sidebar-brand"><span class="v1-sidebar-product" title="HopWorld-Router">HopWorld-Router</span><small id="v1-sidebar-version-label"></small></div></div>
     </nav>
   </aside>
   <main class="page v1-page">
@@ -1254,7 +1254,7 @@
               <label for="update-auto-apply" data-managed-update>自动更新</label><input class="v1-settings-switch" id="update-auto-apply" type="checkbox" role="switch" name="auto_apply" data-managed-update checked>
               <span>更新通道</span><output id="v1-settings-update-channel">—</output>
               <label for="v1-update-channel">跟踪通道</label>
-              <select id="v1-update-channel">
+              <select id="v1-update-channel" disabled>
                 <option value="stable">正式 · Releases</option>
                 <option value="development">开发 · main（需确认）</option>
               </select>

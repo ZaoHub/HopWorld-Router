@@ -400,12 +400,10 @@ html[data-theme="neon-fusion"] #v1-node-probe-settings select {
 }
 html[data-theme="neon-fusion"] input::placeholder,
 html[data-theme="neon-fusion"] textarea::placeholder { color: var(--v1-muted); }
-html[data-theme="neon-fusion"] input:focus,
-html[data-theme="neon-fusion"] select:focus,
-html[data-theme="neon-fusion"] textarea:focus {
-  outline-color: var(--v1-purple);
+html[data-theme="neon-fusion"] :is(input:not([type="checkbox"], [type="radio"], [type="range"]), select, textarea):focus {
+  outline: 2px solid var(--v1-purple);
+  outline-offset: -2px;
   border-color: var(--v1-border-strong);
-  box-shadow: 0 0 0 3px rgba(168, 103, 255, 0.22);
 }
 html[data-theme="neon-fusion"] input:disabled,
 html[data-theme="neon-fusion"] select:disabled,
@@ -529,11 +527,11 @@ html[data-theme="neon-fusion"] .v1-menu-panel button:disabled {
   color: #8E809E;
   opacity: 0.7;
 }
-html[data-theme="neon-fusion"] .v1-menu-panel [role="option"][aria-selected="true"] {
+html[data-theme="neon-fusion"] #v1-select-menu [role="option"][aria-selected="true"] {
   background: rgba(168, 103, 255, 0.28);
   box-shadow: inset 0 0 0 1px rgba(190, 140, 255, 0.45);
 }
-html[data-theme="neon-fusion"] .v1-menu-panel [role="option"][aria-selected="true"]:hover {
+html[data-theme="neon-fusion"] #v1-select-menu [role="option"][aria-selected="true"]:hover {
   background: rgba(168, 103, 255, 0.38);
 }
 html[data-theme="neon-fusion"] .v1-node-filters {
