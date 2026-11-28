@@ -2,7 +2,7 @@
 set -euo pipefail
 
 main() (
-  local version=1.0.5 public_admin_host='' public_admin_script=''
+  local version=1.0.6 public_admin_host='' public_admin_script=''
   if (( $# > 0 )); then
     if [[ $# != 2 || $1 != --public-admin ]]; then
       echo '用法：bash install.sh [--public-admin 公网IPv4或域名]' >&2

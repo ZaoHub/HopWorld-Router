@@ -182,7 +182,7 @@ Ubuntu／Debian 测试环境可从源码构建带 SHA-256 校验文件的 `.deb`
 在使用 systemd 的 VPS 上，以 root 执行。服务器需有 `curl` 并能访问 GitHub：
 
 ```bash
-( set -o pipefail; curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/v1.0.5/deploy/install.sh | bash )
+( set -o pipefail; curl -fsSL https://raw.githubusercontent.com/ZaoHub/HopWorld-Router/v1.0.6/deploy/install.sh | bash )
 ```
 
 - **Ubuntu 22.04+、Debian 12+**：校验 Release 的 `.deb`，由 APT 安装并启动后台。
