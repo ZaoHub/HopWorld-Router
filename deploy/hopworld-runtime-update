@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Root oneshot: apply a queued signed runtime artifact and restart Router.
+set -euo pipefail
+umask 022
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export HOME=/root
+
+runtime_root=${HOPWORLD_RUNTIME_ROOT:-/var/lib/hopworld-router-runtime}
+seed=${HOPWORLD_DPKG_SEED:-/usr/lib/hopworld-router}
+state=$runtime_root/page-status.json
+job=$(cat /proc/sys/kernel/random/uuid)
+
+write_state() {
+  printf '{"state":"%s","id":"%s","timestamp":%s}\n' "$1" "$job" "$(date +%s)" > "$runtime_root/page-status.tmp"
+  chmod 644 "$runtime_root/page-status.tmp"
+  mv -f "$runtime_root/page-status.tmp" "$state"
+}
+
+trap 'write_state failed' ERR
+exec 9>/var/lock/hopworld-router-update.lock
+flock -n 9 || { echo 'Another update is running' >&2; exit 1; }
+
+install -d -m 755 "$runtime_root"
+write_state running
+
+# The root-owned runtime must already be active before a queued update is applied.
+test -L "$runtime_root/current"
+HOPWORLD_RUNTIME_ROOT=$runtime_root PYTHONPATH=$seed /usr/bin/python3 - <<'PYTHON'
+import subprocess
+from router.incremental_update import run_pending
+from router.system_update import require_service_ready
+
+def restart_and_check():
+    subprocess.run(['/usr/bin/systemctl', 'restart', 'hopworld-router.service'], check=True)
+    require_service_ready()
+
+print(run_pending(restart_and_check=restart_and_check))
+PYTHON
+write_state complete
+echo 'runtime update complete'

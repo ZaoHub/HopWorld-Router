@@ -6,6 +6,9 @@ if [ "$1" = configure ]; then
     if ! getent passwd hopworld-router >/dev/null; then
         adduser --system --group --home /var/lib/hopworld-router --no-create-home hopworld-router
     fi
+    if [ -d /run/systemd/system ] && [ -f /lib/systemd/system/hopworld-router-runtime-update.service ]; then
+        systemctl daemon-reload || true
+    fi
     deb-systemd-helper unmask hopworld-router.service >/dev/null
     if deb-systemd-helper --quiet was-enabled hopworld-router.service; then
         deb-systemd-helper enable hopworld-router.service >/dev/null

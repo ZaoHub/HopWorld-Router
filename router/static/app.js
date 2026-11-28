@@ -805,7 +805,9 @@ async function requestFileUpdateCheck() {
   const diff = $('#v1-update-diff');
   const list = $('#v1-update-diff-list');
   const button = $('#v1-update-check-files');
+  const apply = $('#v1-update-apply-files');
   button.disabled = true;
+  if (apply) apply.hidden = true;
   status.textContent = '正在检查 GitHub main 文件差异…';
   diff.hidden = false;
   try {
@@ -819,14 +821,36 @@ async function requestFileUpdateCheck() {
     }));
     status.textContent = incremental.error || incremental.note
       || (files.length ? `发现 ${files.length} 个可增量文件` : '没有可增量的文件变更');
+    if (apply) apply.hidden = !incremental.apply_ready;
   } catch (error) {
     list.replaceChildren();
     status.textContent = error.message;
+    if (apply) apply.hidden = true;
   } finally {
     button.disabled = false;
   }
 }
+async function requestFileUpdateApply() {
+  if (!confirm('将应用已签名的 main 运行时产物并重启服务，现有连接可能短暂中断。继续吗？')) return;
+  const status = $('#v1-update-files-status');
+  const apply = $('#v1-update-apply-files');
+  apply.disabled = true;
+  status.textContent = '正在排队应用增量更新…';
+  try {
+    const result = await call('/api/v1/updates/runtime', {action: 'apply-files'});
+    status.textContent = result.started
+      ? `已开始应用 ${String(result.queued || '').slice(0, 7)}，请稍后刷新页面`
+      : `已排队 ${String(result.queued || '').slice(0, 7)}`;
+    note('增量更新已开始');
+  } catch (error) {
+    status.textContent = error.message;
+    note(error.message, {error: true});
+  } finally {
+    apply.disabled = false;
+  }
+}
 $('#v1-update-check-files')?.addEventListener('click', () => void requestFileUpdateCheck());
+$('#v1-update-apply-files')?.addEventListener('click', () => void requestFileUpdateApply());
 $('#v1-update-settings-open')?.addEventListener('click', () => {
   const panel = $('#v1-update-settings-panel');
   panel.hidden = !panel.hidden;
@@ -863,9 +887,8 @@ $('#v1-update-channel')?.addEventListener('change', async event => {
 });
 $('#v1-update-migrate')?.addEventListener('click', async () => {
   try {
-    const result = await call('/api/v1/updates/runtime', {action: 'migrate'});
-    renderRuntimeUpdate(result.runtime);
-    note('已迁移到独立运行时目录');
+    await call('/api/v1/updates/runtime', {action: 'migrate'});
+    note('迁移已开始，后台可能短暂断开。恢复后刷新页面检查运行版本。');
   } catch (error) {
     note(error.message, {error: true});
   }

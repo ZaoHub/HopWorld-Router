@@ -39,11 +39,28 @@ def build(version, output):
                 install(source, app / relative)
         install(ROOT / 'deploy/hopworld-acme-dns-hook.sh', app / 'deploy/hopworld-acme-dns-hook.sh', 0o755)
         install(ROOT / 'deploy/hopworld-install-runtime.sh', app / 'deploy/hopworld-install-runtime.sh', 0o755)
+        install(ROOT / 'deploy/hopworld-runtime-update', app / 'deploy/hopworld-runtime-update', 0o755)
         install(ROOT / 'deploy/hopworld-router-check.sh', stage / 'usr/bin/hopworld-router-check', 0o755)
         install(ROOT / 'deploy/hopworld-router-uninstall', stage / 'usr/bin/hopworld-router-uninstall', 0o755)
         install(DEBIAN / 'hopworld-package-update.py', app / 'deploy/hopworld-package-update.py')
         install(DEBIAN / 'hopworld-router-package-update.sudoers',
                 stage / 'etc/sudoers.d/hopworld-router-package-update', 0o440)
+        install(ROOT / 'deploy/hopworld-router-runtime-update.sudoers',
+                stage / 'etc/sudoers.d/hopworld-router-runtime-update', 0o440)
+        install(ROOT / 'deploy/keys/runtime-ed25519.pub',
+                stage / 'usr/share/hopworld-router/keys/runtime-ed25519.pub')
+        if shutil.which('git'):
+            source_commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=ROOT,
+                                           text=True, capture_output=True)
+            checkout = subprocess.run(['git', 'status', '--porcelain'], cwd=ROOT,
+                                      text=True, capture_output=True)
+            if (checkout.returncode == 0 and not checkout.stdout and source_commit.returncode == 0
+                    and re.fullmatch(r'[0-9a-f]{40}', source_commit.stdout.strip())):
+                (app / 'SOURCE_COMMIT').write_text(source_commit.stdout, encoding='ascii')
+        install(ROOT / 'deploy/hopworld-router-runtime-migrate.service',
+                stage / 'lib/systemd/system/hopworld-router-runtime-migrate.service')
+        install(ROOT / 'deploy/hopworld-router-runtime-update.service',
+                stage / 'lib/systemd/system/hopworld-router-runtime-update.service')
         install(ROOT / 'LICENSE', stage / 'usr/share/doc/hopworld-router/copyright')
         for name in ('preinst', 'postinst', 'prerm', 'postrm'):
             install(DEBIAN / name, stage / 'DEBIAN' / name, 0o755)

@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from router import incremental_update, runtime_layout
 
@@ -59,6 +60,24 @@ class RuntimeLayoutTests(unittest.TestCase):
         self.assertEqual(runtime_layout.read_state(self.root)['channel'], 'development')
 
 
+    def test_service_channel_is_saved_separately_from_runtime(self):
+        data = Path(self.temp.name) / 'data'
+        data.mkdir()
+        with patch.dict('os.environ', {'HOPWORLD_DATA': str(data), 'HOPWORLD_RUNTIME_ROOT': str(self.root)}):
+            self.assertEqual(runtime_layout.set_channel('development')['channel'], 'development')
+            self.assertEqual(runtime_layout.status()['channel'], 'development')
+            self.assertEqual(runtime_layout.read_state(self.root)['channel'], 'stable')
+            self.assertFalse(self.root.exists())
+
+    def test_start_migration_invokes_only_the_fixed_unit(self):
+        with patch.object(incremental_update.subprocess, 'run') as launch:
+            launch.return_value.returncode = 0
+            incremental_update.start_migration()
+        launch.assert_called_once_with(
+            ['/usr/bin/sudo', '-n', '/usr/bin/systemctl', 'start', '--no-block',
+             'hopworld-router-runtime-migrate.service'], capture_output=True, timeout=5)
+
+
 class IncrementalPreviewTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -93,17 +112,52 @@ class IncrementalPreviewTests(unittest.TestCase):
                     {'filename': 'README.md', 'status': 'modified'},
                     {'filename': 'router/server.py', 'status': 'renamed', 'previous_filename': 'router/old_server.py'},
                 ]}
+            if url.endswith('/releases/tags/runtime-v1'):
+                raise ValueError('not published')
             raise AssertionError(url)
 
-        result = incremental_update.check(root=self.root, fetch=fetch)
+        # _artifact_urls catches missing release via fetch returning bad shape
+        def fetch2(url):
+            if url.endswith('/commits/main'):
+                return {'sha': 'b' * 40}
+            if '/compare/' in url:
+                return {'files': [
+                    {'filename': 'router/runtime_layout.py', 'status': 'added'},
+                    {'filename': 'README.md', 'status': 'modified'},
+                    {'filename': 'router/server.py', 'status': 'renamed', 'previous_filename': 'router/old_server.py'},
+                ]}
+            if url.endswith('/releases/tags/runtime-v1'):
+                return {'assets': []}
+            raise AssertionError(url)
+
+        result = incremental_update.check(root=self.root, fetch=fetch2)
         self.assertEqual(result['state'], 'available')
         self.assertEqual(result['changed_files'], ['router/runtime_layout.py', 'router/server.py'])
         self.assertEqual(result['changes'][1]['op'], 'rename')
         self.assertFalse(result['apply_ready'])
 
-    def test_apply_is_not_enabled_yet(self):
-        with self.assertRaisesRegex(ValueError, '签名'):
-            incremental_update.apply()
+    def test_apply_ready_when_signed_artifact_exists(self):
+        runtime_layout.set_channel('development', root=self.root)
+        tip = 'b' * 40
+
+        def fetch(url):
+            if url.endswith('/commits/main'):
+                return {'sha': tip}
+            if '/compare/' in url:
+                return {'files': [{'filename': 'router/runtime_layout.py', 'status': 'modified'}]}
+            if url.endswith('/releases/tags/runtime-v1'):
+                base = f'https://github.com/ZaoHub/HopWorld-Router/releases/download/runtime-v1/hopworld-runtime-{tip}'
+                return {'assets': [
+                    {'name': f'hopworld-runtime-{tip}.tar.gz', 'browser_download_url': base + '.tar.gz'},
+                    {'name': f'hopworld-runtime-{tip}.manifest.json', 'browser_download_url': base + '.manifest.json'},
+                    {'name': f'hopworld-runtime-{tip}.manifest.json.sig', 'browser_download_url': base + '.manifest.json.sig'},
+                ]}
+            raise AssertionError(url)
+
+        result = incremental_update.check(root=self.root, fetch=fetch)
+        self.assertTrue(result['apply_ready'])
+        queued = incremental_update.apply(root=self.root, fetch=fetch, start_unit=False)
+        self.assertEqual(queued['queued'], tip)
 
 
 if __name__ == '__main__':

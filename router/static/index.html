@@ -1232,7 +1232,10 @@
                   <h3>按文件增量更新</h3>
                   <p class="field-hint">检测 GitHub Main 最新提交与本地文件差异</p>
                 </div>
-                <button type="button" class="secondary" id="v1-update-check-files" aria-describedby="v1-update-files-status">检查文件</button>
+                <div class="v1-update-file-actions">
+                  <button type="button" class="secondary" id="v1-update-check-files" aria-describedby="v1-update-files-status">检查文件</button>
+                  <button type="button" class="primary" id="v1-update-apply-files" hidden>应用增量</button>
+                </div>
               </article>
             </div>
             <details class="v1-update-diff" id="v1-update-diff" hidden>

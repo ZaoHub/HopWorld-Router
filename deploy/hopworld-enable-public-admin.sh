@@ -232,6 +232,9 @@ changed_settings=1
 if [[ ! -e "$settings" ]]; then install -m 0600 /dev/null "$settings"; fi
 sed -i -E '/^[[:space:]]*HOPWORLD_MANAGEMENT_(HTTPS_HOST|LOCAL_ONLY)=/d' "$settings"
 printf '\nHOPWORLD_MANAGEMENT_HTTPS_HOST=%s\nHOPWORLD_MANAGEMENT_LOCAL_ONLY=1\n' "$host" >> "$settings"
+if ! grep -Eq '^[[:space:]]*HOPWORLD_SUBSCRIPTION_BASE=' "$settings"; then
+    printf 'HOPWORLD_SUBSCRIPTION_BASE=https://%s\n' "$host" >> "$settings"
+fi
 systemctl restart hopworld-router
 curl --noproxy '*' --retry 5 --retry-connrefused -fsS --max-time 5 "$local_url/health/ready" >/dev/null
 systemctl enable --now nginx
